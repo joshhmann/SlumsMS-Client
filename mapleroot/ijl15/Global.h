@@ -33,10 +33,14 @@
 #include <comutil.h>
 #include "Funcs.h"
 #include "Config.h"
+#ifdef MAPLEROOT_SINGLE_DLL
+#include <detours.h> // the Detours 4 build slums.dll links once
+#else
 #include "detours.h"
+#pragma comment(lib, "detours.lib")
+#endif
 #include "INIReader.h"
 #pragma comment(lib, "ws2_32.lib")
-#pragma comment(lib, "detours.lib")
 
 #define relative_address(frm, to) (int)(((int)to - (int)frm) - 5)
 

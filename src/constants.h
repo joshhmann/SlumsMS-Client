@@ -1,7 +1,7 @@
 #pragma once
 
-#define CONSTANTS_WINDOW_NAME "Kaentake"
-#define CONSTANTS_DLL_NAME    "Kaentake.dll"
+#define CONSTANTS_WINDOW_NAME "SlumsMS"
+#define CONSTANTS_DLL_NAME    "slums.dll"
 #define CONSTANTS_CONFIG_NAME "config.ini"
 
 #define CONSTANTS_CENTER_STATUSBAR FALSE

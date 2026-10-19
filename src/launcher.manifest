@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
-  <assemblyIdentity version="1.0.0.1" processorArchitecture="*" name="Kaentake" type="win32"/>
-  <description>Kaentake</description>
+  <assemblyIdentity version="1.0.0.1" processorArchitecture="*" name="SlumsMS" type="win32"/>
+  <description>SlumsMS</description>
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v2">
     <security>
       <requestedPrivileges xmlns="urn:schemas-microsoft-com:asm.v3">

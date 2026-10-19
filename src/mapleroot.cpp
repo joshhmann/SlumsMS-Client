@@ -4,19 +4,20 @@
 #include "hook.h"
 #include "wvs/util.h"
 #include <cstdio>
+// The MapleRoot companion is linked into slums.dll (it used to be a separate ijl15.dll loaded through this bridge).
+extern "C" {
+unsigned __cdecl MapleRoot_GetBridgeVersion();
+BOOL __cdecl MapleRoot_Initialize(int width, int height);
+void __cdecl MapleRoot_InitializeResources(void* app);
+void __cdecl MapleRoot_SetResolution(int width, int height);
+void __cdecl MapleRoot_Shutdown();
+void __cdecl MapleRoot_SetModule(HMODULE module);
+}
 namespace {
-using Version = unsigned(__cdecl*)();
-using Initialize = BOOL(__cdecl*)(int, int);
-using Resources = void(__cdecl*)(void*);
-using Resolution = void(__cdecl*)(int, int);
-using Shutdown = void(__cdecl*)();
-Resources resources;
-Resolution resolution;
-Shutdown shutdownRoot;
 void Trace(const char* text) {
     FILE* file = nullptr;
     if (fopen_s(&file, "integration.log", "a") == 0 && file) {
-        fprintf(file, "[Kaentake] %s\n", text);
+        fprintf(file, "[SlumsMS] %s\n", text);
         fclose(file);
     }
 }
@@ -40,37 +41,28 @@ unsigned long BuildTimestamp(HMODULE module) {
     return nt->FileHeader.TimeDateStamp;
 }
 void InitializeMapleRoot() {
-    HMODULE module = GetModuleHandleA("ijl15.dll");
-    if (!module) module = LoadLibraryA("ijl15.dll");
-    if (!module) Fail("Cannot load the integrated ijl15.dll");
-    HMODULE kaentake = nullptr;
+    HMODULE self = nullptr;
     GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-        reinterpret_cast<LPCSTR>(&InitializeMapleRoot), &kaentake);
+        reinterpret_cast<LPCSTR>(&InitializeMapleRoot), &self);
+    MapleRoot_SetModule(self);
     SYSTEMTIME utc; GetSystemTime(&utc);
-    DebugMessage("SESSION_START pid=%lu utc=%04u-%02u-%02uT%02u:%02u:%02uZ kaentake_build=%08lX mapleroot_build=%08lX",
+    DebugMessage("SESSION_START pid=%lu utc=%04u-%02u-%02uT%02u:%02u:%02uZ slums_build=%08lX",
         GetCurrentProcessId(), utc.wYear, utc.wMonth, utc.wDay, utc.wHour, utc.wMinute, utc.wSecond,
-        BuildTimestamp(kaentake), BuildTimestamp(module));
+        BuildTimestamp(self));
     VerifyKaentakeHooks("system and client bypass");
-    auto version = reinterpret_cast<Version>(GetProcAddress(module, "MapleRoot_GetBridgeVersion"));
-    auto initialize = reinterpret_cast<Initialize>(GetProcAddress(module, "MapleRoot_Initialize"));
-    resources = reinterpret_cast<Resources>(GetProcAddress(module, "MapleRoot_InitializeResources"));
-    resolution = reinterpret_cast<Resolution>(GetProcAddress(module, "MapleRoot_SetResolution"));
-    shutdownRoot = reinterpret_cast<Shutdown>(GetProcAddress(module, "MapleRoot_Shutdown"));
-    if (!version || version() != 0x00010001 || !initialize || !resources || !resolution || !shutdownRoot)
-        Fail("The companion DLL has the wrong bridge version");
+    if (MapleRoot_GetBridgeVersion() != 0x00010001) Fail("The MapleRoot companion has the wrong bridge version");
     Trace("Initializing preserved MapleRoot feature groups");
-    if (!initialize(get_screen_width(), get_screen_height())) Fail("Feature initialization failed");
+    if (!MapleRoot_Initialize(get_screen_width(), get_screen_height())) Fail("Feature initialization failed");
     Trace("MapleRoot feature groups initialized");
     Trace("SESSION_FEATURES_READY");
 }
 void InitializeMapleRootResources(void* app) {
-    if (!resources) Fail("Resource bridge was not initialized");
-    resources(app);
+    MapleRoot_InitializeResources(app);
     Trace("MapleRoot Data namespace ready for Custom.wz overlay");
 }
 void UpdateMapleRootResolution(int width, int height) {
-    if (resolution) resolution(width, height);
+    MapleRoot_SetResolution(width, height);
 }
 void ShutdownMapleRoot() {
-    if (shutdownRoot) shutdownRoot();
+    MapleRoot_Shutdown();
 }

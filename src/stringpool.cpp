@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "hook.h"
+#include "constants.h"
 #include "ztl/ztl.h"
 
 #define REPLACE_STRING(INDEX, NEW_STRING) \
@@ -49,5 +50,5 @@ void EncodeString(int nIdx, const char* sSource, char* sDestination) {
 
 
 void AttachStringPoolMod() {
-    REPLACE_STRING(1163, "Kaentake");
+    REPLACE_STRING(1163, CONSTANTS_WINDOW_NAME);
 }

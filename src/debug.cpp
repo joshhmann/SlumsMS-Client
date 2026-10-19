@@ -14,7 +14,7 @@ void DebugMessage(const char* pszFormat, ...) {
 #ifdef MAPLEROOT_INTEGRATION
     FILE* file = nullptr;
     if (fopen_s(&file, "integration.log", "a") == 0 && file) {
-        fprintf(file, "[Kaentake] %s\n", pszDest);
+        fprintf(file, "[SlumsMS] %s\n", pszDest);
         fclose(file);
     }
 #endif

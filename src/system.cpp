@@ -135,6 +135,32 @@ constexpr const char* g_asOriginalAddress[] = {
     "127.0.0.1", // Support localhost clients as well as original v83 clients.
 };
 
+// The configured host may be a name (slumsms.example.com) or an IPv4 address. A name is resolved once, on the first
+// connect: DllMain cannot touch the network, and the address does not change during a session.
+static IN_ADDR g_ServerAddress;
+static BOOL g_bServerAddressResolved = FALSE;
+
+static BOOL CALLBACK ResolveServerAddress(PINIT_ONCE, PVOID, PVOID*) {
+    const char* sHost = g_sServerHost ? g_sServerHost : CONSTANTS_DEFAULT_HOST;
+    if (InetPtonA(AF_INET, sHost, &g_ServerAddress) == 1) {
+        g_bServerAddressResolved = TRUE;
+        return TRUE;
+    }
+    ADDRINFOA hints = {};
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+    ADDRINFOA* pResult = nullptr;
+    if (getaddrinfo(sHost, nullptr, &hints, &pResult) == 0 && pResult) {
+        g_ServerAddress = reinterpret_cast<sockaddr_in*>(pResult->ai_addr)->sin_addr;
+        g_bServerAddressResolved = TRUE;
+        freeaddrinfo(pResult);
+    } else {
+        ErrorMessage("Could not find the server \"%s\". Check your internet connection and the host in %s.", sHost,
+                CONSTANTS_CONFIG_NAME);
+    }
+    return TRUE;
+}
+
 int WSPAPI WSPConnect_hook(SOCKET s, const struct sockaddr FAR* name, int namelen, LPWSABUF lpCallerData, LPWSABUF lpCalleeData, LPQOS lpSQOS, LPQOS lpGQOS, LPINT lpErrno) {
     char sName[INET_ADDRSTRLEN];
     InetNtopA(AF_INET, &((sockaddr_in*)name)->sin_addr, sName, INET_ADDRSTRLEN);
@@ -143,7 +169,11 @@ int WSPAPI WSPConnect_hook(SOCKET s, const struct sockaddr FAR* name, int namele
             continue;
         }
         g_uNexonAddress = ((sockaddr_in*)name)->sin_addr.S_un.S_addr;
-        InetPtonA(AF_INET, g_sServerHost ? g_sServerHost : CONSTANTS_DEFAULT_HOST, &((sockaddr_in*)name)->sin_addr.S_un.S_addr);
+        static INIT_ONCE resolveOnce = INIT_ONCE_STATIC_INIT;
+        InitOnceExecuteOnce(&resolveOnce, ResolveServerAddress, nullptr, nullptr);
+        if (g_bServerAddressResolved) {
+            ((sockaddr_in*)name)->sin_addr = g_ServerAddress;
+        }
         if (g_nServerPort) {
             ((sockaddr_in*)name)->sin_port = htons(static_cast<u_short>(g_nServerPort));
         }

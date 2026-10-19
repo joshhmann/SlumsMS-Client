@@ -45,6 +45,14 @@ endif()
 if(MAPLEROOT_INTEGRATION)
     target_sources(injector PRIVATE mapleroot.cpp crash_diagnostics.cpp)
     target_compile_definitions(injector PRIVATE MAPLEROOT_INTEGRATION)
+    # The MapleRoot companion is part of slums.dll; the game loads the real Intel ijl15.dll again.
+    target_link_libraries(injector PRIVATE mapleroot_companion)
+    add_custom_command(TARGET injector POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${PROJECT_SOURCE_DIR}/vendor/ijl15/ijl15.dll"
+            "${PROJECT_SOURCE_DIR}/mapleroot/ijl15/discord_game_sdk.dll"
+            "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}"
+    )
 endif()
 
 target_link_libraries(injector PRIVATE
@@ -53,7 +61,7 @@ target_link_libraries(injector PRIVATE
 )
 
 set_target_properties(injector PROPERTIES
-    OUTPUT_NAME ${PROJECT_NAME}
+    OUTPUT_NAME slums
 )
 
 add_custom_command(TARGET injector POST_BUILD
@@ -78,7 +86,7 @@ target_link_libraries(launcher PRIVATE
 )
 
 set_target_properties(launcher PROPERTIES
-    OUTPUT_NAME ${PROJECT_NAME}
+    OUTPUT_NAME SlumsMS
 )
 if(MAPLEROOT_INTEGRATION)
     target_compile_definitions(launcher PRIVATE MAPLEROOT_INTEGRATION)

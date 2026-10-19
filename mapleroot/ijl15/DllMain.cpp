@@ -161,11 +161,16 @@ BOOL WINAPI Injected() {
 extern int m_nGameWidth;
 extern int m_nGameHeight;
 extern void __fastcall InitializeMapleRootResources(void*, void*);
+#ifdef MAPLEROOT_SINGLE_DLL
+// Linked into slums.dll: the host calls these directly and hands over its module handle.
+extern "C" void __cdecl MapleRoot_SetModule(HMODULE module) { _this = module; }
+#else
 #pragma comment(linker, "/EXPORT:MapleRoot_GetBridgeVersion=_MapleRoot_GetBridgeVersion")
 #pragma comment(linker, "/EXPORT:MapleRoot_Initialize=_MapleRoot_Initialize")
 #pragma comment(linker, "/EXPORT:MapleRoot_InitializeResources=_MapleRoot_InitializeResources")
 #pragma comment(linker, "/EXPORT:MapleRoot_SetResolution=_MapleRoot_SetResolution")
 #pragma comment(linker, "/EXPORT:MapleRoot_Shutdown=_MapleRoot_Shutdown")
+#endif
 static LONG integrationState = 0;
 extern "C" unsigned __cdecl MapleRoot_GetBridgeVersion() { return 0x00010001; }
 extern "C" void __cdecl MapleRoot_Shutdown() {
@@ -200,6 +205,7 @@ extern "C" void __cdecl MapleRoot_InitializeResources(void* app) {
 }
 #endif
 
+#ifndef MAPLEROOT_SINGLE_DLL
 BOOL APIENTRY DllMain(HMODULE hModule, unsigned long ulReason, void* lpvReserved) {
     _this = hModule;
 	if (ulReason == DLL_PROCESS_ATTACH) {
@@ -218,3 +224,4 @@ BOOL APIENTRY DllMain(HMODULE hModule, unsigned long ulReason, void* lpvReserved
 	}
 	return TRUE;
 }
+#endif

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.14)
-project(Kaentake)
+project(SlumsMS)
 option(MAPLEROOT_MOUNT_INFO "Fit character-info mount previews and names" OFF)
 option(MAPLEROOT_MOVEMENT_KEYS "Build bindable direction keys in keyboard settings" OFF)
 option(MAPLEROOT_WEATHER "Build visual weather/time and lamps with matching server support" OFF)
@@ -16,6 +16,10 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIGURATION>")
 
 # Build external dependencies
 add_subdirectory(external)
+
+if(MAPLEROOT_INTEGRATION)
+    add_subdirectory(mapleroot)
+endif()
 
 # Build injector and laucher
 add_subdirectory(src)

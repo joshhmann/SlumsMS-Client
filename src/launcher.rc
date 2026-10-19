@@ -7,8 +7,8 @@
 #endif
 
 VS_VERSION_INFO VERSIONINFO
-FILEVERSION     1,0,0,1
-PRODUCTVERSION  1,0,0,1
+FILEVERSION     1,2,0,0
+PRODUCTVERSION  1,2,0,0
 FILEFLAGSMASK   VS_FFI_FILEFLAGSMASK
 FILEFLAGS       VER_DEBUG
 FILEOS          VOS_NT_WINDOWS32
@@ -19,14 +19,14 @@ BEGIN
     BEGIN
         BLOCK "040904E4"
         BEGIN
-            VALUE "CompanyName",      "Kaentake"
-            VALUE "FileDescription",  "Kaentake"
-            VALUE "FileVersion",      "1.0.0.1"
-            VALUE "InternalName",     "Kaentake"
-            VALUE "OriginalFilename", "Kaentake.exe"
-            VALUE "ProductName",      "Kaentake"
-            VALUE "ProductVersion",   "1.0.0.1"
-            VALUE "LegalCopyright",   "Kaentake"
+            VALUE "CompanyName",      "SlumsMS"
+            VALUE "FileDescription",  "SlumsMS (based on Kaentake)"
+            VALUE "FileVersion",      "1.2.0.0"
+            VALUE "InternalName",     "SlumsMS"
+            VALUE "OriginalFilename", "SlumsMS.exe"
+            VALUE "ProductName",      "SlumsMS"
+            VALUE "ProductVersion",   "1.2.0.0"
+            VALUE "LegalCopyright",   "SlumsMS; Kaentake by its upstream authors"
         END
     END
 

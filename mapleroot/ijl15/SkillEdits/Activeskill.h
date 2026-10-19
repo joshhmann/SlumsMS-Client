@@ -769,7 +769,7 @@ void* (__fastcall CalcDamage__PDamage)(
 
 auto SecondaryStat__SetFrom_Hook = (void(__thiscall*)(int, int))0x0077F4C9;
 int(__fastcall SecondaryStat__SetFrom)(int ss, void* edx, int cd, int bs, int fs, int a3, int a4, int a5) {
-
+	return 0; // unused stub
 }
 
 auto pGetAttackSpeedDegree = (void(__thiscall*)(int, int, int, int))0x00765066;
