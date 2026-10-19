@@ -132,6 +132,7 @@ constexpr const char* g_asOriginalAddress[] = {
     "63.251.217.2",
     "63.251.217.3",
     "63.251.217.4",
+    "127.0.0.1", // Support localhost clients as well as original v83 clients.
 };
 
 int WSPAPI WSPConnect_hook(SOCKET s, const struct sockaddr FAR* name, int namelen, LPWSABUF lpCallerData, LPWSABUF lpCalleeData, LPQOS lpSQOS, LPQOS lpGQOS, LPINT lpErrno) {
@@ -166,7 +167,25 @@ int WSPAPI WSPStartup_hook(WORD wVersionRequested, LPWSPDATA lpWSPData, LPWSAPRO
 }
 
 
+#ifdef MAPLEROOT_INTEGRATION
+static auto MessageBoxA_orig = &MessageBoxA;
+static auto MessageBoxW_orig = &MessageBoxW;
+int WINAPI MessageBoxA_hook(HWND window, LPCSTR text, LPCSTR title, UINT flags) {
+    DebugMessage("Dialog [%s]: %s", title ? title : "", text ? text : "");
+    return MessageBoxA_orig(window, text, title, flags);
+}
+int WINAPI MessageBoxW_hook(HWND window, LPCWSTR text, LPCWSTR title, UINT flags) {
+    DebugMessage("Dialog [%ls]: %ls", title ? title : L"", text ? text : L"");
+    return MessageBoxW_orig(window, text, title, flags);
+}
+#endif
+
 void AttachSystemHooks() {
+#ifdef MAPLEROOT_INTEGRATION
+    InstallCrashDiagnostics();
+    ATTACH_HOOK(MessageBoxA_orig, MessageBoxA_hook);
+    ATTACH_HOOK(MessageBoxW_orig, MessageBoxW_hook);
+#endif
     ATTACH_HOOK(SetUnhandledExceptionFilter_orig, SetUnhandledExceptionFilter_hook);
     ATTACH_HOOK(CreateMutexA_orig, CreateMutexA_hook);
     ATTACH_HOOK(CreateWindowExA_orig, CreateWindowExA_hook);

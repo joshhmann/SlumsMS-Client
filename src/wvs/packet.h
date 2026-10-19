@@ -3,6 +3,27 @@
 
 
 class CInPacket {
+public:
+    bool TryPeekOpcode(unsigned short& opcode) const {
+        if (m_aRecvBuff.IsEmpty() || m_uLength < 2 || m_uOffset > static_cast<size_t>(m_uLength - 2)) {
+            return false;
+        }
+        memcpy(&opcode, &m_aRecvBuff[m_uOffset], sizeof(opcode));
+        return true;
+    }
+    size_t GetOffset() const { return m_uOffset; }
+    void SetOffset(size_t offset) { m_uOffset = offset; }
+    bool CanRead(size_t n) const {
+        return !m_aRecvBuff.IsEmpty() && m_uOffset <= m_uLength && n <= m_uLength - m_uOffset;
+    }
+    template<typename T> T Decode() {
+        T value{};
+        if (CanRead(sizeof(T))) {
+            memcpy(&value, &m_aRecvBuff[m_uOffset], sizeof(T));
+            m_uOffset += sizeof(T);
+        }
+        return value;
+    }
 protected:
     int m_bLoopback;
     int m_nState;

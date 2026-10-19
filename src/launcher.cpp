@@ -27,5 +27,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         ErrorMessage("GetExitCodeProcess failed [%d]", GetLastError());
         return 1;
     }
-    return 0;
+#ifdef MAPLEROOT_INTEGRATION
+    DebugMessage("SESSION_PROCESS_EXIT pid=%lu code=%08lX", pi.dwProcessId, dwExitCode);
+#endif
+    CloseHandle(pi.hThread);
+    CloseHandle(pi.hProcess);
+    return dwExitCode == 0 ? 0 : 1;
 }

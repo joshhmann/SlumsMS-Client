@@ -117,7 +117,7 @@ void CUser::SetActivePortableChair_hook(int nItemID) {
 }
 
 
-void AttachAvatarDataMod() {
+void AttachAvatarStorageMod() {
     // Inject CAvatar::CustomData struct to CAvatar
     ATTACH_HOOK(CAvatar::Constructor, CAvatar::Constructor_hook);
     ATTACH_HOOK(CAvatar::Destructor, CAvatar::Destructor_hook);
@@ -125,6 +125,9 @@ void AttachAvatarDataMod() {
     PatchJmp(CAvatar__Update_jmp1, CAvatar__Update_hook1);
     PatchJmp(CAvatar__Update_jmp2, CAvatar__Update_hook2);
 
+}
+
+void AttachAvatarChairMod() {
     // Implement tamingMob
     ATTACH_HOOK(CAvatar::SetRidingVehicle, CAvatar::SetRidingVehicle_hook);
     PatchCall(0x00413A31, &load_tamingmob_action_hook); // CActionMan::LoadTamingMobAction
@@ -132,4 +135,8 @@ void AttachAvatarDataMod() {
     // Implement bodyRelMove
     ATTACH_HOOK(CUser::Update, CUser::Update_hook);
     ATTACH_HOOK(CUser::SetActivePortableChair, CUser::SetActivePortableChair_hook);
+}
+void AttachAvatarDataMod() {
+    AttachAvatarStorageMod();
+    AttachAvatarChairMod();
 }

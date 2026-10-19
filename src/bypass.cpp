@@ -8,6 +8,17 @@
 #include "wvs/exception.h"
 #include "wvs/util.h"
 #include "ztl/ztl.h"
+#ifdef MAPLEROOT_CASHSHOP_WINDOW
+#include "cashshopwnd.h"
+#endif
+#ifdef MAPLEROOT_WEATHER
+#include "weather.h"
+extern void Weather_Tick();
+extern void WeatherSplash_Frame();
+extern void WeatherPuddle_Frame();
+extern void WeatherAccum_Frame();
+extern void WeatherSway_Frame();
+#endif
 
 #include <windows.h>
 #include <comdef.h>
@@ -144,7 +155,7 @@ void CWvsApp::Constructor_hook() {
 }
 
 void CWvsApp::SetUp_hook() {
-    DEBUG_MESSAGE("CWvsApp::SetUp");
+    DebugMessage("CWvsApp::SetUp entered");
     // CWvsApp::InitializeAuth(this);
     reinterpret_cast<void(__thiscall*)(CWvsApp*)>(0x009F7097)(this);
     srand(timeGetTime());
@@ -223,6 +234,20 @@ void CWvsApp::SetUp_hook() {
 }
 
 void CWvsApp::CallUpdate_hook(int tCurTime) {
+#ifdef MAPLEROOT_WEATHER
+    Weather_Tick();
+    if (Weather::IsFieldActive()) {
+        if (Weather::HasFallingSky()) {
+            WeatherSplash_Frame();
+            WeatherPuddle_Frame();
+            WeatherAccum_Frame();
+        }
+        WeatherSway_Frame();
+    }
+#endif
+#ifdef MAPLEROOT_CASHSHOP_WINDOW
+    CashShopWnd_Tick();
+#endif
     if (m_bFirstUpdate) {
         m_tUpdateTime = tCurTime;
         m_bFirstUpdate = 0;
@@ -247,6 +272,13 @@ void CWvsApp::CallUpdate_hook(int tCurTime) {
 }
 
 void CWvsApp::Run_hook(int* pbTerminate) {
+#ifdef MAPLEROOT_SHUTDOWN_SMOKE_TEST
+    // A separate test-only build exercises the same destructor/CleanUp path as
+    // a normal quit. No authentication or window input is automated.
+    DebugMessage("SMOKE_SHUTDOWN_REQUESTED after=setup");
+    *pbTerminate = 1;
+    return;
+#endif
     MSG msg;
     ISMSG isMsg;
     memset(&msg, 0, sizeof(msg));
@@ -375,6 +407,9 @@ int CWndMan::TranslateMessage_hook(UINT& msg, WPARAM& wParam, LPARAM& lParam, LR
 
 
 void AttachClientBypass() {
+#if defined(MAPLEROOT_CASHSHOP_WINDOW) || defined(MAPLEROOT_WEATHER)
+    AttachCustomPacketMod();
+#endif
     ATTACH_HOOK(CClientSocket::Connect, CClientSocket::Connect_hook);
     ATTACH_HOOK(CWvsApp::Constructor, CWvsApp::Constructor_hook);
     ATTACH_HOOK(CWvsApp::SetUp, CWvsApp::SetUp_hook);
@@ -382,7 +417,9 @@ void AttachClientBypass() {
     ATTACH_HOOK(CLogin::SendCheckPasswordPacket, CLogin::SendCheckPasswordPacket_hook);
     ATTACH_HOOK(CWndMan::TranslateMessage, CWndMan::TranslateMessage_hook);
 
+#ifndef MAPLEROOT_INTEGRATION
     PatchRetZero(0x009FEC62); // CWvsApp::EnableWinKey
+#endif
     PatchRetZero(0x009F18C9); // ShowStartUpWndModal
     PatchRetZero(0x00422C7E); // ShowAdBalloon
     PatchRetZero(0x009F191B); // SendHSLog

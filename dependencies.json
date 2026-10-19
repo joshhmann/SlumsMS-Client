@@ -1,0 +1,18 @@
+{
+  "vendor/Microsoft.Windows.CppWinRT.2.0.210806.1.nupkg": {
+    "sha256": "6b6f3b24b34dc165b62d0968e7dca5ed9e43f455087effcc80a7356ab87f16a0",
+    "size": 632773
+  },
+  "mapleroot/ijl15/detours.lib": {
+    "sha256": "783242b618f50dc616f6bbbd8a2eea7d037c688dd5797c1b7c04a2bf00fa9641",
+    "size": 201168
+  },
+  "mapleroot/ijl15/discord_game_sdk.dll.lib": {
+    "sha256": "e7b4529ad228224f2e8fe693529480565331abfd691b63781316531542f025fc",
+    "size": 2358
+  },
+  "mapleroot/ijl15/discord_game_sdk.dll": {
+    "sha256": "d8e7d9feb3de8482b186ae44fd1c9abb41fe2b3b3d2c7cd3a4d742ebbad30cdf",
+    "size": 3154744
+  }
+}

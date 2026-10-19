@@ -4,6 +4,15 @@
 #include "wvs/wvsapp.h"
 #include "wvs/util.h"
 #include "ztl/ztl.h"
+#ifdef MAPLEROOT_CASHSHOP_WINDOW
+#include "cashshopwnd.h"
+#endif
+#ifdef MAPLEROOT_MOVEMENT_KEYS
+#include "movementkeys.h"
+#endif
+#ifdef MAPLEROOT_MOUNT_INFO
+#include "mountinfo.h"
+#endif
 #include <algorithm>
 #include <vector>
 #include <tuple>
@@ -19,7 +28,7 @@ public:
 
     HRESULT __stdcall raw__OnGetLocalObject_hook(int nIndex, BSTR sPath, int* pnPathUsed, VARIANT* pvRet) {
         HRESULT hr = raw__OnGetLocalObject_orig(this, nIndex, sPath, pnPathUsed, pvRet);
-        if (SUCCEEDED(hr)) {
+        if (SUCCEEDED(hr) || !g_pCustomNameSpace) {
             return hr;
         }
         if (!std::binary_search(g_vecOverrides.begin(), g_vecOverrides.end(), Ztl_bstr_t(sPath))) {
@@ -36,7 +45,11 @@ public:
 
     HRESULT __stdcall raw_Serialize_hook(IWzArchive* pArchive) {
         HRESULT hr = raw_Serialize_orig(this, pArchive);
-        if (FAILED(hr)) {
+        if (FAILED(hr)) return hr;
+#ifdef MAPLEROOT_MOVEMENT_KEYS
+        InjectMovementKeyIcons(this, pArchive->absoluteUOL);
+#endif
+        if (!g_pCustomNameSpace) {
             return hr;
         }
         if (!std::binary_search(g_vecOverrides.begin(), g_vecOverrides.end(), pArchive->absoluteUOL)) {
@@ -64,7 +77,11 @@ public:
 
 void CWvsApp::InitializeResMan_hook() {
     DEBUG_MESSAGE("CWvsApp::InitializeResMan");
+#ifdef MAPLEROOT_INTEGRATION
+    InitializeMapleRootResources(this);
+#else
     CWvsApp::InitializeResMan(this);
+#endif
 
     // add custom namespace to root
     IWzWritableNameSpacePtr pWritableRoot;
@@ -86,6 +103,7 @@ void CWvsApp::InitializeResMan_hook() {
     Dir_BackSlashToSlash(sStartPath);
     Dir_upDir(sStartPath);
     fs->Init(sStartPath);
+
 
     IWzPackagePtr pPackage;
     PcCreateObject<IWzPackagePtr>(L"NameSpace#Package", pPackage, nullptr);
@@ -132,11 +150,47 @@ void CWvsApp::InitializeResMan_hook() {
     // PCOM.dll - patch CWzProperty objects during serialization
     CWzProperty::raw_Serialize_orig = static_cast<CWzProperty::raw_Serialize_t>(GetAddressByPattern("PCOM.DLL", "B8 ?? ?? ?? ?? E8 ?? ?? ?? ?? 83 EC 68"));
     ATTACH_HOOK(CWzProperty::raw_Serialize_orig, CWzProperty::raw_Serialize_hook);
+#ifdef MAPLEROOT_INTEGRATION
+    VerifyKaentakeHooks("Custom.wz serialization and namespace");
+    DebugMessage("SESSION_OVERLAY_READY entries=%u", static_cast<unsigned>(g_vecOverrides.size()));
+#endif
 }
 
+#ifdef MAPLEROOT_WEATHER
+extern void Weather_Shutdown();
+#endif
 void CWvsApp::CleanUp_hook() {
-    CWvsApp::CleanUp(this);
+    // Release the extension while the game's resource manager and PCOM objects
+    // are still alive. Native cleanup destroys both before it returns.
+    DebugMessage("SESSION_CLEANUP_BEGIN");
+#ifdef MAPLEROOT_MOUNT_INFO
+    ShutdownMountInfo();
+#endif
+#if defined(MAPLEROOT_CASHSHOP_WINDOW) || defined(MAPLEROOT_WEATHER)
+    ShutdownCustomPackets();
+#endif
+#ifdef MAPLEROOT_WEATHER
+    Weather_Shutdown();
+#endif
+#ifdef MAPLEROOT_CASHSHOP_WINDOW
+    CashShopWnd_Shutdown();
+#endif
+#ifdef MAPLEROOT_INTEGRATION
+    ShutdownMapleRoot();
+#endif
+    ReleaseItemEffectResources();
+    std::vector<Ztl_bstr_t>().swap(g_vecOverrides);
+    if (g_pCustomNameSpace && get_root()) {
+        IWzWritableNameSpacePtr writable;
+        if (SUCCEEDED(get_root()->QueryInterface(&writable))) {
+            writable->Unlink(L"Custom");
+        }
+    }
     g_pCustomNameSpace = nullptr;
+    DebugMessage("SESSION_CUSTOM_RESOURCES_RELEASED");
+    CWvsApp::CleanUp(this);
+    ReleaseClientInlinkResources();
+    DebugMessage("SESSION_CLEANUP_COMPLETE");
 }
 
 

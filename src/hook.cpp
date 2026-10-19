@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "hook.h"
+#include "checked_hook.h"
 #include "debug.h"
 #include <windows.h>
 #include <detours.h>
@@ -64,28 +65,38 @@ void* FindPattern(unsigned char* pModuleBase, size_t uModuleSize, unsigned char*
 } // namespace
 
 
+namespace {
+volatile LONG hookFailures = 0;
+struct NativeDetourOps {
+    LONG begin() { return DetourTransactionBegin(); }
+    LONG update() { return DetourUpdateThread(GetCurrentThread()); }
+    LONG attach(PVOID* target, PVOID detour) { return DetourAttach(target, detour); }
+    LONG detach(PVOID* target, PVOID detour) { return DetourDetach(target, detour); }
+    LONG commit() { return DetourTransactionCommit(); }
+    void abort() { DetourTransactionAbort(); }
+};
+}
+long GetKaentakeHookFailureCount() { return InterlockedCompareExchange(&hookFailures, 0, 0); }
 bool AttachHook(void** ppTarget, void* pDetour) {
-    LONG result;
-    if (result = DetourTransactionBegin(); result != NO_ERROR) {
-        DEBUG_MESSAGE("DetourTransactionBegin failed with : %d", result);
-        return false;
+    NativeDetourOps ops;
+    auto result = integration::ChangeHook(ops, true, ppTarget, pDetour);
+    if (!result) {
+        InterlockedIncrement(&hookFailures);
+        DebugMessage("HOOK FAILED phase=%s error=%ld target=%p detour=%p", result.phase, result.error,
+            ppTarget ? *ppTarget : nullptr, pDetour);
     }
-    if (result = DetourUpdateThread(GetCurrentThread()); result != NO_ERROR) {
-        DEBUG_MESSAGE("DetourUpdateThread failed with : %d", result);
-        DetourTransactionAbort();
-        return false;
+    return static_cast<bool>(result);
+}
+
+bool DetachHook(void** ppTarget, void* pDetour) {
+    NativeDetourOps ops;
+    auto result = integration::ChangeHook(ops, false, ppTarget, pDetour);
+    if (!result) {
+        InterlockedIncrement(&hookFailures);
+        DebugMessage("HOOK FAILED phase=%s error=%ld target=%p detour=%p", result.phase, result.error,
+            ppTarget ? *ppTarget : nullptr, pDetour);
     }
-    if (result = DetourAttach(ppTarget, pDetour); result != NO_ERROR) {
-        DEBUG_MESSAGE("DetourAttach failed with : %d", result);
-        DetourTransactionAbort();
-        return false;
-    }
-    if (result = DetourTransactionCommit(); result != NO_ERROR) {
-        DEBUG_MESSAGE("DetourTransactionCommit failed with : %d", result);
-        DetourTransactionAbort();
-        return false;
-    }
-    return true;
+    return static_cast<bool>(result);
 }
 
 void* VMTHook(void* pInstance, void* pDetour, size_t uIndex) {

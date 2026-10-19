@@ -1,0 +1,21 @@
+name: Client build
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          submodules: recursive
+      - shell: pwsh
+        run: ./scripts/build.ps1
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: client-build
+          path: |
+            build-baseline/Release/Kaentake.dll
+            build-baseline/Release/Kaentake.exe
+            build-baseline/Release/Custom.wz
+            mapleroot/build/Integrated/ijl15.dll

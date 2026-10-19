@@ -18,6 +18,34 @@ add_library(injector SHARED
 )
 
 target_precompile_headers(injector PRIVATE pch.h)
+if(MAPLEROOT_MOUNT_INFO)
+    target_sources(injector PRIVATE mountinfo.cpp)
+    target_compile_definitions(injector PRIVATE MAPLEROOT_MOUNT_INFO)
+endif()
+if(MAPLEROOT_MOVEMENT_KEYS)
+    target_sources(injector PRIVATE movementkeys.cpp)
+    target_compile_definitions(injector PRIVATE MAPLEROOT_MOVEMENT_KEYS)
+endif()
+if(MAPLEROOT_CASHSHOP_WINDOW OR MAPLEROOT_WEATHER)
+    target_sources(injector PRIVATE packetdispatcher.cpp)
+endif()
+if(MAPLEROOT_WEATHER)
+    target_sources(injector PRIVATE weather.cpp weatherfx.cpp weathercanvas.cpp weathersound.cpp
+        weathersplash.cpp weatherwind.cpp weatheraccum.cpp weatherpuddle.cpp weathersway.cpp
+        weathermove_disabled.cpp lamps.cpp)
+    target_compile_definitions(injector PRIVATE MAPLEROOT_WEATHER)
+endif()
+if(MAPLEROOT_CASHSHOP_WINDOW)
+    target_sources(injector PRIVATE cashshopwnd.cpp)
+    target_compile_definitions(injector PRIVATE MAPLEROOT_CASHSHOP_WINDOW)
+endif()
+if(MAPLEROOT_SHUTDOWN_SMOKE_TEST)
+    target_compile_definitions(injector PRIVATE MAPLEROOT_SHUTDOWN_SMOKE_TEST)
+endif()
+if(MAPLEROOT_INTEGRATION)
+    target_sources(injector PRIVATE mapleroot.cpp crash_diagnostics.cpp)
+    target_compile_definitions(injector PRIVATE MAPLEROOT_INTEGRATION)
+endif()
 
 target_link_libraries(injector PRIVATE
     Detours
@@ -52,3 +80,6 @@ target_link_libraries(launcher PRIVATE
 set_target_properties(launcher PROPERTIES
     OUTPUT_NAME ${PROJECT_NAME}
 )
+if(MAPLEROOT_INTEGRATION)
+    target_compile_definitions(launcher PRIVATE MAPLEROOT_INTEGRATION)
+endif()

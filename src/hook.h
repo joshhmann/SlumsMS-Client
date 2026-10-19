@@ -1,5 +1,7 @@
 #pragma once
 #include "debug.h"
+#include "mapleroot.h"
+#include "avatar_features.h"
 #include <type_traits>
 
 #ifdef _DEBUG
@@ -45,30 +47,130 @@ void AttachSystemHooks();
 
 // called in system.cpp -> SetUnhandledExceptionFilter_hook
 void AttachClientBypass();
+#if defined(MAPLEROOT_CASHSHOP_WINDOW) || defined(MAPLEROOT_WEATHER)
+void AttachCustomPacketMod();
+void ShutdownCustomPackets();
+#endif
 void AttachClientInlink();
+void ReleaseClientInlinkResources();
 void AttachStringPoolMod();
 void AttachResManMod();
 void AttachAvatarDataMod();
+void AttachAvatarStorageMod();
+void AttachAvatarChairMod();
 void AttachItemEffectMod();
+void ReleaseItemEffectResources();
 void AttachResolutionMod();
 void AttachMobHpTagMod();
 void AttachToolTipMod();
 void AttachIconIconMod();
 void AttachTempStatMod();
+#ifdef MAPLEROOT_MOUNT_INFO
+void AttachMountInfoMod();
+#endif
+#ifdef MAPLEROOT_MOVEMENT_KEYS
+void AttachMovementKeysMod();
+#endif
+#ifdef MAPLEROOT_WEATHER
+void AttachWeatherMod();
+void AttachWeatherWindMod();
+#endif
 
 inline void AttachClientHooks() {
+    static bool initialized = false;
+    if (initialized) return;
+    initialized = true;
+    DebugMessage("Installing: AttachClientBypass();");
     AttachClientBypass();
+#ifdef MAPLEROOT_MOUNT_INFO
+    AttachMountInfoMod();
+    VerifyKaentakeHooks("Mount preview and name");
+#endif
+#ifdef MAPLEROOT_MOVEMENT_KEYS
+    AttachMovementKeysMod();
+    VerifyKaentakeHooks("Bindable movement keys");
+#endif
+#ifdef MAPLEROOT_INTEGRATION
+    VerifyKaentakeHooks("AttachClientBypass");
+#endif
+#ifdef MAPLEROOT_INTEGRATION
+    InitializeMapleRoot();
+#endif
+    DebugMessage("Installing: AttachClientInlink();");
     AttachClientInlink();
+#ifdef MAPLEROOT_INTEGRATION
+    VerifyKaentakeHooks("AttachClientInlink");
+#endif
+    DebugMessage("Installing: AttachStringPoolMod();");
     AttachStringPoolMod();
+#ifdef MAPLEROOT_INTEGRATION
+    VerifyKaentakeHooks("AttachStringPoolMod");
+#endif
+    DebugMessage("Installing: AttachResManMod();");
     AttachResManMod();
-    AttachAvatarDataMod();
-    AttachItemEffectMod();
+#ifdef MAPLEROOT_INTEGRATION
+    VerifyKaentakeHooks("AttachResManMod");
+#endif
+#ifdef MAPLEROOT_INTEGRATION
+    constexpr bool mapleRootChairs = true;
+#else
+    constexpr bool mapleRootChairs = false;
+#endif
+    integration::InstallAvatarFeatures(mapleRootChairs,
+        [] {
+            DebugMessage("Installing: AttachAvatarStorageMod();");
+            AttachAvatarStorageMod();
+#ifdef MAPLEROOT_INTEGRATION
+            VerifyKaentakeHooks("AttachAvatarStorageMod");
+#endif
+        },
+        [] {
+            DebugMessage("Installing: AttachAvatarChairMod();");
+            AttachAvatarChairMod();
+        },
+        [] {
+            DebugMessage("Installing: AttachItemEffectMod();");
+            AttachItemEffectMod();
+#ifdef MAPLEROOT_INTEGRATION
+            VerifyKaentakeHooks("AttachItemEffectMod");
+#endif
+        });
+    DebugMessage("Installing: AttachResolutionMod();");
     AttachResolutionMod();
+#ifdef MAPLEROOT_WEATHER
+    AttachWeatherMod();
+    AttachWeatherWindMod();
+    VerifyKaentakeHooks("Weather/time/lamps");
+#endif
+#ifdef MAPLEROOT_INTEGRATION
+    VerifyKaentakeHooks("AttachResolutionMod");
+#endif
+#ifndef MAPLEROOT_INTEGRATION
+    DebugMessage("Installing: AttachMobHpTagMod();");
     AttachMobHpTagMod();
+#ifdef MAPLEROOT_INTEGRATION
+    VerifyKaentakeHooks("AttachMobHpTagMod");
+#endif
+#endif
+    DebugMessage("Installing: AttachToolTipMod();");
     AttachToolTipMod();
+#ifdef MAPLEROOT_INTEGRATION
+    VerifyKaentakeHooks("AttachToolTipMod");
+#endif
+    DebugMessage("Installing: AttachIconIconMod();");
     AttachIconIconMod();
+#ifdef MAPLEROOT_INTEGRATION
+    VerifyKaentakeHooks("AttachIconIconMod");
+#endif
+#ifndef MAPLEROOT_INTEGRATION
+    DebugMessage("Installing: AttachTempStatMod();");
     AttachTempStatMod();
+#ifdef MAPLEROOT_INTEGRATION
+    VerifyKaentakeHooks("AttachTempStatMod");
+#endif
+#endif
 }
+
 
 
 template <typename T>
@@ -81,7 +183,9 @@ constexpr auto CastHook(T fn) -> void* {
     return u.p;
 }
 
+long GetKaentakeHookFailureCount();
 bool AttachHook(void** ppTarget, void* pDetour);
+bool DetachHook(void** ppTarget, void* pDetour);
 
 void* VMTHook(void* pInstance, void* pDetour, size_t uIndex);
 

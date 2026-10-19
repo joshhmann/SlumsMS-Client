@@ -655,6 +655,10 @@ void set_screen_resolution(int nResolution, bool bSave) {
         }
         g_nScreenWidth = nScreenWidth;
         g_nScreenHeight = nScreenHeight;
+#ifdef MAPLEROOT_INTEGRATION
+        UpdateMapleRootResolution(nScreenWidth, nScreenHeight);
+        DebugMessage("SESSION_RESOLUTION width=%d height=%d", nScreenWidth, nScreenHeight);
+#endif
         g_nAdjustCenterY = (g_nScreenHeight - 600) / 2;
         if (CWndMan::IsInstantiated()) {
             CWndMan::GetInstance()->ResetOrgWindow();

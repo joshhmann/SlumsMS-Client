@@ -5,6 +5,7 @@
 #include "wvs/util.h"
 #include "ztl/ztl.h"
 #include <map>
+#include <memory>
 
 #define AVATAR_OFFSET 0x88
 
@@ -18,10 +19,19 @@ public:
     }
 };
 
-static std::map<int, IWzPropertyPtr> g_mPropItemEffect;
+using ItemEffectCache = std::map<int, IWzPropertyPtr>;
+static std::unique_ptr<ItemEffectCache> g_mPropItemEffect;
+
+void ReleaseItemEffectResources() {
+    // These COM objects belong to PCOM; release them before native cleanup
+    // unloads the resource modules, rather than from static destruction.
+    // Destroy the map itself too: its sentinel uses the game's allocator.
+    g_mPropItemEffect.reset();
+}
 
 static auto CItemInfo__IterateItemInfo = reinterpret_cast<int(__thiscall*)(CItemInfo*)>(0x005CA71C);
 int __fastcall CItemInfo__IterateItemInfo_hook(CItemInfo* pThis, void* _EDX) {
+    g_mPropItemEffect = std::make_unique<ItemEffectCache>();
     IWzPropertyPtr pItemEff = get_rm()->GetObjectA(L"Effect/ItemEff.img").GetUnknown();
     IEnumVARIANTPtr pEnum = pItemEff->_NewEnum;
     while (true) {
@@ -37,7 +47,7 @@ int __fastcall CItemInfo__IterateItemInfo_hook(CItemInfo* pThis, void* _EDX) {
         IUnknownPtr pUnknown = pProp->item[L"effect"].GetUnknown();
         if (SUCCEEDED(pUnknown.QueryInterface(__uuidof(IWzPropertyPtr), &pEffect))) {
             DEBUG_MESSAGE("Loaded Effect/ItemEff.img/%d", nItemID);
-            g_mPropItemEffect[nItemID] = pEffect;
+            (*g_mPropItemEffect)[nItemID] = pEffect;
         }
     }
     return CItemInfo__IterateItemInfo(pThis);
@@ -45,11 +55,12 @@ int __fastcall CItemInfo__IterateItemInfo_hook(CItemInfo* pThis, void* _EDX) {
 
 
 void UpdateItemEff(CUser* pUser) {
+    if (!g_mPropItemEffect) return;
     CAvatar* pAvatar = &pUser->m_CAvatar;
     for (auto i = 0; i < 60; ++i) {
         int nItemID = pAvatar->m_avatarLook.anHairEquip[i];
         auto pItemEffectLayer = &pAvatar->m_pCustomData->aItemEffectLayer[i];
-        if (auto search = g_mPropItemEffect.find(nItemID); search != g_mPropItemEffect.end()) {
+        if (auto search = g_mPropItemEffect->find(nItemID); search != g_mPropItemEffect->end()) {
             int bFlip = pAvatar->m_pLayerUnderFace->flip;
             int nAction = pAvatar->GetCurrentAction(nullptr);
             if (pItemEffectLayer->nItemID == nItemID && pItemEffectLayer->nAction == nAction &&
