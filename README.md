@@ -32,3 +32,8 @@ MapleRoot gameplay remains in the companion DLL: custom skills, long EXP, expand
 Both repos use tag `baseline-20261018-r1`. `release/baseline.json` records accepted artifact hashes/flags; the protected release record pins both commits. Seven native tests and full companion/client compilation passed from this repo layout. Archived binaries passed the manual checks documented under docs/evidence, including normal exit and resource release. New builds still require the paired runtime/assets and appropriate smoke testing.
 
 Upstream Kaentake usage and notices are preserved in docs/KAENTAKE-UPSTREAM.md. Original file-level notices and third-party submodules remain intact. The inherited small `src/Custom.wz` UI extension is retained; the large game Data files are not included.
+
+
+## Parsec startup workaround
+
+On the deployment PC, starting the client while connected to a Parsec virtual display produced `-2147467259` during graphics initialization, before login. Disconnecting Parsec, launching the game, then reconnecting allowed entry with the original checkpoint files. This is an observed workaround for that machine/session; the underlying driver cause is not confirmed. Resolution changes, a GPU preference override and removing the DirectX wrapper did not resolve it, and those trials were reverted. No driver reset or client code change was required.
