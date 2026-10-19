@@ -407,7 +407,7 @@ int CWndMan::TranslateMessage_hook(UINT& msg, WPARAM& wParam, LPARAM& lParam, LR
 
 
 void AttachClientBypass() {
-#if defined(MAPLEROOT_CASHSHOP_WINDOW) || defined(MAPLEROOT_WEATHER)
+#if defined(MAPLEROOT_CASHSHOP_WINDOW) || defined(MAPLEROOT_WEATHER) || defined(MAPLEROOT_DAILY_CHECKIN)
     AttachCustomPacketMod();
 #endif
     ATTACH_HOOK(CClientSocket::Connect, CClientSocket::Connect_hook);

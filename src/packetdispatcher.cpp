@@ -5,6 +5,9 @@
 #ifdef MAPLEROOT_CASHSHOP_WINDOW
 #include "cashshopwnd.h"
 #endif
+#ifdef MAPLEROOT_DAILY_CHECKIN
+#include "dailycheckin.h"
+#endif
 #ifdef MAPLEROOT_WEATHER
 #include "weather.h"
 #include "lamps.h"
@@ -21,6 +24,13 @@ void __fastcall ProcessPacketHook(void* socket, void*, CInPacket* packet) {
         if (opcode == kCashShopSyncOpcode) {
             std::lock_guard<std::mutex> lock(dispatchGate);
             if (!shuttingDown) CashShopWnd_HandleSync(packet);
+            return;
+        }
+#endif
+#ifdef MAPLEROOT_DAILY_CHECKIN
+        if (opcode == kDailyCheckinSyncOpcode) {
+            std::lock_guard<std::mutex> lock(dispatchGate);
+            if (!shuttingDown) DailyCheckin_HandleSync(packet);
             return;
         }
 #endif

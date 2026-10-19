@@ -47,7 +47,7 @@ void AttachSystemHooks();
 
 // called in system.cpp -> SetUnhandledExceptionFilter_hook
 void AttachClientBypass();
-#if defined(MAPLEROOT_CASHSHOP_WINDOW) || defined(MAPLEROOT_WEATHER)
+#if defined(MAPLEROOT_CASHSHOP_WINDOW) || defined(MAPLEROOT_WEATHER) || defined(MAPLEROOT_DAILY_CHECKIN)
 void AttachCustomPacketMod();
 void ShutdownCustomPackets();
 #endif
