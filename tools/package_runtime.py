@@ -3,6 +3,11 @@ from pathlib import Path,PurePosixPath
 import argparse,hashlib,json,subprocess,zipfile
 p=argparse.ArgumentParser();p.add_argument('--runtime',type=Path,required=True);p.add_argument('--core-archive',type=Path,required=True);p.add_argument('--addon-overlay',type=Path,required=True);p.add_argument('--output',type=Path,required=True);a=p.parse_args();r=Path(__file__).resolve().parents[1]
 assert not a.output.exists(),'Output already exists'
+baseline=json.loads((r/'release/baseline.json').read_text())
+assert hashlib.sha256((a.runtime/'Kaentake.dll').read_bytes()).hexdigest()==baseline['accepted_artifacts']['Kaentake.dll'],'Runtime DLL is not the accepted baseline'
+assert hashlib.sha256(a.core_archive.read_bytes()).hexdigest()==baseline['assets']['core_archive_sha256'],'Core asset archive mismatch'
+for name,expected in baseline['assets']['addon_overlay_files'].items():
+ assert hashlib.sha256((a.addon_overlay/name).read_bytes()).hexdigest()==expected,'Addon asset mismatch: '+name
 files={}
 for f in a.runtime.iterdir():
  if f.is_file() and f.suffix.lower() not in ['.log'] and f.name!='config.ini':files[f.name]=f.read_bytes()
