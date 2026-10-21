@@ -1,0 +1,255 @@
+#pragma once
+
+// ============================================================
+// bounce_rules.h -- double-tap jump and the bounce block zones.
+//
+// How MapleRoot's universal bounces work (mapleroot/ijl15, unchanged here):
+//   * The server grants every character Ninja Bounce 1050 / 10001050 / 20001050
+//     ("Jump Around!") and Vertical Bounce 1054 / 10001054 / 20001054 ("Jump
+//     Upwards!") at login. A player hotkeys one and presses it.
+//   * CUserLocal::DoActiveSkill 0x00966F7A is detoured (SkillEdits/Activeskill.h
+//     CUserLocal__DoActiveSkill_t). For those ids the detour rewrites the jg at
+//     0x0096792A into a jmp to its doActiveSkills cave, which sends the bounce
+//     ids to the stock bound-jump call at 0x0096897A, i.e.
+//     CUserLocal::DoActiveSkill_BoundJump 0x0096BE38 (the thieves' Flash Jump).
+//   * Inside that function a cave at 0x0096BF0B (FlashJumpAll) accepts the
+//     bounce ids next to 14101004 and, per use, rewrites the impulse immediates
+//     at 0x0096C00A / 0x0096C021 / 0x0096C031 (sideways for 1050, straight up
+//     for 1054). 0x0096C073 is NOPed so every non-Hermit id takes the Night
+//     Walker effect path. YourStuff.h "PROPER FJ" NOPs the one-time-action,
+//     foothold and skill-request gates (0x0096BED2/BEE2/BF59/BF86/BFAE).
+//
+// SlumsMS adds two things on top, and touches none of those bytes:
+//   1. Double-tap jump ([clienthax] doubletapjump, default true): the jump
+//      key's call to CUserLocal::Jump in CUserLocal::OnKeyDown (0x0094F5A7,
+//      E8 rel32 -> 0x0094C383) is redirected once at startup. A FRESH press
+//      (lParam bit 30 clear: not keyboard auto-repeat) while the character is
+//      airborne by the client's own physics state -- no foothold, not on a
+//      ladder or rope, not swimming or in a fly map -- also asks
+//      DoActiveSkill for the best bounce the character has: real Flash Jump
+//      (4111006 / 14101004) first, else the Ninja Bounce of its job family.
+//      Holding jump never bounces; the stock "one bound jump per airtime" flag
+//      (CUserLocal+0x2B58) still limits it to one per jump.
+//   2. Bounce block zones: on a blocked map, DoActiveSkill refuses the six
+//      universal bounce ids before anything moves or is sent (hotkey, macro or
+//      double-tap alike). Flash Jump (4111006 / 14101004) is refused only where
+//      the zone's category says block_flash_jump -- the jump quests, mirroring
+//      stock v83: DoActiveSkill_BoundJump itself refuses any bound jump when
+//      CField+0x144 (fieldLimit) has MOVEMENTSKILLS 0x2 (0x0096BE5E..0x0096BE71,
+//      string 0x374), and the server's stock Map.wz sets 0x2 on every vanilla
+//      JQ stage. Our list does not depend on the client's own Map.wz copy.
+//      The sets come from the server (LP BOUNCE_ZONES_SYNC 0x3737) at login;
+//      until they arrive the built-in jump-quest list below is used for both.
+//
+// Everything here is pure so tests/bounce_rules_test.cpp runs it natively.
+// ============================================================
+
+#include <algorithm>
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <vector>
+
+namespace bounce {
+
+// ---- skills ----
+constexpr int kFlashJumpHermit = 4111006;
+constexpr int kFlashJumpNightWalker = 14101004;
+constexpr std::array<int, 3> kNinjaBounce = {{1050, 10001050, 20001050}};
+constexpr std::array<int, 3> kVerticalBounce = {{1054, 10001054, 20001054}};
+
+inline bool IsNinjaBounce(int id) {
+    return std::find(kNinjaBounce.begin(), kNinjaBounce.end(), id) != kNinjaBounce.end();
+}
+inline bool IsVerticalBounce(int id) {
+    return std::find(kVerticalBounce.begin(), kVerticalBounce.end(), id) != kVerticalBounce.end();
+}
+// The MapleRoot bounces every character has; never the thieves' real Flash Jump.
+inline bool IsUniversalBounce(int id) { return IsNinjaBounce(id) || IsVerticalBounce(id); }
+inline bool IsFlashJump(int id) { return id == kFlashJumpHermit || id == kFlashJumpNightWalker; }
+
+// ---- map zones ----
+struct MapRange {
+    std::int32_t first;
+    std::int32_t last; // inclusive
+    bool operator==(const MapRange& o) const { return first == o.first && last == o.last; }
+};
+
+// Sorted, merged, inclusive ranges; Contains is a binary search.
+class ZoneSet {
+public:
+    ZoneSet() = default;
+    static ZoneSet FromRanges(std::vector<MapRange> ranges) {
+        ranges.erase(std::remove_if(ranges.begin(), ranges.end(),
+                         [](const MapRange& r) { return r.first > r.last; }),
+            ranges.end());
+        std::sort(ranges.begin(), ranges.end(),
+            [](const MapRange& a, const MapRange& b) { return a.first < b.first; });
+        ZoneSet z;
+        for (const auto& r : ranges) {
+            if (!z.ranges_.empty() && static_cast<std::int64_t>(r.first) <= static_cast<std::int64_t>(z.ranges_.back().last) + 1) {
+                z.ranges_.back().last = (std::max)(z.ranges_.back().last, r.last);
+            } else {
+                z.ranges_.push_back(r);
+            }
+        }
+        return z;
+    }
+    bool Contains(int mapId) const {
+        auto it = std::upper_bound(ranges_.begin(), ranges_.end(), mapId,
+            [](int id, const MapRange& r) { return id < r.first; });
+        if (it == ranges_.begin()) return false;
+        --it;
+        return mapId >= it->first && mapId <= it->last;
+    }
+    const std::vector<MapRange>& Ranges() const { return ranges_; }
+    std::size_t MapCount() const {
+        std::size_t n = 0;
+        for (const auto& r : ranges_) n += static_cast<std::size_t>(r.last - r.first) + 1;
+        return n;
+    }
+
+private:
+    std::vector<MapRange> ranges_;
+};
+
+// The jump-quest category of the server's bounce-zones.yaml, generated by the server's
+// tools/bounce/gen_client_zones.py. tests/bounce_rules_test.cpp checks it against the server's
+// golden BOUNCE_ZONES_SYNC packet for the shipped yaml, so the two lists cannot drift silently.
+inline const std::vector<MapRange>& BuiltinJumpQuestRanges() {
+    static const std::vector<MapRange> ranges = {
+#include "bounce_zones_builtin.inc"
+    };
+    return ranges;
+}
+
+// ---- LP BOUNCE_ZONES_SYNC 0x3737 ----
+// After the opcode, little-endian: version(1) = 1, nativeBounce(4) = the Ninja Bounce id of the
+// character's job family, n(2), n x (first(4), last(4)) inclusive map-id ranges where the universal
+// bounces are refused, m(2), m x (first(4), last(4)) where Flash Jump is refused too. The server's
+// server.bounce.BounceZonePackets writes it; the sets replace the built-in list.
+constexpr std::uint16_t kBounceZonesSyncOpcode = 0x3737;
+constexpr std::uint8_t kBounceZonesVersion = 1;
+constexpr std::size_t kMaxZoneRanges = 4096;
+
+struct ZonesSync {
+    int nativeBounce = 0;
+    std::vector<MapRange> bounce;
+    std::vector<MapRange> flashJump;
+};
+
+inline std::int32_t ReadLe32(const unsigned char* p) {
+    return static_cast<std::int32_t>(static_cast<std::uint32_t>(p[0]) | (static_cast<std::uint32_t>(p[1]) << 8)
+        | (static_cast<std::uint32_t>(p[2]) << 16) | (static_cast<std::uint32_t>(p[3]) << 24));
+}
+
+// Decodes the bytes after the opcode. False (and out untouched) on a short, long or unknown packet.
+inline bool DecodeZonesSync(const unsigned char* body, std::size_t size, ZonesSync& out) {
+    if (!body || size < 9 || body[0] != kBounceZonesVersion) return false;
+    ZonesSync z;
+    z.nativeBounce = ReadLe32(body + 1);
+    if (z.nativeBounce != 0 && !IsNinjaBounce(z.nativeBounce)) return false;
+    std::size_t at = 5;
+    for (auto* list : {&z.bounce, &z.flashJump}) {
+        if (size < at + 2) return false;
+        const std::size_t count = static_cast<std::size_t>(body[at]) | (static_cast<std::size_t>(body[at + 1]) << 8);
+        at += 2;
+        if (count > kMaxZoneRanges || size < at + count * 8) return false;
+        list->reserve(count);
+        for (std::size_t i = 0; i < count; ++i, at += 8) list->push_back({ReadLe32(body + at), ReadLe32(body + at + 4)});
+    }
+    if (at != size) return false;
+    out = std::move(z);
+    return true;
+}
+
+// ---- decisions ----
+
+// The client's own movement state of the local user's CVecCtrl.
+struct AirState {
+    bool hasVecCtrl = false;
+    bool onFoothold = false; // CVecCtrl+0x110 non-null
+    bool onLadder = false;   // 0x00705309
+    bool onRope = false;     // 0x00705343
+    bool swimOrFly = false;  // 0x007046AC: swim area or fly map
+};
+
+inline bool IsAirborne(const AirState& s) {
+    return s.hasVecCtrl && !s.onFoothold && !s.onLadder && !s.onRope && !s.swimOrFly;
+}
+
+// WM_KEYDOWN lParam: bit 30 = the key was already down (auto-repeat), bit 31 = key up.
+inline bool IsFreshPress(std::uint32_t lParam) { return (lParam & 0xC0000000u) == 0; }
+
+// The bounce a double-tap uses: real Flash Jump if learned, else the job family's Ninja Bounce
+// (nativeBounce from the server; 0 = unknown), else any Ninja Bounce the character has. 0 = none.
+template <typename LevelOf>
+int ChooseDoubleTapSkill(LevelOf levelOf, int nativeBounce) {
+    for (int id : {kFlashJumpHermit, kFlashJumpNightWalker}) {
+        if (levelOf(id) > 0) return id;
+    }
+    if (IsNinjaBounce(nativeBounce) && levelOf(nativeBounce) > 0) return nativeBounce;
+    for (int id : kNinjaBounce) {
+        if (levelOf(id) > 0) return id;
+    }
+    return 0;
+}
+
+// Whether the current map refuses bounces / Flash Jump.
+struct MapBlock {
+    bool bounce = false;
+    bool flashJump = false;
+};
+
+// Whether DoActiveSkill must refuse this skill on this map.
+inline bool ShouldBlockSkill(int skillId, const MapBlock& here) {
+    return (IsUniversalBounce(skillId) && here.bounce) || (IsFlashJump(skillId) && here.flashJump);
+}
+
+struct DoubleTapInput {
+    bool enabled = true;      // [clienthax] doubletapjump
+    std::uint32_t lParam = 0; // the jump key's WM_KEYDOWN lParam
+    AirState air;
+    MapBlock here;
+};
+
+// The skill a jump-key press should also use, or 0 for "just the stock jump".
+template <typename LevelOf>
+int DecideDoubleTap(const DoubleTapInput& in, LevelOf levelOf, int nativeBounce) {
+    if (!in.enabled || !IsFreshPress(in.lParam) || !IsAirborne(in.air)) return 0;
+    const int skill = ChooseDoubleTapSkill(levelOf, nativeBounce);
+    if (skill == 0 || ShouldBlockSkill(skill, in.here)) return 0;
+    return skill;
+}
+
+// ---- the one static patch ----
+// CUserLocal::OnKeyDown 0x0094F2ED, jump function key (53):
+//   0094F5A4  57              push edi            ; bEnforced = 0
+//   0094F5A5  8B CB           mov ecx, ebx        ; CUserLocal*
+//   0094F5A7  E8 D7 CD FF FF  call 0x0094C383     ; CUserLocal::Jump
+// Only the rel32 of that call changes. MapleRoot's attackjump patch (0x0094C3BB, inside Jump)
+// is untouched; Jump itself is not detoured.
+constexpr std::uint32_t kJumpKeyCallSite = 0x0094F5A7;
+constexpr std::uint32_t kCUserLocalJump = 0x0094C383;
+constexpr std::uint32_t kJumpKeyContext = 0x0094F5A4;
+constexpr std::array<unsigned char, 8> kJumpKeyOriginal = {{0x57, 0x8B, 0xCB, 0xE8, 0xD7, 0xCD, 0xFF, 0xFF}};
+
+inline std::array<unsigned char, 5> CallRel32(std::uint32_t site, std::uint32_t target) {
+    const std::uint32_t rel = target - (site + 5);
+    return {{0xE8, static_cast<unsigned char>(rel), static_cast<unsigned char>(rel >> 8),
+        static_cast<unsigned char>(rel >> 16), static_cast<unsigned char>(rel >> 24)}};
+}
+
+enum class JumpSiteState { Original, Patched, Unknown };
+
+// current = 8 bytes read from kJumpKeyContext.
+inline JumpSiteState ClassifyJumpSite(const unsigned char* current, std::uint32_t thunk) {
+    if (std::memcmp(current, kJumpKeyOriginal.data(), kJumpKeyOriginal.size()) == 0) return JumpSiteState::Original;
+    const auto call = CallRel32(kJumpKeyCallSite, thunk);
+    if (std::memcmp(current, kJumpKeyOriginal.data(), 3) == 0 && std::memcmp(current + 3, call.data(), call.size()) == 0)
+        return JumpSiteState::Patched;
+    return JumpSiteState::Unknown;
+}
+
+} // namespace bounce

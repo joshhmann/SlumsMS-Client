@@ -169,7 +169,7 @@ void CWvsApp::CleanUp_hook() {
 #ifdef MAPLEROOT_MOUNT_INFO
     ShutdownMountInfo();
 #endif
-#if defined(MAPLEROOT_CASHSHOP_WINDOW) || defined(MAPLEROOT_WEATHER) || defined(MAPLEROOT_DAILY_CHECKIN) || defined(MAPLEROOT_SET_EQUIP) || defined(MAPLEROOT_MONSTER_BOOK) || defined(MAPLEROOT_COLOR_PRISM)
+#if defined(MAPLEROOT_CASHSHOP_WINDOW) || defined(MAPLEROOT_WEATHER) || defined(MAPLEROOT_DAILY_CHECKIN) || defined(MAPLEROOT_SET_EQUIP) || defined(MAPLEROOT_MONSTER_BOOK) || defined(MAPLEROOT_COLOR_PRISM) || defined(MAPLEROOT_INTEGRATION)
     ShutdownCustomPackets();
 #endif
 #ifdef MAPLEROOT_WEATHER

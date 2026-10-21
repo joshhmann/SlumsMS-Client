@@ -615,8 +615,12 @@ bool isSkillIDMatched(int nSkillID)
 }
 
 auto pDoActiveSkill = (int(__thiscall*)(int, int, int, int))0x00966F7A;
+// SlumsMS (src/bounce.cpp): the universal bounces do nothing on a blocked map (jump quests by default).
+extern "C" int __cdecl SlumsBounce_BlockSkill(int nSkillID);
 int(__fastcall CUserLocal__DoActiveSkill_t)(int _This, void* edx, int nSkillID, unsigned int nScanCode, int pnConsumeCheck)
 {
+	if (SlumsBounce_BlockSkill(nSkillID))
+		return 0;
 	if (isSkillIDMatched(nSkillID))
 	{
 		CodeCave((void*)doActiveSkills, 0x0096792A, 0);

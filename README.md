@@ -35,6 +35,18 @@ MapleRoot's single `[clienthax] moveattack` switch is split into three keys, one
 
 Precedence: a key that is set wins for its own patch. A missing `attackjump`/`chargemove` follows the legacy `moveattack=` (default `true`; `moveattack=false` turns both off). `attackwalk` never follows `moveattack`; it is off unless `attackwalk=true`. A disabled site is restored to vanilla bytes if something else (such as a stray MapleRoot `ijl15.dll`) already patched it. `jumpshoot` and `jumpmagic` stay separate keys.
 
+## Bounces: double-tap jump and blocked maps
+
+The server gives every character MapleRoot's Ninja Bounce (1050 / 10001050 / 20001050, "Jump Around!") and Vertical Bounce (1054 / 10001054 / 20001054, "Jump Upwards!"). MapleRoot makes them work by routing those ids through `CUserLocal::DoActiveSkill` (its detour) into the thieves' bound jump, `CUserLocal::DoActiveSkill_BoundJump` (`0x0096BE38`, cave at `0x0096BF0B`). `src/bounce.cpp` and `src/bounce_rules.h` add:
+
+| Key | What | Default |
+| --- | --- | --- |
+| `[clienthax] doubletapjump` | a fresh jump press while airborne (no foothold, not on a ladder/rope, not swimming or in a fly map; keyboard auto-repeat ignored) also uses real Flash Jump if learned, else the job family's Ninja Bounce; one per airtime as before | `true` |
+
+The patch is installed once at startup: the jump key's `call CUserLocal::Jump` in `CUserLocal::OnKeyDown` (`0x0094F5A7`) gets a new rel32, nothing else; `Jump` itself and MapleRoot's attackjump bytes (`0x0094C3BB`) are untouched. With the key off nothing is patched.
+
+Blocked maps: on maps the server lists (its `bounce-zones.yaml`; jump quests by default) the six bounce ids do nothing, from a hotkey, a macro or a double-tap, and on jump quests real Flash Jump is refused too, as stock v83 fieldLimit already did. The server sends the list at login (LP `0x3737` `BOUNCE_ZONES_SYNC`); until then the built-in jump-quest list (`src/bounce_zones_builtin.inc`, generated from the server's yaml) applies. `tests/bounce_rules_test.cpp` checks both against the server's golden packet.
+
 ## Runtime inputs
 
 The game Data tree is intentionally external. The accepted checkpoint separately retains the base game executable, supporting runtime DLLs, launcher and the exact manually accepted built DLLs. Install into a private copy of the owned v83 client, apply the matching core and addon assets, and use the server/client release manifest. `config.example.ini` uses login port 8485; the earlier disposable tests used 8488.
