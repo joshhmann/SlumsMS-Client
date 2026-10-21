@@ -8,6 +8,9 @@
 #ifdef MAPLEROOT_DAILY_CHECKIN
 #include "dailycheckin.h"
 #endif
+#ifdef MAPLEROOT_SET_EQUIP
+#include "setitem.h"
+#endif
 #ifdef MAPLEROOT_WEATHER
 #include "weather.h"
 #include "lamps.h"
@@ -31,6 +34,13 @@ void __fastcall ProcessPacketHook(void* socket, void*, CInPacket* packet) {
         if (opcode == kDailyCheckinSyncOpcode) {
             std::lock_guard<std::mutex> lock(dispatchGate);
             if (!shuttingDown) DailyCheckin_HandleSync(packet);
+            return;
+        }
+#endif
+#ifdef MAPLEROOT_SET_EQUIP
+        if (opcode == kSetItemSyncOpcode) {
+            std::lock_guard<std::mutex> lock(dispatchGate);
+            if (!shuttingDown) SetItem_HandleSync(packet);
             return;
         }
 #endif

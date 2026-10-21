@@ -11,6 +11,9 @@
 #ifdef MAPLEROOT_CASHSHOP_WINDOW
 #include "cashshopwnd.h"
 #endif
+#ifdef MAPLEROOT_SET_EQUIP
+#include "setitem.h"
+#endif
 #ifdef MAPLEROOT_WEATHER
 #include "weather.h"
 extern void Weather_Tick();
@@ -248,6 +251,9 @@ void CWvsApp::CallUpdate_hook(int tCurTime) {
 #ifdef MAPLEROOT_CASHSHOP_WINDOW
     CashShopWnd_Tick();
 #endif
+#ifdef MAPLEROOT_SET_EQUIP
+    SetItem_Tick();
+#endif
     if (m_bFirstUpdate) {
         m_tUpdateTime = tCurTime;
         m_bFirstUpdate = 0;
@@ -407,7 +413,7 @@ int CWndMan::TranslateMessage_hook(UINT& msg, WPARAM& wParam, LPARAM& lParam, LR
 
 
 void AttachClientBypass() {
-#if defined(MAPLEROOT_CASHSHOP_WINDOW) || defined(MAPLEROOT_WEATHER) || defined(MAPLEROOT_DAILY_CHECKIN)
+#if defined(MAPLEROOT_CASHSHOP_WINDOW) || defined(MAPLEROOT_WEATHER) || defined(MAPLEROOT_DAILY_CHECKIN) || defined(MAPLEROOT_SET_EQUIP)
     AttachCustomPacketMod();
 #endif
     ATTACH_HOOK(CClientSocket::Connect, CClientSocket::Connect_hook);

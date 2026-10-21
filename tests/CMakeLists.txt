@@ -31,3 +31,8 @@ if(MAPLEROOT_MOUNT_INFO AND EXISTS "${MOVEMENTKEYS_TEST_CLIENT}/Data/Character/T
     target_include_directories(mountinfo_canvas_test PRIVATE ../src)
     add_test(NAME mount_full_frame_replacement COMMAND mountinfo_canvas_test "${MOVEMENTKEYS_TEST_CLIENT}")
 endif()
+
+if(MAPLEROOT_SET_EQUIP)
+    add_executable(setitem_proto_test setitem_proto_test.cpp)
+    add_test(NAME setequip_wire_format COMMAND setitem_proto_test)
+endif()
