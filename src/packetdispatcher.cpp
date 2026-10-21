@@ -11,6 +11,9 @@
 #ifdef MAPLEROOT_SET_EQUIP
 #include "setitem.h"
 #endif
+#ifdef MAPLEROOT_MONSTER_BOOK
+#include "monsterbook.h"
+#endif
 #ifdef MAPLEROOT_WEATHER
 #include "weather.h"
 #include "lamps.h"
@@ -41,6 +44,14 @@ void __fastcall ProcessPacketHook(void* socket, void*, CInPacket* packet) {
         if (opcode == kSetItemSyncOpcode) {
             std::lock_guard<std::mutex> lock(dispatchGate);
             if (!shuttingDown) SetItem_HandleSync(packet);
+            return;
+        }
+#endif
+#ifdef MAPLEROOT_MONSTER_BOOK
+        if (opcode == kMonsterBookResultOpcode) {
+            // Client-addon-only opcode: swallowed here, the stock client has no handler for it.
+            std::lock_guard<std::mutex> lock(dispatchGate);
+            if (!shuttingDown) MonsterBook_HandleResult(packet);
             return;
         }
 #endif
