@@ -47,6 +47,7 @@
 #include "constants.h"
 #include "debug.h"
 #include "cashshopwnd.h"
+#include "ui_wheel.h"
 
 #include "wvs/iteminfo.h"
 #include "wvs/packet.h"
@@ -1586,7 +1587,11 @@ public:
     virtual void OnMouseButton(unsigned int msg, unsigned int wParam, int rx, int ry) override;
     virtual int  OnMouseMove(int rx, int ry) override;
     virtual int  OnMouseWheel(int, int, int nWheel) override {
-        m_nScroll += (nWheel > 0) ? -1 : 1;      // wheel up -> earlier rows
+        // The client passes wheel UP as NEGATIVE (see ui_wheel.h). This had the sign the
+        // Windows way round, so the cash shop scrolled backwards.
+        const int nStep = WheelRowStep(nWheel);
+        if (!nStep) return 1;
+        m_nScroll += nStep;
         ClampScroll();
         InvalidateRect(nullptr);
         return 1;

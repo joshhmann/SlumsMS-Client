@@ -63,3 +63,6 @@ endif()
 
 add_executable(attackstop_patch_test attackstop_patch_test.cpp)
 add_test(NAME attackstop_moveattack_sites COMMAND attackstop_patch_test)
+
+add_executable(ui_wheel_test ui_wheel_test.cpp)
+add_test(NAME ui_wheel_direction COMMAND ui_wheel_test)
