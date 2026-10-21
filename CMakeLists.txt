@@ -6,6 +6,7 @@ option(MAPLEROOT_WEATHER "Build visual weather/time and lamps with matching serv
 option(MAPLEROOT_INTEGRATION "Preserve MapleRoot custom gameplay and Data assets" OFF)
 option(MAPLEROOT_SHUTDOWN_SMOKE_TEST "Test-only client: return from Run immediately to exercise native cleanup" OFF)
 option(MAPLEROOT_DAILY_CHECKIN "Build the Daily Check-In window (requires matching server support)" OFF)
+option(MAPLEROOT_MONSTER_BOOK "Build the Monster Book addon: open book, live drop %, search (requires matching server support)" OFF)
 option(MAPLEROOT_CASHSHOP_WINDOW "Build the in-field cash shop addon (requires matching server support)" OFF)
 if(MAPLEROOT_SHUTDOWN_SMOKE_TEST AND NOT MAPLEROOT_INTEGRATION)
     message(FATAL_ERROR "Shutdown smoke tests require MAPLEROOT_INTEGRATION")

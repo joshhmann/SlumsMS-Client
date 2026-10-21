@@ -47,7 +47,7 @@ void AttachSystemHooks();
 
 // called in system.cpp -> SetUnhandledExceptionFilter_hook
 void AttachClientBypass();
-#if defined(MAPLEROOT_CASHSHOP_WINDOW) || defined(MAPLEROOT_WEATHER) || defined(MAPLEROOT_DAILY_CHECKIN)
+#if defined(MAPLEROOT_CASHSHOP_WINDOW) || defined(MAPLEROOT_WEATHER) || defined(MAPLEROOT_DAILY_CHECKIN) || defined(MAPLEROOT_MONSTER_BOOK)
 void AttachCustomPacketMod();
 void ShutdownCustomPackets();
 #endif
@@ -70,6 +70,14 @@ void AttachMountInfoMod();
 #endif
 #ifdef MAPLEROOT_MOVEMENT_KEYS
 void AttachMovementKeysMod();
+#endif
+#ifdef MAPLEROOT_MONSTER_BOOK
+// monsterbook*.cpp; the shared surface is monsterbook.h
+void AttachMonsterBookMod();
+void AttachMonsterBookFoundInMod();
+void AttachMonsterBookDropsMod();
+void AttachMonsterBookSearchMod();
+void MonsterBook_Tick();
 #endif
 #ifdef MAPLEROOT_WEATHER
 void AttachWeatherMod();
@@ -151,6 +159,14 @@ inline void AttachClientHooks() {
 #ifdef MAPLEROOT_INTEGRATION
     VerifyKaentakeHooks("AttachMobHpTagMod");
 #endif
+#endif
+#ifdef MAPLEROOT_MONSTER_BOOK
+    // DROPS before SEARCH: the search module reads the 16-per-page Dropping patch the drops module installs.
+    AttachMonsterBookMod();
+    AttachMonsterBookFoundInMod();
+    AttachMonsterBookDropsMod();
+    AttachMonsterBookSearchMod();
+    VerifyKaentakeHooks("Monster Book");
 #endif
     DebugMessage("Installing: AttachToolTipMod();");
     AttachToolTipMod();

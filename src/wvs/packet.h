@@ -12,6 +12,10 @@ public:
         return true;
     }
     size_t GetOffset() const { return m_uOffset; }
+    // The unread bytes, starting at the current offset (the opcode, for a packet the dispatcher only peeked).
+    const unsigned char* CurrentPublic() const {
+        return CanRead(1) ? &m_aRecvBuff[m_uOffset] : nullptr;
+    }
     void SetOffset(size_t offset) { m_uOffset = offset; }
     bool CanRead(size_t n) const {
         return !m_aRecvBuff.IsEmpty() && m_uOffset <= m_uLength && n <= m_uLength - m_uOffset;
