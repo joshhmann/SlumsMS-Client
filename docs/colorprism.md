@@ -36,12 +36,14 @@ effect layer, 1 hair, 2 face. Hue is absolute, stored as -(degrees + 1) in -360.
 - Item 5782000 is a new image, `Item/Cash/0578.img`, in Custom.wz (icon origin rewritten to (0,33)).
   `tools/wz/add_color_prism.py` builds both from `assets/colorprism/`.
 - The cash-use and drop hooks the package leaves to the host are in `coloringprism_hooks.cpp`.
+- Item name and description: `String/Cash.img` is stock and Custom.wz cannot add `5782000` to it, so
+  `coloringprism_hooks.cpp` hooks CItemInfo's string worker (0x005CF6FE, behind both GetItemName 0x005CF63E and
+  GetItemDesc 0x005CF69E) and fills in 5782000's `name`/`desc` when the stock answer is empty. The text is in
+  `coloringprism_text.h` and matches the server's `tools/colorprism/install_wz.py`; ctest `colorprism_item_text`.
 - `AVATAR_EQUIP_SLOTS` (52, the client's real array size) is defined in `wvs/avatar.h`; the struct is unchanged.
 - The opcode is routed by `packetdispatcher.cpp` and `WeaponTint_Tick` runs from `CallUpdate`.
 
 ## Known gaps
 
-- No item name or description: `String/Cash.img` is stock and Custom.wz cannot add `5782000` to it.
-  `CItemInfo::GetItemName` (0x005CF63E) returns an empty string for an unknown id, so the tooltip title is blank.
 - Cape/aura layers from `itemeff.cpp` are not dyed: `WeaponTint_BeginItemEffSwap` is not wired, because that
   module caches layers on item/action/flip and a tint change would not invalidate them.
