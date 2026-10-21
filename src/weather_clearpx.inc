@@ -2721,9 +2721,9 @@
 // connect/ladder/67/3  48x102
 { 0xDB781103E3BC5C81ULL, 8, 0 },
 // connect/rope/0/1  5x30
-{ 0x52AAD636EAF43B6CULL, 4, 12 },
+{ 0x52AAD636EAF43B6CULL, 4, 11 },
 // connect/rope/0/3  5x120
-{ 0x52AAD836EAF43ED2ULL, 4, 12 },
+{ 0x52AAD836EAF43ED2ULL, 4, 11 },
 // connect/rope/10/3  4x52
 { 0x9F4DE559E63CC2DBULL, -1, -1 },
 // connect/rope/10/4  4x156

@@ -266,11 +266,6 @@ IWzCanvasPtr WeatherCanvas_Project(IWzCanvasPtr pSrc, const PROJECT& cfg, POINT*
         return nullptr;
     }
 
-    // The WHOLE sprite, kept before the window narrows sw/sh. CopyEx source coordinates
-    // are in the sprite's own space whatever window we are drawing, so the clear pixel is
-    // bounded against this and not against the window.
-    const int nFullW = sw, nFullH = sh;
-
     // The source WINDOW. Everything below measures from here, so a caller that asked for
     // one plant out of a four plant sprite gets a canvas the size of that plant and a
     // pivot at that plant's own base, rather than the bitmap's.
@@ -446,40 +441,23 @@ IWzCanvasPtr WeatherCanvas_Project(IWzCanvasPtr pSrc, const PROJECT& cfg, POINT*
         // No pixel buffer: shear by blitting one source row at a time. Same geometry,
         // hard edges, no tint control beyond what the layer colour can do.
         try {
-            // CLEAR THE CANVAS FIRST. Create() does not promise to, and this path only
-            // ever writes the sheared band: each row lands at its own dx, so a wedge down
-            // each side -- widest at the TOP, where the lean is greatest -- is never
-            // written at all. Whatever the allocator handed back stays there, and after a
-            // rebuild that memory is usually the frames just freed, so the wedge shows a
-            // ghost of a previous lean: a frozen, offset copy of the plant's head that
-            // never moves because it is baked into the frame.
+            // NO SECOND CLEAR HERE. The destination was zeroed with the 0x00FFFFFF
+            // sentinel right after Create(), which covers every pixel this path does not
+            // write.
             //
-            // Stretching ONE source pixel over the whole destination is the only clear
-            // available without a pixel buffer, so that pixel had better be transparent.
+            // This branch used to clear AGAIN by stretching one "measured transparent"
+            // source pixel (cfg.nClearX/Y from weather_clearpx.inc, else the corner) over
+            // the whole canvas. That table is keyed by WZ path and was measured against
+            // different data from what SlumsMS ships: connect/rope/0/1 and /0/3 (the
+            // Henesys hunting ground ropes) carried (4,12), which is 80% opaque brown in
+            // our Map.wz -- (4,11) is the clear one -- and 196 other connect/ rope and
+            // ladder sprites are not listed at all although their corner is opaque or
+            // faint (alpha 17..255). Every one of those drew inside a solid or faint box
+            // the size of its sway frame: the 1.4.x "rope rectangle border" report.
             //
-            // It used to be the source rect's corner unconditionally. That is transparent
-            // on 118 of the 120 acc1 foliage sprites measured, which is why it survived --
-            // and it is OPAQUE on anything that fills its own canvas. A rope and a ladder
-            // both do, so both drew inside a solid box of their own corner colour.
-            //
-            // cfg.nClearX/Y is a measured transparent pixel for those sprites, from
-            // weather_clearpx.inc. -1 keeps the old corner, which is correct wherever the
-            // corner is already clear.
-            // The fallback is the CANVAS corner (0,0), NOT the window corner.
-            //
-            // It used to be sx0/sy0, which is the same thing for an ordinary sprite and is
-            // the wrong thing for a clumped one: a clump window's corner sits inside the
-            // plant's own bounding box and is usually opaque, so every clumped sprite --
-            // every mushroom cluster, every tuft of several plants -- cleared with a solid
-            // colour and drew in a box. The ropes did not, which is why fixing their corner
-            // fixed them and left the clusters untouched.
-            //
-            // (0,0) is safe precisely because weather_clearpx.inc lists every sprite whose
-            // (0,0) is NOT transparent; a sprite absent from that table has a clear corner
-            // by construction.
-            const int nClrX = (cfg.nClearX >= 0 && cfg.nClearX < nFullW) ? cfg.nClearX : 0;
-            const int nClrY = (cfg.nClearY >= 0 && cfg.nClearY < nFullH) ? cfg.nClearY : 0;
-            pDst->CopyEx(0, 0, pSrc, CANVAS_ALPHATYPE::CA_OVERWRITE, dw, dh, nClrX, nClrY, 1, 1);
+            // The stretch could only ever undo a correct clear, never improve on it, so
+            // it is gone. tests/weather_rope_clear_test.cpp pins both halves: the sentinel
+            // zeroes a filled canvas, and a sheared rope keeps exactly its own pixels.
             for (int y = 0; y < sh; ++y) {
                 const float hAbove = (float)(nBaseRow - y);   // signed: negative below the pivot
                 // Only the LEAN is clamped: a row on the anchored side does not lean, but
