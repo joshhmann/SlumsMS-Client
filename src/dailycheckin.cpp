@@ -4,7 +4,7 @@
 // dailycheckin.cpp  —  custom Daily Check-In window (28-day login-streak grid).
 //
 // A single CWnd subclass (CUIDailyCheckin), one instance, showing a 7x4 grid of day
-// slots over your custom art (UI/UIWindow.img/DailyCheckin/backgrnd, 513x346). Each
+// slots over the art (Custom.wz UI/UIWindowEx.img/DailyCheckin/backgrnd, 513x346). Each
 // consecutive day (server-gated to one claim / 24h) unlocks the next day's reward;
 // clicking an unlocked, unclaimed slot sends a CLAIM request and (on the reply) pops a
 // native confirmation dialog.
@@ -261,7 +261,11 @@ public:
     }
 
     void LoadSprites() {
-        m_pBg          = LoadSprite(L"UI/UIWindow.img/DailyCheckin/backgrnd");
+        // The art ships in Custom.wz as UI/UIWindowEx.img (a custom-only image, served whole from Custom.wz like
+        // MobHPRatioInfo; a new sub-property of the stock UIWindow.img would not be merged). The stock path is the
+        // fallback for a client that packed the node into its own UI.wz.
+        m_pBg          = LoadSprite(L"UI/UIWindowEx.img/DailyCheckin/backgrnd");
+        if (!m_pBg) m_pBg = LoadSprite(L"UI/UIWindow.img/DailyCheckin/backgrnd");
         m_pBtClose[0]  = LoadSprite(L"UI/UIWindow.img/Bag/BtClose/normal/0");
         m_pBtClose[1]  = LoadSprite(L"UI/UIWindow.img/Bag/BtClose/mouseOver/0");
     }
@@ -340,7 +344,8 @@ public:
             ShadowText(c, hx, y + 4, lines[0].c_str(), titleF);                      // gold header, centred
             int ty = y + titleH + 6;
             for (size_t i = 1; i < lines.size(); ++i) {
-                IWzFontPtr f = (lines[i].find("mesos") != std::string::npos && m_pFontAccent) ? m_pFontAccent : bodyF;
+                const bool accent = lines[i].find("mesos") != std::string::npos || lines[i].find(" NX") != std::string::npos;
+                IWzFontPtr f = (accent && m_pFontAccent) ? m_pFontAccent : bodyF;   // NX and mesos in amber
                 ShadowText(c, x + padX, ty, lines[i].c_str(), f);
                 ty += lineH;
             }
