@@ -1165,25 +1165,7 @@ struct FacePatchGuard {
 // than trying to edit the already-cached source canvas.
 int NativeFaceForTint(int faceId, const WeaponTint& tint) {
     const int base = faceId - 100 * ((faceId / 100) % 10);
-    int variant = 2; // red / pink, the reference hue for the Prism's hue slider
-    const int h = tint.hue;
-    if (tint.bright <= -70 || tint.chroma <= -75) {
-        variant = 0; // black
-    } else if (h < 30 || h >= 330) {
-        variant = 2; // red / pink
-    } else if (h < 80) {
-        variant = 4; // brown / amber
-    } else if (h < 155) {
-        variant = 3; // green
-    } else if (h < 210) {
-        variant = 5; // aqua
-    } else if (h < 265) {
-        variant = 1; // blue
-    } else if (h < 320) {
-        variant = 6; // purple
-    } else {
-        variant = 7; // magenta
-    }
+    const int variant = FaceColorVariantForTint(tint);
     const int candidate = base + variant * 100;
     return FaceImg(candidate) ? candidate : faceId;
 }

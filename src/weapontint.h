@@ -65,6 +65,24 @@ constexpr signed char kTintDeltaMax =  100;
 constexpr int kTintKey_Hair = 1;
 constexpr int kTintKey_Face = 2;
 
+// Which of Face.img's artist-drawn eye colours (the HUNDREDS DIGIT of a face id) the
+// field render swaps in for an eye tint. The face assembler ignores canvas swaps, so
+// this nearest native variant is what other players and the field actually show.
+// It MUST read the absolute Tone via HueDegrees(): the stored hue is -(h + 1), and
+// comparing that raw negative number against degree bands put every tint in the
+// first band (Red), which is why eyes ignored the chosen Tone (1.4.1 QA t-cp-3).
+inline int FaceColorVariantForTint(const WeaponTint& t) {
+    if (t.bright <= -70 || t.chroma <= -75) return 0;   // black
+    const int h = t.HueDegrees();
+    if (h < 30 || h >= 330) return 2;                    // red / pink
+    if (h < 80)  return 4;                               // brown / amber
+    if (h < 155) return 3;                               // green
+    if (h < 210) return 5;                               // aqua
+    if (h < 265) return 1;                               // blue
+    if (h < 320) return 6;                               // purple
+    return 7;                                            // magenta
+}
+
 inline bool IsLookTintKey(int key) { return key == kTintKey_Hair || key == kTintKey_Face; }
 
 // An item's EFFECT layers are dyed separately from its body, so they need a second key

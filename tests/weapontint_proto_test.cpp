@@ -62,6 +62,34 @@ int main() {
         red.hue = -1;
         Check(red.IsHueEncodingValid() && red.HueDegrees() == 0 && !red.IsIdentity(), "Tone 0 is a colour, not identity");
 
+        // Eye colour follows the ABSOLUTE Tone (1.4.1 QA t-cp-3). The stored hue is negative, so a
+        // decoder that compared the raw value against degree bands sent every Tone to Red (variant 2).
+        {
+            auto eye = [](int degrees, int chroma = 0, int bright = 0) {
+                WeaponTint t;
+                t.hue = WeaponTint::EncodeAbsoluteHue(degrees);
+                t.chroma = static_cast<signed char>(chroma);
+                t.bright = static_cast<signed char>(bright);
+                return FaceColorVariantForTint(t);
+            };
+            Check(eye(0) == 2 && eye(359) == 2 && eye(330) == 2, "red tones -> red eyes");
+            Check(eye(50) == 4, "amber tone -> brown eyes");
+            Check(eye(120) == 3, "green tone -> green eyes");
+            Check(eye(180) == 5, "cyan tone -> aqua eyes");
+            Check(eye(240) == 1, "blue tone -> blue eyes");
+            Check(eye(290) == 6, "violet tone -> purple eyes");
+            Check(eye(325) == 7, "magenta tone -> magenta eyes");
+            Check(eye(240, 0, -80) == 0 && eye(120, -90) == 0, "dark or grey -> black eyes");
+            // Every Tone on the slider lands on the variant its own band names, whatever the
+            // encoding: the result depends on HueDegrees() only.
+            for (int d = 0; d < 360; ++d) {
+                WeaponTint t;
+                t.hue = WeaponTint::EncodeAbsoluteHue(d);
+                Check(t.HueDegrees() == d, "round trip");
+                if (d >= 80 && d < 330) Check(FaceColorVariantForTint(t) != 2, "non-red tone never picks red eyes");
+            }
+        }
+
         {
             const auto bytes = Hex(kSnapshot);
             auto c = Body(bytes, kTintSync_Snapshot);
