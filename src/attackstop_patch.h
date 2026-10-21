@@ -18,14 +18,19 @@
 //       at 0x0095F914)  7F 2C (jg) -> EB 59 (jmp to "return 1"), so every
 //       keydown skill is treated as movable.
 //
-// Vanilla attack stop = leave (or put back) the original bytes at all three.
-// This header is pure data + decisions so it can be tested natively.
+// SlumsMS splits the single switch into one config.ini key per site (see
+// ResolveMoveAttackSettings for precedence) and applies them from here.
+// Vanilla = leave (or put back) the original bytes at a site.
+// Decisions are pure functions so they can be tested natively.
 // ============================================================
 
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <cctype>
 #include <cstring>
+#include <optional>
+#include <string>
 
 namespace integration {
 
@@ -55,24 +60,98 @@ inline AttackStopState ClassifyAttackStopSite(const AttackStopSite& site, const 
     return AttackStopState::Unknown;
 }
 
-// Default for config.ini [clienthax] vanillaattackstop when the key is absent.
-#ifdef MAPLEROOT_VANILLA_ATTACK_STOP
-constexpr bool kVanillaAttackStopDefault = true;
-#else
-constexpr bool kVanillaAttackStopDefault = false;
-#endif
+enum class MoveAttackSite : std::size_t { ChargeMove = 0, AttackWalk = 1, AttackJump = 2 };
 
-// moveattack is applied only when asked for and vanilla attack stop is off.
-// vanillaattackstop wins so installs whose config.ini already says
-// moveattack=true (the MapleRoot default we shipped) still get the fix.
-inline bool ShouldApplyMoveAttack(bool iniMoveAttack, bool vanillaAttackStop) {
-    return iniMoveAttack && !vanillaAttackStop;
+// config.ini [clienthax] key that owns each site, indexed like AttackStopSites().
+inline const char* MoveAttackSiteKey(MoveAttackSite site) {
+    static const char* const keys[] = {"chargemove", "attackwalk", "attackjump"};
+    return keys[static_cast<std::size_t>(site)];
 }
 
-// Restore one site: write the original bytes only over the exact moveattack
-// bytes. Anything else (already vanilla, or some other patch) is left alone.
-inline bool ShouldRestoreAttackStopSite(const AttackStopSite& site, const unsigned char* current) {
-    return ClassifyAttackStopSite(site, current) == AttackStopState::MoveAttack;
+// Parse an INI boolean the way MapleRoot's INIReader::GetBoolean does
+// (true/yes/on/1, false/no/off/0, any case). Absent ("") or anything else is
+// "not set" so it falls back like a missing key.
+inline std::optional<bool> ParseIniBool(std::string value) {
+    for (auto& c : value) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    if (value == "true" || value == "yes" || value == "on" || value == "1") return true;
+    if (value == "false" || value == "no" || value == "off" || value == "0") return false;
+    return std::nullopt;
+}
+
+struct MoveAttackIni {
+    std::optional<bool> moveAttack;  // legacy MapleRoot switch for all three
+    std::optional<bool> attackWalk;  // 0x009CBFB0, the slide
+    std::optional<bool> attackJump;  // 0x0094C3BB
+    std::optional<bool> chargeMove;  // 0x0095F97A
+};
+
+struct MoveAttackSettings {
+    bool attackWalk;
+    bool attackJump;
+    bool chargeMove;
+    bool Enabled(MoveAttackSite site) const {
+        switch (site) {
+        case MoveAttackSite::ChargeMove: return chargeMove;
+        case MoveAttackSite::AttackWalk: return attackWalk;
+        default: return attackJump;
+        }
+    }
+};
+
+// Precedence, per site (each key controls only its own site):
+//   1. The site's own key (attackwalk / attackjump / chargemove), when set.
+//   2. Otherwise attackjump and chargemove follow the legacy moveattack
+//      (default true, MapleRoot's default), so old config.ini files keep
+//      jumping and moving while charging; moveattack=false turns them off.
+//   3. attackwalk never follows moveattack=true: the slide is off unless
+//      attackwalk=true (owner's default, 2026-10-21: vanilla attack weight).
+//      moveattack=false leaves it off too.
+inline MoveAttackSettings ResolveMoveAttackSettings(const MoveAttackIni& ini) {
+    const bool legacy = ini.moveAttack.value_or(true);
+    return MoveAttackSettings{
+        ini.attackWalk.value_or(false),
+        ini.attackJump.value_or(legacy),
+        ini.chargeMove.value_or(legacy),
+    };
+}
+
+enum class MoveAttackWrite { None, WriteMoveAttack, WriteOriginal };
+
+// What to write at one site. Enabled: patch only over the vanilla bytes.
+// Disabled: restore only over the exact moveattack bytes (e.g. a stray
+// MapleRoot ijl15.dll applied it). Unknown bytes belong to some other patch
+// and are left alone either way.
+inline MoveAttackWrite DecideMoveAttackWrite(const AttackStopSite& site, const unsigned char* current, bool enabled) {
+    const AttackStopState state = ClassifyAttackStopSite(site, current);
+    if (enabled && state == AttackStopState::Original) return MoveAttackWrite::WriteMoveAttack;
+    if (!enabled && state == AttackStopState::MoveAttack) return MoveAttackWrite::WriteOriginal;
+    return MoveAttackWrite::None;
+}
+
+// Apply the resolved settings. Reader is const unsigned char*(std::uint32_t
+// address) giving the current bytes; Writer is void(std::uint32_t address,
+// const unsigned char* bytes, std::size_t length) and owns page protection.
+template <typename Reader, typename Writer>
+void ApplyMoveAttackSettings(const MoveAttackSettings& settings, Reader&& read, Writer&& write) {
+    const auto& sites = AttackStopSites();
+    for (std::size_t i = 0; i < sites.size(); ++i) {
+        const auto& site = sites[i];
+        switch (DecideMoveAttackWrite(site, read(site.address), settings.Enabled(static_cast<MoveAttackSite>(i)))) {
+        case MoveAttackWrite::WriteMoveAttack: write(site.address, site.moveAttack.data(), site.length); break;
+        case MoveAttackWrite::WriteOriginal: write(site.address, site.original.data(), site.length); break;
+        default: break;
+        }
+    }
+}
+
+// In-process form: read the live client image at the site address.
+template <typename Writer>
+void ApplyMoveAttackSettings(const MoveAttackSettings& settings, Writer&& write) {
+    ApplyMoveAttackSettings(settings,
+        [](std::uint32_t address) {
+            return reinterpret_cast<const unsigned char*>(static_cast<std::uintptr_t>(address));
+        },
+        write);
 }
 
 } // namespace integration

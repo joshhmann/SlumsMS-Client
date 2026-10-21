@@ -23,6 +23,18 @@ Without external Data, only the five tests that do not require game assets are r
 
 `config.ini` `[config] host=` takes a host name (for example `slumsms.asslorde.com`) or an IPv4 address, and `port=` the login port. A name is resolved once, on the first connection.
 
+## Movement during attacks
+
+MapleRoot's single `[clienthax] moveattack` switch is split into three keys, one per client patch (`src/attackstop_patch.h`):
+
+| Key | Patch | Default |
+| --- | --- | --- |
+| `attackwalk` | keep reading walk input during attacks, the "slide" (`0x009CBFB0`) | `false` (vanilla: attacks stop you) |
+| `attackjump` | jump during attack animations (`0x0094C3BB`) | `true` |
+| `chargemove` | move while charging keydown skills (`0x0095F97A`) | `true` |
+
+Precedence: a key that is set wins for its own patch. A missing `attackjump`/`chargemove` follows the legacy `moveattack=` (default `true`; `moveattack=false` turns both off). `attackwalk` never follows `moveattack`; it is off unless `attackwalk=true`. A disabled site is restored to vanilla bytes if something else (such as a stray MapleRoot `ijl15.dll`) already patched it. `jumpshoot` and `jumpmagic` stay separate keys.
+
 ## Runtime inputs
 
 The game Data tree is intentionally external. The accepted checkpoint separately retains the base game executable, supporting runtime DLLs, launcher and the exact manually accepted built DLLs. Install into a private copy of the owned v83 client, apply the matching core and addon assets, and use the server/client release manifest. `config.example.ini` uses login port 8485; the earlier disposable tests used 8488.

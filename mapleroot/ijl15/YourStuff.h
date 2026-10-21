@@ -625,28 +625,19 @@ void doini()
 
 
 
-		// Vanilla attack stop: MapleRoot's moveattack keeps reading the walk
-		// keys during attack animations, so holding left/right slides through
-		// attacks. See src/attackstop_patch.h for the three sites.
-		const bool vanillaAttackStop = reader.GetBoolean("clienthax", "vanillaattackstop",
-			integration::kVanillaAttackStopDefault);
-		if (integration::ShouldApplyMoveAttack(reader.GetBoolean("clienthax", "moveattack", "true"), vanillaAttackStop)) {
-			// CUserLocal::IsImmovable
-			WriteByte(0x0095F97A, 0xEB); // jmp
-			WriteByte(0x0095F97A + 1, 0x59); // 0095F9D5
-			// CVecCtrlUser::WorkUpdateActive
-			WriteByte(0x009CBFB0, 0xEB); // jmp
-			// CUserLocal::Jump
-			PatchNop(0x0094C3BB, 6);
-		}
-		else if (vanillaAttackStop) {
-			// Put the original bytes back if something else (e.g. a stray
-			// MapleRoot ijl15.dll) already applied moveattack.
-			for (const auto& site : integration::AttackStopSites()) {
-				if (integration::ShouldRestoreAttackStopSite(site, reinterpret_cast<const unsigned char*>(site.address))) {
-					WriteBytes(site.address, site.original.data(), static_cast<UINT>(site.length));
-				}
-			}
+		// SlumsMS: MapleRoot's moveattack is split into [clienthax] attackwalk
+		// (the slide, default off), attackjump and chargemove (default on, or
+		// whatever a legacy moveattack= says). See src/attackstop_patch.h.
+		{
+			const auto iniBool = [&reader](const char* key) {
+				return integration::ParseIniBool(reader.Get("clienthax", key, ""));
+			};
+			integration::ApplyMoveAttackSettings(
+				integration::ResolveMoveAttackSettings({iniBool("moveattack"), iniBool("attackwalk"),
+					iniBool("attackjump"), iniBool("chargemove")}),
+				[](std::uint32_t address, const unsigned char* bytes, std::size_t length) {
+					WriteBytes(address, bytes, static_cast<UINT>(length));
+				});
 		}
 
 		if (reader.GetBoolean("clienthax", "jumpshoot", "true")) {

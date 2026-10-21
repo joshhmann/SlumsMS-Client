@@ -3,6 +3,9 @@
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <map>
+#include <optional>
+#include <string>
 #include <stdexcept>
 #include <vector>
 
@@ -54,19 +57,84 @@ int main(int argc, char** argv) {
     require(JumpTarget(0x0094C3BB, sites[2].original.data()) == 0x0094C4D3, "Jump vanilla jg to ret path");
     for (std::size_t i = 0; i < 6; ++i) require(sites[2].moveAttack[i] == 0x90, "Jump gate NOP'd");
 
-    // Classification and restore decisions.
+    // Classification.
     for (const auto& s : sites) {
         require(ClassifyAttackStopSite(s, s.original.data()) == AttackStopState::Original, "original classified");
         require(ClassifyAttackStopSite(s, s.moveAttack.data()) == AttackStopState::MoveAttack, "patched classified");
-        require(!ShouldRestoreAttackStopSite(s, s.original.data()), "no write over vanilla");
-        require(ShouldRestoreAttackStopSite(s, s.moveAttack.data()), "restore over moveattack");
         const unsigned char other[6] = {0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC};
         require(ClassifyAttackStopSite(s, other) == AttackStopState::Unknown, "unknown classified");
-        require(!ShouldRestoreAttackStopSite(s, other), "foreign patch left alone");
     }
-    require(ShouldApplyMoveAttack(true, false), "moveattack kept when stop off");
-    require(!ShouldApplyMoveAttack(true, true), "vanillaattackstop beats moveattack=true");
-    require(!ShouldApplyMoveAttack(false, false) && !ShouldApplyMoveAttack(false, true), "moveattack=false");
+    // Site order matches the key table.
+    require(sites[static_cast<std::size_t>(MoveAttackSite::ChargeMove)].address == 0x0095F97A, "chargemove site");
+    require(sites[static_cast<std::size_t>(MoveAttackSite::AttackWalk)].address == 0x009CBFB0, "attackwalk site");
+    require(sites[static_cast<std::size_t>(MoveAttackSite::AttackJump)].address == 0x0094C3BB, "attackjump site");
+    require(std::string(MoveAttackSiteKey(MoveAttackSite::AttackWalk)) == "attackwalk", "attackwalk key");
+    require(std::string(MoveAttackSiteKey(MoveAttackSite::AttackJump)) == "attackjump", "attackjump key");
+    require(std::string(MoveAttackSiteKey(MoveAttackSite::ChargeMove)) == "chargemove", "chargemove key");
+
+    // INI boolean parsing (INIReader::GetBoolean spellings; junk = not set).
+    for (const char* t : {"true", "TRUE", "yes", "On", "1"}) require(ParseIniBool(t) == std::optional<bool>(true), t);
+    for (const char* f : {"false", "No", "off", "0"}) require(ParseIniBool(f) == std::optional<bool>(false), f);
+    require(!ParseIniBool("").has_value() && !ParseIniBool("maybe").has_value(), "absent/junk not set");
+
+    // Precedence table. ini = {moveattack, attackwalk, attackjump, chargemove};
+    // expected = {walk, jump, charge}.
+    using O = std::optional<bool>;
+    const O _ = std::nullopt, T = true, F = false;
+    struct Row { MoveAttackIni ini; bool walk, jump, charge; const char* what; };
+    const Row table[] = {
+        {{_, _, _, _}, false, true, true, "empty [clienthax]: slide off, jump+charge on"},
+        {{T, _, _, _}, false, true, true, "legacy moveattack=true: slide off, rest on"},
+        {{F, _, _, _}, false, false, false, "legacy moveattack=false: all off"},
+        {{F, T, _, _}, true, false, false, "moveattack=false, attackwalk=true"},
+        {{F, _, T, _}, false, true, false, "moveattack=false, attackjump=true"},
+        {{F, _, _, T}, false, false, true, "moveattack=false, chargemove=true"},
+        {{T, _, F, _}, false, false, true, "moveattack=true, attackjump=false"},
+        {{T, _, _, F}, false, true, false, "moveattack=true, chargemove=false"},
+        {{_, T, T, T}, true, true, true, "all new keys on"},
+        {{_, F, F, F}, false, false, false, "all new keys off"},
+        {{T, F, T, T}, false, true, true, "shipped config.ini"},
+        {{F, T, T, T}, true, true, true, "new keys beat moveattack=false"},
+        {{T, F, F, F}, false, false, false, "new keys beat moveattack=true"},
+    };
+    for (const auto& row : table) {
+        const MoveAttackSettings got = ResolveMoveAttackSettings(row.ini);
+        require(got.attackWalk == row.walk && got.attackJump == row.jump && got.chargeMove == row.charge, row.what);
+        require(got.Enabled(MoveAttackSite::AttackWalk) == row.walk, row.what);
+        require(got.Enabled(MoveAttackSite::AttackJump) == row.jump, row.what);
+        require(got.Enabled(MoveAttackSite::ChargeMove) == row.charge, row.what);
+    }
+
+    // Per-site write decisions.
+    for (const auto& s : sites) {
+        const unsigned char other[6] = {0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC};
+        require(DecideMoveAttackWrite(s, s.original.data(), true) == MoveAttackWrite::WriteMoveAttack, "enable vanilla");
+        require(DecideMoveAttackWrite(s, s.moveAttack.data(), true) == MoveAttackWrite::None, "already enabled");
+        require(DecideMoveAttackWrite(s, s.original.data(), false) == MoveAttackWrite::None, "already vanilla");
+        require(DecideMoveAttackWrite(s, s.moveAttack.data(), false) == MoveAttackWrite::WriteOriginal, "restore");
+        require(DecideMoveAttackWrite(s, other, true) == MoveAttackWrite::None, "foreign patch kept (on)");
+        require(DecideMoveAttackWrite(s, other, false) == MoveAttackWrite::None, "foreign patch kept (off)");
+    }
+
+    // End to end on a fake image: each setting touches only its own site.
+    for (int mask = 0; mask < 8; ++mask) {
+        for (int start = 0; start < 2; ++start) { // all-vanilla, then all-patched (stray ijl15)
+            std::map<std::uint32_t, std::vector<unsigned char>> image;
+            for (const auto& s : sites) {
+                const auto& from = start ? s.moveAttack : s.original;
+                image[s.address].assign(from.begin(), from.begin() + s.length);
+            }
+            const MoveAttackSettings set{(mask & 1) != 0, (mask & 2) != 0, (mask & 4) != 0};
+            ApplyMoveAttackSettings(set,
+                [&](std::uint32_t a) { return image.at(a).data(); },
+                [&](std::uint32_t a, const unsigned char* b, std::size_t n) { image.at(a).assign(b, b + n); });
+            for (std::size_t i = 0; i < sites.size(); ++i) {
+                const bool on = set.Enabled(static_cast<MoveAttackSite>(i));
+                require(ClassifyAttackStopSite(sites[i], image.at(sites[i].address).data()) ==
+                            (on ? AttackStopState::MoveAttack : AttackStopState::Original), sites[i].name);
+            }
+        }
+    }
 
     // Optional: check the original bytes against an unpacked client exe.
     if (argc > 1) {
@@ -80,5 +148,5 @@ int main(int argc, char** argv) {
         }
         std::cout << "PASS: client exe holds the vanilla bytes at all three sites\n";
     }
-    std::cout << "PASS: moveattack site encodings, restore decisions and vanillaattackstop precedence\n";
+    std::cout << "PASS: moveattack site encodings, per-site write decisions and attackwalk/attackjump/chargemove precedence\n";
 }
