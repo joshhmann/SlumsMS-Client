@@ -64,6 +64,7 @@ void AttachResolutionMod();
 void AttachMobHpTagMod();
 void AttachToolTipMod();
 void AttachIconIconMod();
+void AttachPetEquipFlagMod();   // petequipflag.cpp: newer pets overflow the 128-bit pet flag
 void AttachTempStatMod();
 #ifdef MAPLEROOT_MOUNT_INFO
 void AttachMountInfoMod();
@@ -193,6 +194,11 @@ inline void AttachClientHooks() {
     AttachIconIconMod();
 #ifdef MAPLEROOT_INTEGRATION
     VerifyKaentakeHooks("AttachIconIconMod");
+#endif
+    DebugMessage("Installing: AttachPetEquipFlagMod();");
+    AttachPetEquipFlagMod();
+#ifdef MAPLEROOT_INTEGRATION
+    VerifyKaentakeHooks("AttachPetEquipFlagMod");
 #endif
 #ifndef MAPLEROOT_INTEGRATION
     DebugMessage("Installing: AttachTempStatMod();");

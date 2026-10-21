@@ -5,6 +5,9 @@ Sources (assets/colorprism/, BunsMS-authored, see authored-provenance.json and d
   ColorPrism.img  -> UI/UIWindowEx.img/ColorPrism: backgrnd + backgrndLook (301x406) and the
                      trackTone/trackChroma/trackBright slider gradients (176x8). The authored
                      LayerBt chips are not used by coloringprism.cpp and are left out.
+                     BtReset/{normal,pressed,mouseOver}/0 (47x18, origin 0,0): the footer's RESET
+                     button, from assets/colorprism/BtReset/*.png (tools/wz/make_prism_reset_button.py
+                     builds them out of the stock BtCancel2 art; the client has no RESET button).
                      UIWindowEx.img is not a stock image, so resman.cpp serves the whole node
                      from Custom.wz; a new sub-property of the stock UIWindow.img would not merge.
   0578.img        -> Item/Cash/0578.img, a NEW image (the stock client has no 0578.img), with
@@ -26,7 +29,8 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from native_wz import Archive, Node, parse_img, write_img, semantic_hash  # noqa: E402
+from PIL import Image  # noqa: E402
+from native_wz import Archive, Node, canvas, parse_img, write_img, semantic_hash  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 CUSTOM = ROOT / 'src' / 'Custom.wz'
@@ -36,6 +40,8 @@ UI_NODE = 'ColorPrism'
 ITEM_IMG = 'Item/Cash/0578.img'
 WANT_UI = {'backgrnd': (301, 406), 'backgrndLook': (301, 406),
            'trackTone': (176, 8), 'trackChroma': (176, 8), 'trackBright': (176, 8)}
+RESET_STATES = ('normal', 'pressed', 'mouseOver')
+RESET_SIZE = (47, 18)                  # the stock BtOK2 / BtCancel2 it sits beside
 
 
 def build_ui():
@@ -46,6 +52,13 @@ def build_ui():
         c = node.child(name)
         if c is None or c.kind != 'canvas' or (c.value['width'], c.value['height']) != (w, h):
             sys.exit(f'ColorPrism.img: {name} missing or not {w}x{h}')
+    states = []
+    for state in RESET_STATES:
+        image = Image.open(ASSETS / 'BtReset' / f'{state}.png').convert('RGBA')
+        if image.size != RESET_SIZE:
+            sys.exit(f'BtReset/{state}.png is not {RESET_SIZE[0]}x{RESET_SIZE[1]}')
+        states.append(Node(state, 'property', children=[canvas('0', image)]))
+    node.children.append(Node('BtReset', 'property', children=states))
     return node
 
 

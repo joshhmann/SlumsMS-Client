@@ -11,6 +11,7 @@ add_library(injector SHARED
     mobhptag.cpp
     tooltip.cpp
     itemicon.cpp
+    petequipflag.cpp
     tempstat.cpp
     stringpool.cpp
     debug.cpp

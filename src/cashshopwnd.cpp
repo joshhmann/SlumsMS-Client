@@ -2056,6 +2056,14 @@ public:
         auto* pII = CItemInfo::GetInstance();
         if (!pII || !c || m_badIcons.count(itemId)) return;
         const int off = (size - 32) / 2;
+        if (IWzCanvasPtr special = SpecialIcon(itemId)) {
+            // Same anchor DrawItemIconForSlot gets, applied by hand: a canvas-to-canvas copy
+            // places the source by its top-left, so the icon's own origin is subtracted here.
+            int cx = 0, cy = 0;
+            try { cx = static_cast<int>(special->cx); cy = static_cast<int>(special->cy); } catch (...) {}
+            BlitA(c, special, boxX + off + 1 - cx, boxY + off + kIconBaseline - cy);
+            return;
+        }
         try {
             if (!SehDrawItemIcon(pII, c.GetInterfacePtr(), itemId, boxX + off + 1,
                                  boxY + off + kIconBaseline)) {
@@ -2068,6 +2076,27 @@ public:
         }
     }
     std::set<int> m_badIcons;   // ids whose icon draw threw or faulted
+
+    // The +8 slot coupons (Equip 9111000, Use 9112000, Set-up 9113000, Etc 9114000; Storage
+    // 9110000) have stock v83 art, but in a shape CItemInfo cannot reach: Item/Special/0911.img
+    // holds each id as a bare {icon, name, delta} with no `info` node, and GetItemInfo
+    // (0x005DA83C) only treats 0910.img (packages) that way -- for every other id it returns the
+    // root's `info`, which here is missing, so DrawItemIconForSlot draws nothing. The stock cash
+    // shop drew them through its own path. Custom.wz cannot help either: it can add a NEW image,
+    // not an `info` node inside the stock 0911.img. So this window reads the stock icon directly.
+    // Looked up once per id; a miss is remembered as an empty pointer.
+    IWzCanvasPtr SpecialIcon(int itemId) {
+        if (itemId / 10000 != 911) return nullptr;
+        auto it = m_specialIcons.find(itemId);
+        if (it != m_specialIcons.end()) return it->second;
+        wchar_t path[64];
+        _snwprintf_s(path, _countof(path), _TRUNCATE, L"Item/Special/0911.img/%d/icon", itemId);
+        IWzCanvasPtr icon = LoadSprite(path);
+        if (!icon) LOG_ONCE("cashshopwnd: no Item/Special/0911.img icon for item %d", itemId);
+        m_specialIcons.emplace(itemId, icon);
+        return icon;
+    }
+    std::map<int, IWzCanvasPtr> m_specialIcons;
 
     // --- the composed pieces ------------------------------------------------
     void DrawSectionHead(IWzCanvasPtr c, int x, int y, int w, const char* left, const char* right);

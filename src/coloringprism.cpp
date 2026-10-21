@@ -5,17 +5,17 @@
 // preview and three slider rows -- Tone (hue 0..359), Chroma (saturation
 // -100..+100) and Brightness (value -100..+100) -- that recolor the player's worn
 // Cash weapon. Confirm sends the values to the server, which stores them on the item
-// and consumes the prism. The other button zeroes the three sliders, and confirming
-// from there UNDOES a colour, because an identity tint is sent as a restore rather than
-// an apply: the server can then refuse it without consuming anything when the target was
-// never tinted.
+// and consumes the prism. RESET zeroes the three sliders, and confirming from there
+// UNDOES a colour, because an identity tint is sent as a restore rather than an apply:
+// the server can then refuse it without consuming anything when the target was never
+// tinted (it says so in a popup). CANCEL and the title chip close without sending.
 //
 // Structure follows the reference dialog in the modern client (title, item banner,
 // preview pane, three labelled slider rows with numeric readouts, Reset / Confirm /
 // Cancel) but is redrawn at v83 scale: that dialog is 466x721 and this client's
-// default screen is 800x600. The backdrop is hand-drawn art at
-// Tools/art/coloring-prism.png; the sliders are drag-and-click-the-track, with no
-// stepper arrows, because the art has no wells for them.
+// default screen is 800x600. The backdrop is UI/UIWindowEx.img/ColorPrism/backgrnd in
+// Custom.wz (assets/colorprism); coloringprism_layout.h is measured off it. The sliders
+// are drag-and-click-the-track, with no stepper arrows, because the art has no wells.
 //
 // SPLIT OF RESPONSIBILITIES
 //   weapontint.cpp   owns the recolor itself, the tint state and both opcodes.
@@ -37,6 +37,7 @@
 #include "hook.h"
 #include "debug.h"
 #include "weapontint.h"
+#include "coloringprism_layout.h"
 
 #include "wvs/iteminfo.h"
 #include "wvs/packet.h"
@@ -225,81 +226,16 @@ bool IsCashEquip(int itemId) {
 }
 
 // =====================================================
-// LAYOUT
+// LAYOUT -- coloringprism_layout.h, measured off the backdrop this client loads
 // =====================================================
-// These MIRROR Tools/import_coloring_prism.py, and both were MEASURED off the
-// hand-drawn backdrop at Tools/art/coloring-prism.png. The three files MUST agree;
-// redraw the art -> re-measure -> update both (the same rule
-// import_skill_window_art.py:27-28 states for the skill window).
-//
-// The art bakes the frame, the title, the banner message, the HUE/CHROMA/VALUE row
-// labels and the hint text, so Draw() paints only what moves: the item icon, the
-// three gradients, the thumbs, the numbers and the buttons.
-constexpr int kWndW = 301, kWndH = 406;
-constexpr int kTitleH = 23;                          // drag region; white interior y5..18
-constexpr int kBtCloseX = 281, kBtCloseY = 5, kBtCloseW = 12, kBtCloseH = 12;
-
-// TABS. These are the Item Inventory's own Basic.img/Tab2 pieces: 4px left and
-// right caps with a one-pixel fill column between them. They are 19px high and
-// must never be vertically scaled. Four 44px tabs leave a clear gap before the
-// right end of the strip.
-constexpr int kTabT = 23, kTabH = 19, kTabW = 44;
-constexpr int kTabCount = 4;
-constexpr int kTabX[kTabCount] = { 6, 50, 94, 138 };
+using namespace ColorPrismLayout;
 enum Tab { kTabEquip = 0, kTabEffects = 1, kTabHair = 2, kTabEye = 3 };
-
-constexpr int kBannerT = 50, kBannerB = 115;         // blue banner
-constexpr int kWellX = 21, kWellY = 59, kWellSize = 48;   // the drop well, measured
-constexpr int kIconX = 29, kIconBaseline = 99;       // 32x32 icon centred in it, bottom-left
-constexpr int kIconSize = 32;
-// Copy occupies only the blue banner section after the icon divider. Keeping this
-// explicit prevents a long instruction from running underneath the right bevel.
-constexpr int kBannerTextX = 76, kBannerTextW = 213, kBannerTextT = 62;
-constexpr int kBannerLineH = 14;
-// Hair and Face have no well, so their copy uses the WHOLE blue band. Measured off the
-// art: the band's interior runs x8..290, and the well punches a hole through x20..67,
-// which is the only reason the ordinary copy starts at 76. Two lines instead of three,
-// so the top moves down half a line to keep the block on the same centre (y82).
-constexpr int kBannerFullX = 8, kBannerFullW = 283;
-constexpr int kBannerLookT = 69;
-
-constexpr int kPreviewT = 121, kPreviewB = 271;      // pane interior (11,121)-(289,271)
-// The two thin vertical separators painted inside the preview pane. The avatar's feet
-// are clamped far enough inside them that its body never crosses either line.
-constexpr int kPreviewSepLeft = 26, kPreviewSepRight = 275;
-constexpr int kPreviewAvatarHalfW = 18;
-
-// Three slider rows. Each has a 53x29 PINK LABEL PLATE baked into the art at x9..61 and a
-// dithered well to its right; the DLL letters the plate and draws the track into the well.
-constexpr int kRowsT = 277;                          // interior top of row 0 (border at 276)
-constexpr int kRowStep = 32;                         // measured: borders at 276 / 308 / 340
-constexpr int kRowH = 28;                            // interior height
-constexpr int kLabelX = 9, kLabelW = 53;             // the baked pink plate
-constexpr int kTrackX = 68, kTrackW = 176, kTrackH = 8;
-constexpr int kValueX = 248, kValueW = 46;
-
-// Footer interior is y378..401. Basic.img/BtOK2 and BtCancel2 are a matched, direct
-// 47x18 vanilla pair, so their baked lettering needs no overpainting. NOTE the left one
-// wears Cancel's lettering but RESETS the sliders; the window is closed with the title
-// chip. Repoint it at CloseNow if the wording matters more than the affordance.
-constexpr int kBtnT = 380, kBtnW = 47, kBtnH = 18;
-constexpr int kBtnCount = 2;
-constexpr int kBtnX[kBtnCount] = { 12, kWndW - kBtnW - 12 };
-constexpr int kBtnCancel = 0;
-constexpr int kBtnOK = 1;
-
-// Feet position of the preview avatar inside the pane, window-local.
-constexpr int kAvatarX = (11 + 289) / 2;             // 150
-constexpr int kAvatarY = kPreviewT + 105;
 constexpr int kAvatarScale = 100;
 
 // Movement constants for the preview, matching the client's own 100% walk and jump speed.
 constexpr float kWalkPxPerSec = 125.0f, kJumpVel0 = -555.0f;
 constexpr float kGravity = 2000.0f, kFallSpeedMax = 670.0f;
 constexpr float kWalkAccel = 1400.0f, kWalkDrag = 800.0f, kStopEps = 4.0f;
-
-constexpr int kThumbW = 22, kThumbH = 14;           // UI/Basic.img/Slider/thumb*
-constexpr int kTrackTravel = kTrackW - kThumbW;
 
 // The three rows, in draw order.
 enum Row { kRowTone = 0, kRowChroma = 1, kRowBright = 2, kRowCount = 3 };
@@ -431,7 +367,7 @@ public:
     int  m_editRow;                                 // kRow*, or -1 when not typing
     char m_editText[8];                             // "359" / "+100" / "-100"
     // button states
-    int  m_nBtnPressed, m_nBtnHover;                 // index into kBtnX, or -1
+    int  m_nBtnPressed, m_nBtnHover;                 // kBtnReset / kBtnOK / kBtnCancel, or -1
     int  m_nClosePressed, m_nCloseHover;
     void* m_pCurrentStage;                           // close when the stage changes
     unsigned int m_avatarRef[2];                     // ZRef<CAvatar> storage
@@ -450,8 +386,9 @@ public:
     IWzCanvasPtr m_pBgLook;
     IWzCanvasPtr m_pTrack[kRowCount];
     IWzCanvasPtr m_pThumb[3];                        // normal, pressed, mouseOver
-    IWzCanvasPtr m_pBtOK[3];                       // Basic.img/BtOK2: normal, pressed, hover
-    IWzCanvasPtr m_pBtCancel[3];                   // Basic.img/BtCancel2: matched vanilla cancel
+    IWzCanvasPtr m_pBtOK[4];                       // Basic.img/BtOK2: normal, pressed, hover, disabled
+    IWzCanvasPtr m_pBtCancel[3];                   // Basic.img/BtCancel2: closes, like the title chip
+    IWzCanvasPtr m_pBtReset[3];                    // UIWindowEx.img/ColorPrism/BtReset (Custom.wz)
     // UI/Basic.img/Tab2, indexed by [selected]. This is the vanilla inventory
     // tab chrome; the names are drawn separately because its baked labels are
     // specifically Equip / Use / Set-up / Etc / Cash.
@@ -663,7 +600,6 @@ public:
         }
         PushPreview();
     }
-    static int RowTop(int row) { return kRowsT + row * kRowStep; }
     int ThumbX(int row) const {
         const RowSpec& r = kRows[row];
         const int span = r.hi - r.lo;
@@ -671,7 +607,7 @@ public:
         return kTrackX + (Value(row) - r.lo) * kTrackTravel / span;
     }
     void ThumbRect(int row, RECT& rc) const {
-        const int x = ThumbX(row), y = RowTop(row) + (kRowH - kThumbH) / 2;
+        const int x = ThumbX(row), y = ThumbY(row);
         rc = { x, y, x + kThumbW, y + kThumbH };
     }
     // Window-local x -> value, using the thumb's LEFT edge (matches ThumbX).
@@ -1081,16 +1017,20 @@ void CUIColorPrism::LoadSprites() {
     m_pThumb[1] = LoadSprite(L"UI/Basic.img/Slider/thumbPressed");
     m_pThumb[2] = LoadSprite(L"UI/Basic.img/Slider/thumbMouseOver");
 
-    // Direct vanilla footer buttons. Both already contain the correct stock lettering,
-    // unlike donor buttons such as Shop/BtBuy whose text would have to be painted over.
-    const wchar_t* kStates[3] = { L"normal", L"pressed", L"mouseOver" };
-    for (int i = 0; i < 3; ++i) {
+    // Footer buttons. OK and CANCEL are the vanilla matched pair with their stock lettering;
+    // RESET is the prism's own art, made from BtCancel2 (the client has no stock RESET button).
+    const wchar_t* kStates[4] = { L"normal", L"pressed", L"mouseOver", L"disabled" };
+    for (int i = 0; i < 4; ++i) {
         wchar_t p[64];
         _snwprintf_s(p, _countof(p), _TRUNCATE, L"UI/Basic.img/BtOK2/%s/0", kStates[i]);
         m_pBtOK[i] = LoadSprite(p);
+        if (i == 3) break;
         _snwprintf_s(p, _countof(p), _TRUNCATE, L"UI/Basic.img/BtCancel2/%s/0", kStates[i]);
         m_pBtCancel[i] = LoadSprite(p);
+        _snwprintf_s(p, _countof(p), _TRUNCATE, L"UI/UIWindowEx.img/ColorPrism/BtReset/%s/0", kStates[i]);
+        m_pBtReset[i] = LoadSprite(p);
     }
+    if (!m_pBtReset[0]) LOG_ONCE("coloringprism: no BtReset art in Custom.wz; drawing the label instead");
     m_pTabLeft[0]  = LoadSprite(L"UI/Basic.img/Tab2/left0");
     m_pTabLeft[1]  = LoadSprite(L"UI/Basic.img/Tab2/left1");
     m_pTabFill[0]  = LoadSprite(L"UI/Basic.img/Tab2/fill0");
@@ -1184,9 +1124,10 @@ void CUIColorPrism::OnDestroy() {
     for (int i = 0; i < kRowCount; ++i) m_pTrack[i] = nullptr;
     for (int i = 0; i < 3; ++i) {
         m_pThumb[i] = nullptr;
-        m_pBtOK[i] = nullptr;
         m_pBtCancel[i] = nullptr;
+        m_pBtReset[i] = nullptr;
     }
+    for (int i = 0; i < 4; ++i) m_pBtOK[i] = nullptr;
     m_pBtClose[0] = nullptr; m_pBtClose[1] = nullptr;
     for (int state = 0; state < 2; ++state) {
         m_pTabLeft[state] = nullptr;
@@ -1355,13 +1296,15 @@ void CUIColorPrism::Draw(const RECT* pRect) {
         "Adjust the sliders, then press OK.",
         "One Coloring Prism is used per dye.",
     };
+    //     Dark, not white: this backdrop's banner is a pale blue (edf5fc), and the white copy
+    //     the package drew on its own dark banner was invisible on it in 1.4.0.
     if (NeedsDrop()) {
         for (int i = 0; i < 3; ++i)
-            DrawTextCentred(pCanvas, pfLt, kBannerTextX, kBannerTextW,
+            DrawTextCentred(pCanvas, pfDk, kBannerTextX, kBannerTextW,
                              kBannerTextT + i * kBannerLineH, kBannerDrop[i]);
     } else {
         for (int i = 0; i < 2; ++i)
-            DrawTextCentred(pCanvas, pfLt, kBannerFullX, kBannerFullW,
+            DrawTextCentred(pCanvas, pfDk, kBannerFullX, kBannerFullW,
                              kBannerLookT + i * kBannerLineH, kBannerLook[i]);
     }
 
@@ -1371,7 +1314,7 @@ void CUIColorPrism::Draw(const RECT* pRect) {
         const int y = RowTop(row);
         const int textY = y + (kRowH - 13) / 2;
 
-        BlitA(pCanvas, m_pTrack[row], kTrackX, y + (kRowH - kTrackH) / 2);
+        BlitA(pCanvas, m_pTrack[row], kTrackX, TrackY(row));
 
         RECT th; ThumbRect(row, th);
         IWzCanvasPtr thumb = (m_sliderDrag == row && m_pThumb[1]) ? m_pThumb[1] : m_pThumb[0];
@@ -1384,19 +1327,24 @@ void CUIColorPrism::Draw(const RECT* pRect) {
         else if (row == kRowTone) _snprintf_s(num, _countof(num), _TRUNCATE, "%d", Value(row));
         else                 _snprintf_s(num, _countof(num), _TRUNCATE, "%+d", Value(row));
         num[15] = 0;
-        DrawTextRight(pCanvas, pfDk, kValueX + kValueW - 6, textY, num);
+        DrawTextRight(pCanvas, pfDk, kValueX + kValueW - 1, textY, num);
     }
 
-    // (6) Matched vanilla Cancel / OK footer buttons. The left button is repurposed
-    // as a slider reset; only the title-bar chip discards the preview and closes.
+    // (6) Footer: RESET | OK CANCEL. RESET zeroes the sliders (0/0/0), and OK from there
+    // UNDOES the colour (an identity tint is sent as a restore). CANCEL closes and drops the
+    // preview, exactly like the title chip. OK is greyed while there is nothing to act on.
     for (int i = 0; i < kBtnCount; ++i) {
         int state = 0;
-        if (m_nBtnPressed == i)     state = 1;
-        else if (m_nBtnHover == i)  state = 2;
-        IWzCanvasPtr art = (i == kBtnCancel)
-            ? (m_pBtCancel[state] ? m_pBtCancel[state] : m_pBtCancel[0])
-            : (m_pBtOK[state] ? m_pBtOK[state] : m_pBtOK[0]);
-        BlitA(pCanvas, art, kBtnX[i], kBtnT);
+        if (i == kBtnOK && !Ready())     state = 3;
+        else if (m_nBtnPressed == i)     state = 1;
+        else if (m_nBtnHover == i)       state = 2;
+        IWzCanvasPtr* arts = (i == kBtnReset) ? m_pBtReset : (i == kBtnOK) ? m_pBtOK : m_pBtCancel;
+        IWzCanvasPtr art = arts[state] ? arts[state] : arts[0];
+        if (art) {
+            BlitA(pCanvas, art, kBtnX[i], kBtnT);
+        } else if (i == kBtnReset) {
+            DrawTextCentred(pCanvas, pfDk, kBtnX[i], kBtnW, kBtnT + 3, "Reset");
+        }
     }
 
     { const int off = m_nClosePressed ? 1 : 0;
@@ -1472,8 +1420,9 @@ void CUIColorPrism::OnMouseButton(unsigned int msg, unsigned int /*wParam*/, int
             RECT rc = { kBtnX[i], kBtnT, kBtnX[i] + kBtnW, kBtnT + kBtnH };
             if (PtInRect(&rc, pt)) {
                 play_ui_sound(L"BtMouseClick");
-                if (i == kBtnCancel) ResetValues();
+                if (i == kBtnReset) ResetValues();
                 else if (i == kBtnOK && Ready()) SendConfirm();
+                else if (i == kBtnCancel) CloseNow();
                 return;                              // `this` may be gone
             }
             InvalidateRect(nullptr);

@@ -43,6 +43,19 @@ effect layer, 1 hair, 2 face. Hue is absolute, stored as -(degrees + 1) in -360.
 - `AVATAR_EQUIP_SLOTS` (52, the client's real array size) is defined in `wvs/avatar.h`; the struct is unchanged.
 - The opcode is routed by `packetdispatcher.cpp` and `WeaponTint_Tick` runs from `CallUpdate`.
 
+## 1.4.1 (after the owner's 1.4.0 QA)
+
+- Layout: 1.4.0 used the package's constants, which were measured off the package's own art, not the BunsMS
+  backdrop that ships in Custom.wz. The sliders were drawn a row below the art's bars, the tabs were squashed to
+  19px, and the banner copy was white on the pale banner (invisible). `coloringprism_layout.h` is now measured
+  off `assets/colorprism/backgrnd.png`; ctest `colorprism_window_layout` checks every control against the art.
+- Reset: the left footer button wore BtCancel2's CANCEL lettering but reset the sliders, so there was no visible
+  Reset. The footer is now RESET | OK CANCEL: RESET zeroes the sliders (OK from there restores the original
+  colour), CANCEL closes without sending (like the title chip), OK is greyed until there is something to dye.
+  The RESET art (`UI/UIWindowEx.img/ColorPrism/BtReset`, normal/pressed/mouseOver) is made from the stock
+  BtCancel2 by `tools/wz/make_prism_reset_button.py` (letters from BtReceive/BtSend/BtDel) and added by
+  `tools/wz/add_color_prism.py`.
+
 ## Known gaps
 
 - Cape/aura layers from `itemeff.cpp` are not dyed: `WeaponTint_BeginItemEffSwap` is not wired, because that
