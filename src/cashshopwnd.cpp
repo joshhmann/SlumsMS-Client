@@ -1183,6 +1183,27 @@ void* SehCurrentStage() {
     return s;
 }
 
+// CItemInfo::DrawItemIconForSlot (0x005D6458) with the access violations caught. For pet
+// equips added from later versions (WZ with _hash, 1802046+) its GetEquipItem (0x005CA785)
+// reads through a null at +0x80 (0x00402634) and took the whole client down (1.4.0 QA:
+// scrolling Pet Equip). The _com_error it throws for a missing icon is NOT caught here: that
+// keeps unwinding to IconInBox's try/catch as before. The callee takes its ZComPtr<IWzCanvas>
+// by value and releases it, so the raw pointer is AddRef'd for it; a fault mid-call leaks
+// that one reference, which IconInBox makes a one-off by never drawing that id again.
+using DrawItemIconForSlotFn = void(__thiscall*)(CItemInfo*, IWzCanvas*, int, int, int,
+                                                int, int, int, int, int, int);
+bool SehDrawItemIcon(CItemInfo* pII, IWzCanvas* canvas, int itemId, int x, int y) {
+    __try {
+        canvas->AddRef();
+        reinterpret_cast<DrawItemIconForSlotFn>(0x005D6458)(pII, canvas, itemId, x, y,
+                                                            0, 0, 0, 0, 0, 0);
+        return true;
+    } __except (GetExceptionCode() == EXCEPTION_ACCESS_VIOLATION
+                    ? EXCEPTION_EXECUTE_HANDLER : EXCEPTION_CONTINUE_SEARCH) {
+        return false;
+    }
+}
+
 bool SehBuildAvatar(unsigned int* pRef, void* charData, IWzGr2DLayer* pLayer,
                     int x, int y, const LookOverride* lk, void** ppOut,
                     int nPackedMA, int nActionCode) {
@@ -2028,18 +2049,25 @@ public:
     // Centres a 32px icon in a box of any size. Guarded per call: DrawItemIconForSlot
     // (0x005D6458) reaches GetEquipItem (0x005CA785) and raises _com_error E_FAIL for an
     // id whose icon node is missing. Unguarded that unwinds out of Draw and abandons every
-    // later step, so one bad icon would blank the rest of the window
+    // later step, so one bad icon would blank the rest of the window. SehDrawItemIcon also
+    // catches the access violation some later-version pet equips cause there. An id that
+    // failed once is never drawn again (its cell keeps an empty well).
     void IconInBox(IWzCanvasPtr c, int itemId, int boxX, int boxY, int size) {
         auto* pII = CItemInfo::GetInstance();
-        if (!pII || !c) return;
+        if (!pII || !c || m_badIcons.count(itemId)) return;
         const int off = (size - 32) / 2;
         try {
-            pII->DrawItemIconForSlot(c, itemId, boxX + off + 1, boxY + off + kIconBaseline,
-                                     0, 0, 0, 0, 0, 0);
+            if (!SehDrawItemIcon(pII, c.GetInterfacePtr(), itemId, boxX + off + 1,
+                                 boxY + off + kIconBaseline)) {
+                m_badIcons.insert(itemId);
+                DebugMessage("cashshopwnd: icon draw faulted for item %d; not drawn again", itemId);
+            }
         } catch (...) {
+            m_badIcons.insert(itemId);
             LOG_ONCE("cashshopwnd: icon draw threw for item %d", itemId);
         }
     }
+    std::set<int> m_badIcons;   // ids whose icon draw threw or faulted
 
     // --- the composed pieces ------------------------------------------------
     void DrawSectionHead(IWzCanvasPtr c, int x, int y, int w, const char* left, const char* right);
