@@ -88,6 +88,11 @@ struct PROJECT {
     //
     // weather_clearpx.inc carries a measured transparent pixel for every sprite whose
     // corner is not already one. The pixel path ignores this entirely.
+    //
+    // NO LONGER USED FOR CLEARING. WeatherCanvas_Project zeroes every new canvas with
+    // the 0x00FFFFFF sentinel, and the stretch-clear from this pixel was removed because
+    // the path-keyed table does not match SlumsMS's Map.wz (the rope "box" bug). Kept so
+    // weathersway's x = -1 gate still leaves those sprites unswayed.
     int nClearX = -1;
     int nClearY = -1;
 

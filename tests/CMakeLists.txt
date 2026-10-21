@@ -23,6 +23,13 @@ if(MAPLEROOT_WEATHER)
     add_test(NAME weather_animated_portal_colors COMMAND weather_object_policy_test)
 endif()
 
+if(MAPLEROOT_WEATHER AND EXISTS "${MOVEMENTKEYS_TEST_CLIENT}/Data/Map/Obj/connect.img")
+    add_executable(weather_rope_clear_test weather_rope_clear_test.cpp ../src/weathercanvas.cpp ../src/debug.cpp)
+    target_link_libraries(weather_rope_clear_test PRIVATE WzLib)
+    target_include_directories(weather_rope_clear_test PRIVATE ../src)
+    add_test(NAME weather_rope_sway_no_box COMMAND weather_rope_clear_test "${MOVEMENTKEYS_TEST_CLIENT}")
+endif()
+
 if(MAPLEROOT_MOUNT_INFO)
     add_executable(mountinfo_layout_test mountinfo_layout_test.cpp)
     add_test(NAME mount_preview_layout COMMAND mountinfo_layout_test)
@@ -56,3 +63,6 @@ endif()
 
 add_executable(attackstop_patch_test attackstop_patch_test.cpp)
 add_test(NAME attackstop_moveattack_sites COMMAND attackstop_patch_test)
+
+add_executable(ui_wheel_test ui_wheel_test.cpp)
+add_test(NAME ui_wheel_direction COMMAND ui_wheel_test)
