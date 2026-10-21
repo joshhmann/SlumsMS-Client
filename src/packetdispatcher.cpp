@@ -14,6 +14,9 @@
 #ifdef MAPLEROOT_MONSTER_BOOK
 #include "monsterbook.h"
 #endif
+#ifdef MAPLEROOT_COLOR_PRISM
+#include "weapontint.h"
+#endif
 #ifdef MAPLEROOT_WEATHER
 #include "weather.h"
 #include "lamps.h"
@@ -52,6 +55,14 @@ void __fastcall ProcessPacketHook(void* socket, void*, CInPacket* packet) {
             // Client-addon-only opcode: swallowed here, the stock client has no handler for it.
             std::lock_guard<std::mutex> lock(dispatchGate);
             if (!shuttingDown) MonsterBook_HandleResult(packet);
+            return;
+        }
+#endif
+#ifdef MAPLEROOT_COLOR_PRISM
+        if (opcode == kWeaponTintSyncOpcode) {
+            // WeaponTint_HandleSync skips the opcode itself from the CURRENT offset, which the peek left in place.
+            std::lock_guard<std::mutex> lock(dispatchGate);
+            if (!shuttingDown) WeaponTint_HandleSync(packet);
             return;
         }
 #endif

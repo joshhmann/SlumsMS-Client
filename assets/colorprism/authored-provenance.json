@@ -1,0 +1,71 @@
+{
+  "authorship": "Original BunSMS procedural UI artwork; not recovered bundled ColorPrism art.",
+  "specification": "/root/maplestory_dump/INTEGRATION (2).md:64-116; DLL-owner confirmed paths/dimensions",
+  "icon_source": "/tmp/wz-release-inputs/features/prism-research/5782000-original-icon.webp",
+  "icon_sha256": "8a62c95b2697b76a25fa1fe635f83bf002b67f6f2d5c186a3d1b62e12079032e",
+  "font": "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+  "font_sha256": "5c1247acef7f2b8522a31742c76d6adcb5569bacc0be7ceaa4dc39dd252ce895",
+  "layout": {
+    "window": [
+      301,
+      406
+    ],
+    "caption": [
+      14,
+      8
+    ],
+    "tabs": [
+      8,
+      24,
+      286,
+      21
+    ],
+    "banner": [
+      8,
+      48,
+      286,
+      53
+    ],
+    "preview": [
+      20,
+      107,
+      262,
+      133
+    ],
+    "item_well": [
+      18,
+      56,
+      45,
+      43
+    ],
+    "layer_badges": [
+      [
+        127,
+        222
+      ],
+      [
+        149,
+        222
+      ]
+    ],
+    "sliders_x": 88,
+    "sliders_y": [
+      260,
+      295,
+      330
+    ],
+    "sliders_size": [
+      176,
+      8
+    ],
+    "toggle_y": 242,
+    "restore_y": 353,
+    "buttons_y": 374,
+    "native_control_owner": "native-runtime-review.NativePrismPort"
+  },
+  "semantic_hashes": {
+    "ColorPrism.img": "12568f79257ff918ba72f16f32d92922680d27e9b90e8a3cf61e56282a97da61",
+    "0578.img": "24aee812399fea03fd077a7e382e7b4e1c53a4676ffa2c2bac9b453c8ed47a5d",
+    "Cash.img": "40d0d9fa7020176a2dffe2d833433dc3c008ff1001d6dad1d647f85ead552d3a"
+  }
+}

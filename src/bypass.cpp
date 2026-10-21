@@ -257,6 +257,9 @@ void CWvsApp::CallUpdate_hook(int tCurTime) {
 #ifdef MAPLEROOT_MONSTER_BOOK
     MonsterBook_Tick();
 #endif
+#ifdef MAPLEROOT_COLOR_PRISM
+    WeaponTint_Tick();
+#endif
     if (m_bFirstUpdate) {
         m_tUpdateTime = tCurTime;
         m_bFirstUpdate = 0;
@@ -416,7 +419,7 @@ int CWndMan::TranslateMessage_hook(UINT& msg, WPARAM& wParam, LPARAM& lParam, LR
 
 
 void AttachClientBypass() {
-#if defined(MAPLEROOT_CASHSHOP_WINDOW) || defined(MAPLEROOT_WEATHER) || defined(MAPLEROOT_DAILY_CHECKIN) || defined(MAPLEROOT_SET_EQUIP) || defined(MAPLEROOT_MONSTER_BOOK)
+#if defined(MAPLEROOT_CASHSHOP_WINDOW) || defined(MAPLEROOT_WEATHER) || defined(MAPLEROOT_DAILY_CHECKIN) || defined(MAPLEROOT_SET_EQUIP) || defined(MAPLEROOT_MONSTER_BOOK) || defined(MAPLEROOT_COLOR_PRISM)
     AttachCustomPacketMod();
 #endif
     ATTACH_HOOK(CClientSocket::Connect, CClientSocket::Connect_hook);

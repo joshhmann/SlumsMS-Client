@@ -4,6 +4,13 @@
 #include <windows.h>
 
 
+// The client's real equip arrays are 52 entries: AvatarLook::operator= (0x00451541) copies
+// anHairEquip as push 0x34 / lea [eax+0x19], anUnseenEquip as push 0x34 / lea [eax+0xE9], then
+// 3 pets at +0x1B9, and 0x004515D5 compares 0x1C5 bytes. The struct below keeps its historical
+// [60] declaration so no existing module's layout moves; anHairEquip's offset is right either way.
+// Loop bounds over worn equips should use this (weapontint.cpp does).
+#define AVATAR_EQUIP_SLOTS 52
+
 #pragma pack(push, 1)
 struct AvatarLook : public ZRefCounted {
     unsigned char nGender;

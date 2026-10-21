@@ -36,3 +36,8 @@ if(MAPLEROOT_SET_EQUIP)
     add_executable(setitem_proto_test setitem_proto_test.cpp)
     add_test(NAME setequip_wire_format COMMAND setitem_proto_test)
 endif()
+
+if(MAPLEROOT_COLOR_PRISM)
+    add_executable(weapontint_proto_test weapontint_proto_test.cpp)
+    add_test(NAME colorprism_wire_format COMMAND weapontint_proto_test)
+endif()

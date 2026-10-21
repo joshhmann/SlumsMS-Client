@@ -47,7 +47,7 @@ void AttachSystemHooks();
 
 // called in system.cpp -> SetUnhandledExceptionFilter_hook
 void AttachClientBypass();
-#if defined(MAPLEROOT_CASHSHOP_WINDOW) || defined(MAPLEROOT_WEATHER) || defined(MAPLEROOT_DAILY_CHECKIN) || defined(MAPLEROOT_SET_EQUIP) || defined(MAPLEROOT_MONSTER_BOOK)
+#if defined(MAPLEROOT_CASHSHOP_WINDOW) || defined(MAPLEROOT_WEATHER) || defined(MAPLEROOT_DAILY_CHECKIN) || defined(MAPLEROOT_SET_EQUIP) || defined(MAPLEROOT_MONSTER_BOOK) || defined(MAPLEROOT_COLOR_PRISM)
 void AttachCustomPacketMod();
 void ShutdownCustomPackets();
 #endif
@@ -78,6 +78,14 @@ void AttachMonsterBookFoundInMod();
 void AttachMonsterBookDropsMod();
 void AttachMonsterBookSearchMod();
 void MonsterBook_Tick();
+#endif
+#ifdef MAPLEROOT_COLOR_PRISM
+// weapontint.cpp (renderer + protocol, CAvatar::PrepareActionLayer and the face builder),
+// coloringprism.cpp (the window), coloringprism_hooks.cpp (cash-use gate/sends, item drop)
+void AttachWeaponTintMod();
+void AttachColoringPrismMod();
+void AttachColoringPrismHostHooks();
+void WeaponTint_Tick();
 #endif
 #ifdef MAPLEROOT_WEATHER
 void AttachWeatherMod();
@@ -167,6 +175,14 @@ inline void AttachClientHooks() {
     AttachMonsterBookDropsMod();
     AttachMonsterBookSearchMod();
     VerifyKaentakeHooks("Monster Book");
+#endif
+#ifdef MAPLEROOT_COLOR_PRISM
+    AttachWeaponTintMod();
+    AttachColoringPrismMod();
+    AttachColoringPrismHostHooks();
+#ifdef MAPLEROOT_INTEGRATION
+    VerifyKaentakeHooks("Coloring Prism");
+#endif
 #endif
     DebugMessage("Installing: AttachToolTipMod();");
     AttachToolTipMod();
