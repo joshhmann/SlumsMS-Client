@@ -41,3 +41,8 @@ if(MAPLEROOT_COLOR_PRISM)
     add_executable(weapontint_proto_test weapontint_proto_test.cpp)
     add_test(NAME colorprism_wire_format COMMAND weapontint_proto_test)
 endif()
+
+if(MAPLEROOT_ATTACK_DIAG)
+    add_executable(attackdiag_rules_test attackdiag_rules_test.cpp)
+    add_test(NAME attackdiag_remote_attack_rules COMMAND attackdiag_rules_test)
+endif()

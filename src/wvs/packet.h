@@ -17,6 +17,9 @@ public:
         return CanRead(1) ? &m_aRecvBuff[m_uOffset] : nullptr;
     }
     void SetOffset(size_t offset) { m_uOffset = offset; }
+    // The whole received packet and its length, for read-only diagnostics (attackdiag.cpp).
+    const unsigned char* BufferPublic() const { return m_aRecvBuff.IsEmpty() ? nullptr : &m_aRecvBuff[0]; }
+    size_t LengthPublic() const { return m_uLength; }
     bool CanRead(size_t n) const {
         return !m_aRecvBuff.IsEmpty() && m_uOffset <= m_uLength && n <= m_uLength - m_uOffset;
     }
