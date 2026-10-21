@@ -19,6 +19,21 @@ To run all seven checks using your existing complete test client:
 
 Without external Data, only the five tests that do not require game assets are registered. Build errors stop the script before staging or tests; no old DLL is silently accepted. The script builds one CMake project with all accepted addon flags. Output in `build/Release`: `SlumsMS.exe` (starter), `slums.dll` (everything: Kaentake plus the MapleRoot companion), the original Intel `ijl15.dll`, `discord_game_sdk.dll` and `Custom.wz`. Players start `SlumsMS.exe`; it launches `MapleStory.exe` with `slums.dll`.
 
+## Build stamp (version gate)
+
+slums.dll tells the login server which build it is: CP `0x3738` (format 1, int build, string release) right before
+every password packet (`src/buildstamp_proto.h`, sent from `CLogin::SendCheckPasswordPacket_hook`). The server refuses
+logins below its `MIN_CLIENT_BUILD` with "Your game is out of date: open the SlumsMS launcher to update."; clients
+without the stamp (1.4.1 and older) count as build 0.
+
+- The numbers come from `VERSION` (repo root) on every configure: release = its text, build =
+  major*10000 + minor*100 + patch (1.4.2 -> 10402; 1.4.2-rc1 is also 10402). `cmake/BuildStamp.cmake` checks them.
+- A release bumps `VERSION` in its release commit, nothing else. The build prints
+  `slums.dll build stamp: <release> (build <n>)` and writes `build/Release/slums-build.txt` (`release=`, `build=`);
+  the server release sets `MIN_CLIENT_BUILD` to that build (SlumsMS `tools/release/set-min-client-build`).
+- One-off builds may pass `-DSLUMS_RELEASE_OVERRIDE=` / `-DSLUMS_BUILD_NUMBER_OVERRIDE=` (remove with `-U`).
+- `buildstamp_wire_format` (ctest) checks the bytes against the server's golden packet.
+
 ## Server address
 
 `config.ini` `[config] host=` takes a host name (for example `slumsms.asslorde.com`) or an IPv4 address, and `port=` the login port. A name is resolved once, on the first connection.

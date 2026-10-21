@@ -19,6 +19,10 @@ add_library(injector SHARED
 )
 
 target_precompile_headers(injector PRIVATE pch.h)
+# Build stamp reported at login (cmake/BuildStamp.cmake); slums-build.txt beside slums.dll is for the release tools.
+target_compile_definitions(injector PRIVATE SLUMS_BUILD_NUMBER=${SLUMS_BUILD_NUMBER} "SLUMS_RELEASE=\"${SLUMS_RELEASE}\"")
+file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/$<CONFIG>/slums-build.txt"
+    CONTENT "release=${SLUMS_RELEASE}\nbuild=${SLUMS_BUILD_NUMBER}\n")
 if(MAPLEROOT_MOUNT_INFO)
     target_sources(injector PRIVATE mountinfo.cpp)
     target_compile_definitions(injector PRIVATE MAPLEROOT_MOUNT_INFO)

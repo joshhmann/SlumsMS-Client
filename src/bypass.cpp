@@ -5,6 +5,7 @@
 #include "wvs/wndman.h"
 #include "wvs/stage.h"
 #include "wvs/packet.h"
+#include "buildstamp_proto.h"
 #include "wvs/exception.h"
 #include "wvs/util.h"
 #include "ztl/ztl.h"
@@ -392,6 +393,11 @@ int CLogin::SendCheckPasswordPacket_hook(char* sID, char* sPasswd) {
     CSystemInfo si;
     // CSystemInfo::Init(&si);
     reinterpret_cast<void(__thiscall*)(CSystemInfo*)>(0x00A54BD0)(&si);
+
+    // Build stamp first (CP 0x3738, buildstamp_proto.h): the login server gates on it when it checks the password.
+    COutPacket oStamp(kBuildStampOpcode);
+    BuildStamp_Encode(oStamp);
+    reinterpret_cast<void(__thiscall*)(CClientSocket*, const COutPacket&)>(0x0049637B)(CClientSocket::GetInstance(), oStamp);
 
     COutPacket oPacket(1); // CP_CheckPassword
     oPacket.EncodeStr(sID);
