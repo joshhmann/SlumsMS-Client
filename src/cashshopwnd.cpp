@@ -101,6 +101,8 @@ const char* const kBuyMsg[] = {
     "That item is not on sale.",
     "Another purchase is already in progress.",
     "That cart is not valid.",
+    "Your level is too low for this item.",
+    "You can't expand this any further.",
 };
 
 // Sanity ceilings. A truncated or hostile packet must be rejected whole, the way
