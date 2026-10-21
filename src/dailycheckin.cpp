@@ -119,8 +119,8 @@ static constexpr int kCellH     = 71;   // cell height (label + content box)
 static constexpr int kIconDX    = 16;   // (kCellW-32)/2 -> horizontally centre a 32px icon
 static constexpr int kIconBY    = 62;   // bottom anchor for DrawItemIconForSlot, below the label
 
-// Close button (top-right). Reuses the vanilla bag-window 12x12 close art
-// (UI/UIWindow.img/Bag/BtClose) — point this at any close button in your UI.wz. Seated inside the
+// Close button (top-right). Reuses the stock generic 12x12 close art (UI/Basic.img/BtClose, the
+// button most v83 windows use; this client has no UI/UIWindow.img/Bag). Seated inside the
 // header band (sample art's white strip is y5..18) so it doesn't clip the title-bar gradient/frame.
 static constexpr int kBtCloseX = 490, kBtCloseY = 6, kBtCloseW = 12, kBtCloseH = 12;
 
@@ -266,8 +266,8 @@ public:
         // fallback for a client that packed the node into its own UI.wz.
         m_pBg          = LoadSprite(L"UI/UIWindowEx.img/DailyCheckin/backgrnd");
         if (!m_pBg) m_pBg = LoadSprite(L"UI/UIWindow.img/DailyCheckin/backgrnd");
-        m_pBtClose[0]  = LoadSprite(L"UI/UIWindow.img/Bag/BtClose/normal/0");
-        m_pBtClose[1]  = LoadSprite(L"UI/UIWindow.img/Bag/BtClose/mouseOver/0");
+        m_pBtClose[0]  = LoadSprite(L"UI/Basic.img/BtClose/normal/0");
+        m_pBtClose[1]  = LoadSprite(L"UI/Basic.img/BtClose/mouseOver/0");
     }
 
     // Create a bold Dotum font of the given colour/size.
