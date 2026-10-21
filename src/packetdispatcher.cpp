@@ -17,6 +17,9 @@
 #ifdef MAPLEROOT_COLOR_PRISM
 #include "weapontint.h"
 #endif
+#ifdef MAPLEROOT_INTEGRATION
+#include "bounce_rules.h"
+#endif
 #ifdef MAPLEROOT_WEATHER
 #include "weather.h"
 #include "lamps.h"
@@ -63,6 +66,13 @@ void __fastcall ProcessPacketHook(void* socket, void*, CInPacket* packet) {
             // WeaponTint_HandleSync skips the opcode itself from the CURRENT offset, which the peek left in place.
             std::lock_guard<std::mutex> lock(dispatchGate);
             if (!shuttingDown) WeaponTint_HandleSync(packet);
+            return;
+        }
+#endif
+#ifdef MAPLEROOT_INTEGRATION
+        if (opcode == bounce::kBounceZonesSyncOpcode) {
+            std::lock_guard<std::mutex> lock(dispatchGate);
+            if (!shuttingDown) BounceZones_HandleSync(packet);
             return;
         }
 #endif

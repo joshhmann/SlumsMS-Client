@@ -47,7 +47,7 @@ void AttachSystemHooks();
 
 // called in system.cpp -> SetUnhandledExceptionFilter_hook
 void AttachClientBypass();
-#if defined(MAPLEROOT_CASHSHOP_WINDOW) || defined(MAPLEROOT_WEATHER) || defined(MAPLEROOT_DAILY_CHECKIN) || defined(MAPLEROOT_SET_EQUIP) || defined(MAPLEROOT_MONSTER_BOOK) || defined(MAPLEROOT_COLOR_PRISM)
+#if defined(MAPLEROOT_CASHSHOP_WINDOW) || defined(MAPLEROOT_WEATHER) || defined(MAPLEROOT_DAILY_CHECKIN) || defined(MAPLEROOT_SET_EQUIP) || defined(MAPLEROOT_MONSTER_BOOK) || defined(MAPLEROOT_COLOR_PRISM) || defined(MAPLEROOT_INTEGRATION)
 void AttachCustomPacketMod();
 void ShutdownCustomPackets();
 #endif
@@ -87,6 +87,12 @@ void AttachWeaponTintMod();
 void AttachColoringPrismMod();
 void AttachColoringPrismHostHooks();
 void WeaponTint_Tick();
+#endif
+#ifdef MAPLEROOT_INTEGRATION
+// bounce.cpp: double-tap jump ([clienthax] doubletapjump) and the bounce block zones (LP 0x3737)
+void AttachBounceMod();
+class CInPacket;
+void BounceZones_HandleSync(CInPacket* packet);
 #endif
 #ifdef MAPLEROOT_ATTACK_DIAG
 // attackdiag.cpp: logs other characters' attacks the client drops (config.ini [debug] attackdiag=1)
@@ -210,6 +216,11 @@ inline void AttachClientHooks() {
 #ifdef MAPLEROOT_INTEGRATION
     VerifyKaentakeHooks("AttachTempStatMod");
 #endif
+#endif
+#ifdef MAPLEROOT_INTEGRATION
+    DebugMessage("Installing: AttachBounceMod();");
+    AttachBounceMod();
+    VerifyKaentakeHooks("AttachBounceMod");
 #endif
 #ifdef MAPLEROOT_ATTACK_DIAG
     DebugMessage("Installing: AttachAttackDiagMod();");
