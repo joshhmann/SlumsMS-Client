@@ -88,6 +88,10 @@ void AttachColoringPrismMod();
 void AttachColoringPrismHostHooks();
 void WeaponTint_Tick();
 #endif
+#ifdef MAPLEROOT_ATTACK_DIAG
+// attackdiag.cpp: logs other characters' attacks the client drops (config.ini [debug] attackdiag=1)
+void AttachAttackDiagMod();
+#endif
 #ifdef MAPLEROOT_WEATHER
 void AttachWeatherMod();
 void AttachWeatherWindMod();
@@ -205,6 +209,13 @@ inline void AttachClientHooks() {
     AttachTempStatMod();
 #ifdef MAPLEROOT_INTEGRATION
     VerifyKaentakeHooks("AttachTempStatMod");
+#endif
+#endif
+#ifdef MAPLEROOT_ATTACK_DIAG
+    DebugMessage("Installing: AttachAttackDiagMod();");
+    AttachAttackDiagMod();
+#ifdef MAPLEROOT_INTEGRATION
+    VerifyKaentakeHooks("AttachAttackDiagMod");
 #endif
 #endif
 }

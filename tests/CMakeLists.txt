@@ -48,3 +48,8 @@ if(MAPLEROOT_COLOR_PRISM)
     add_executable(coloringprism_layout_test coloringprism_layout_test.cpp)
     add_test(NAME colorprism_window_layout COMMAND coloringprism_layout_test)
 endif()
+
+if(MAPLEROOT_ATTACK_DIAG)
+    add_executable(attackdiag_rules_test attackdiag_rules_test.cpp)
+    add_test(NAME attackdiag_remote_attack_rules COMMAND attackdiag_rules_test)
+endif()
