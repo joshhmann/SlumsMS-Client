@@ -53,3 +53,6 @@ if(MAPLEROOT_ATTACK_DIAG)
     add_executable(attackdiag_rules_test attackdiag_rules_test.cpp)
     add_test(NAME attackdiag_remote_attack_rules COMMAND attackdiag_rules_test)
 endif()
+
+add_executable(attackstop_patch_test attackstop_patch_test.cpp)
+add_test(NAME attackstop_moveattack_sites COMMAND attackstop_patch_test)
