@@ -4,6 +4,10 @@
 #include "wvs/tooltip.h"
 #include "wvs/iteminfo.h"
 #include "ztl/ztl.h"
+#ifdef MAPLEROOT_SET_EQUIP
+#include "setitem.h"
+#include <climits>
+#endif
 
 
 class GW_ItemSlotEquip {
@@ -29,8 +33,15 @@ public:
 };
 
 
+#ifdef MAPLEROOT_SET_EQUIP
+static void SetEffect_OnEquipToolTip(CUIToolTip* pTip, int nItemID);
+#endif
+
 void CUIToolTip::SetToolTip_Equip_Basic_hook(GW_ItemSlotEquip* pe) {
     int nItemID = pe->nItemID;
+#ifdef MAPLEROOT_SET_EQUIP
+    SetEffect_OnEquipToolTip(this, nItemID);   // first: records this as the main equip tooltip
+#endif
     auto pEquipItem = CItemInfo::GetInstance()->GetEquipItem(nItemID);
     if (!pEquipItem) {
         return;
@@ -82,9 +93,30 @@ void CUIToolTip::SetToolTip_Equip_Basic_hook(GW_ItemSlotEquip* pe) {
     if (pEquipItem->nRUC) {
         PrintValue(PT_VALUE, pe->nRUC, "NUMBER OF UPGRADES AVAILABLE :", 1);
     }
+#ifdef MAPLEROOT_SET_EQUIP
+    // Two fixed rows only: the full list goes in the second tooltip (AddInfoEx rows have no bounds check, and a
+    // long set listed inline overflowed them in the addon's first version).
+    setitem::Def def;
+    std::vector<int> worn;
+    if (SetItem_Find(nItemID, def, worn)) {
+        AddInfoEx(14, 15, "SET EFFECT :", ZXString<char>(def.name.c_str()), 1, 1001);
+        ZXString<char> sPieces;
+        sPieces.Format("%d / %d", static_cast<int>(worn.size()), def.complete);
+        AddInfoEx(14, 15, "PIECES EQUIPPED :", sPieces, 1, 1001);
+    }
+#endif
 }
 
 
+#ifdef MAPLEROOT_SET_EQUIP
+#include "tooltip_setitem.inl"
+#endif
+
 void AttachToolTipMod() {
     ATTACH_HOOK(CUIToolTip::SetToolTip_Equip_Basic, CUIToolTip::SetToolTip_Equip_Basic_hook);
+#ifdef MAPLEROOT_SET_EQUIP
+    ATTACH_HOOK(CUIToolTip__DrawToolTip_Equip, CUIToolTip__DrawToolTip_Equip_hook);
+    ATTACH_HOOK(CUIToolTip__ClearToolTip, CUIToolTip__ClearToolTip_hook);
+    AttachSetStatBonusMod();
+#endif
 }

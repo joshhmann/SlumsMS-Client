@@ -13,6 +13,9 @@
 #ifdef MAPLEROOT_MOUNT_INFO
 #include "mountinfo.h"
 #endif
+#ifdef MAPLEROOT_SET_EQUIP
+#include "setitem.h"
+#endif
 #include <algorithm>
 #include <vector>
 #include <tuple>
@@ -166,7 +169,7 @@ void CWvsApp::CleanUp_hook() {
 #ifdef MAPLEROOT_MOUNT_INFO
     ShutdownMountInfo();
 #endif
-#if defined(MAPLEROOT_CASHSHOP_WINDOW) || defined(MAPLEROOT_WEATHER) || defined(MAPLEROOT_DAILY_CHECKIN)
+#if defined(MAPLEROOT_CASHSHOP_WINDOW) || defined(MAPLEROOT_WEATHER) || defined(MAPLEROOT_DAILY_CHECKIN) || defined(MAPLEROOT_SET_EQUIP)
     ShutdownCustomPackets();
 #endif
 #ifdef MAPLEROOT_WEATHER
@@ -174,6 +177,9 @@ void CWvsApp::CleanUp_hook() {
 #endif
 #ifdef MAPLEROOT_CASHSHOP_WINDOW
     CashShopWnd_Shutdown();
+#endif
+#ifdef MAPLEROOT_SET_EQUIP
+    SetEffectToolTip_Shutdown();
 #endif
 #ifdef MAPLEROOT_INTEGRATION
     ShutdownMapleRoot();
