@@ -66,6 +66,7 @@ void AttachToolTipMod();
 void AttachIconIconMod();
 void AttachPetEquipFlagMod();   // petequipflag.cpp: newer pets overflow the 128-bit pet flag
 void AttachProposalGenderMod(); // proposalgender.cpp: any gender may use an engagement ring box
+void AttachCreateBlockMod();    // createblock.cpp: no random "high population" block on character creation
 void AttachTempStatMod();
 #ifdef MAPLEROOT_MOUNT_INFO
 void AttachMountInfoMod();
@@ -215,6 +216,11 @@ inline void AttachClientHooks() {
     AttachProposalGenderMod();
 #ifdef MAPLEROOT_INTEGRATION
     VerifyKaentakeHooks("AttachProposalGenderMod");
+#endif
+    DebugMessage("Installing: AttachCreateBlockMod();");
+    AttachCreateBlockMod();
+#ifdef MAPLEROOT_INTEGRATION
+    VerifyKaentakeHooks("AttachCreateBlockMod");
 #endif
 #ifndef MAPLEROOT_INTEGRATION
     DebugMessage("Installing: AttachTempStatMod();");

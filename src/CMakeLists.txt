@@ -13,6 +13,7 @@ add_library(injector SHARED
     itemicon.cpp
     petequipflag.cpp
     proposalgender.cpp
+    createblock.cpp
     tempstat.cpp
     stringpool.cpp
     debug.cpp
