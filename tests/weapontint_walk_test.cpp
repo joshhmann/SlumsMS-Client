@@ -122,7 +122,7 @@ struct FakeOps {
     bool IsOurs(const Canvas& cv) { return cache.IsOurs(cv.get()); }
     bool Swap(const Node& parent, const std::wstring& name, const Canvas& orig) {
         CanvasPtr clone;
-        if (!cache.Find(orig.get(), tint, &clone)) {
+        if (!cache.Find(orig.get(), tint, clone)) {
             clone = std::make_shared<FakeCanvas>(*orig);
             clone->tintDepth = orig->tintDepth + 1;
             ++clonesMade;
@@ -303,14 +303,14 @@ static void TestCacheHoldsOriginals() {
         CHECK(fresh.back().get() != rawOrig, "a new canvas reused a cached original's address");
     }
     CanvasPtr hit;
-    CHECK(cache.Find(rawOrig, 7u, &hit) && hit && hit->art == L"30/shoot1/1/weapon", "cached clone");
-    CHECK(!cache.Find(rawOrig, 8u, &hit), "another tint is another entry");
+    CHECK(cache.Find(rawOrig, 7u, hit) && hit && hit->art == L"30/shoot1/1/weapon", "cached clone");
+    CHECK(!cache.Find(rawOrig, 8u, hit), "another tint is another entry");
     CHECK(cache.IsOurs(hit.get()) && !cache.IsOurs(rawOrig), "IsOurs knows clones from originals");
     // Failures are cached too, and are not ours.
     auto bad = std::make_shared<FakeCanvas>();
     cache.Put(bad.get(), bad, 7u, nullptr, nullptr);
     CanvasPtr none = std::make_shared<FakeCanvas>();
-    CHECK(cache.Find(bad.get(), 7u, &none) && !none, "a cached failure reads back as empty");
+    CHECK(cache.Find(bad.get(), 7u, none) && !none, "a cached failure reads back as empty");
     CHECK(!cache.Trim(2) && cache.Size() == 2, "under the cap nothing is dropped");
     CHECK(cache.Trim(1) && cache.Size() == 0 && !cache.IsOurs(hit.get()), "over the cap it empties");
     CHECK(weakOrig.expired() || weakOrig.use_count() == 0, "a trimmed entry releases its original");

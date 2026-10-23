@@ -531,7 +531,7 @@ IWzCanvasPtr GetTinted(IWzCanvasPtr pSrc, const WeaponTint& t) {
     if (!pSrc) return nullptr;
     IWzCanvas* raw = pSrc;
     IWzCanvasPtr clone;
-    if (g_clones.Find(raw, t.Key(), &clone)) return clone;
+    if (g_clones.Find(raw, t.Key(), clone)) return clone;
     clone = CloneTinted(pSrc, t);
     // Cache the failure too, so it is not retried per frame.
     g_clones.Put(raw, pSrc, t.Key(), clone ? static_cast<IWzCanvas*>(clone) : nullptr, clone);
@@ -1015,7 +1015,7 @@ IWzCanvasPtr GetIrisTinted(IWzCanvasPtr pSrc, const FaceIrisPlan& plan, const We
     }
     IWzCanvas* raw = pSrc;
     IWzCanvasPtr clone;
-    if (g_irisClones.Find(raw, t.Key(), &clone)) return clone;
+    if (g_irisClones.Find(raw, t.Key(), clone)) return clone;
     clone = CloneIrisTinted(pSrc, plan, t);
     // Cache failures too, so they are not retried per frame.
     g_irisClones.Put(raw, pSrc, t.Key(), clone ? static_cast<IWzCanvas*>(clone) : nullptr, clone);

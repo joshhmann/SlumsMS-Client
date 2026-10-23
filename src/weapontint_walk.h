@@ -191,11 +191,12 @@ private:
 template <class Raw, class Ptr>
 class CloneCache {
 public:
-    // True if (raw, tint) is cached; *clone may be empty (a cached failure).
-    bool Find(const Raw* raw, unsigned int tintKey, Ptr* clone) const {
+    // True if (raw, tint) is cached; clone may come back empty (a cached failure). By reference:
+    // _com_ptr_t overloads operator&, so a Ptr* parameter cannot take &clone.
+    bool Find(const Raw* raw, unsigned int tintKey, Ptr& clone) const {
         auto it = map_.find(Key(raw, tintKey));
         if (it == map_.end()) return false;
-        *clone = it->second.clone;
+        clone = it->second.clone;
         return true;
     }
     void Put(const Raw* rawOriginal, const Ptr& original, unsigned int tintKey,
