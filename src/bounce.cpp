@@ -3,7 +3,7 @@
 //
 // Installed once at startup, nothing is rewritten afterwards:
 //   * 0x0094F5A7: the jump key's `call CUserLocal::Jump` -> JumpKeyThunk (rel32 only), when
-//     [clienthax] doubletapjump is true (the default).
+//     [clienthax] doubletapjump is true (default false; a player turns it on).
 //   * The block is a check at the top of MapleRoot's existing CUserLocal::DoActiveSkill detour
 //     (mapleroot/ijl15/SkillEdits/Activeskill.h) calling SlumsBounce_BlockSkill; no new hook.
 //   * LP 0x3737 BOUNCE_ZONES_SYNC through the shared packet dispatcher (packetdispatcher.cpp).
@@ -36,7 +36,7 @@ auto CWvsContext__GetCurFieldID = reinterpret_cast<int(__thiscall*)(void*)>(0x00
 constexpr uintptr_t kAddr_CUserLocal = 0x00BEBF98;
 auto CUserLocal__GetJobCode = reinterpret_cast<int(__thiscall*)(void*)>(0x0095FFC3);
 
-bool g_doubleTap = true;
+bool g_doubleTap = false;
 DWORD g_jumpKeyLParam = 0; // written by JumpKeyThunk, game thread only
 
 std::mutex g_zoneGate;
@@ -164,7 +164,14 @@ extern "C" void __cdecl SlumsBounce_ApplyImpulse(int nSkillID) {
 extern "C" int __cdecl SlumsBounce_BlockSkill(int nSkillID) {
     if (!bounce::IsUniversalBounce(nSkillID) && !bounce::IsFlashJump(nSkillID)) return 0;
     const int mapId = CurrentFieldId();
-    if (!bounce::ShouldBlockSkill(nSkillID, MapBlocked(mapId))) return 0;
+    if (!bounce::ShouldBlockSkill(nSkillID, MapBlocked(mapId))) {
+        // Hermit Flash Jump branches to the bound jump at 0x0096BF02, before MapleRoot's
+        // FlashJumpAll cave (0x0096BF0B), so the cave never picks its impulse and it used to fly
+        // with whatever the last bounce wrote (straight up after a Vertical Bounce). Write it here,
+        // in the same DoActiveSkill detour, before anything moves. Same function as the cave.
+        if (bounce::IsFlashJump(nSkillID)) SlumsBounce_ApplyImpulse(nSkillID);
+        return 0;
+    }
     LOG_ONCE("Bounce: skill %d refused on blocked map %d (logged once per session)", nSkillID, mapId);
     return 1;
 }
@@ -215,7 +222,7 @@ void BounceZones_HandleSync(CInPacket* packet) {
 }
 
 void AttachBounceMod() {
-    g_doubleTap = ReadIniBool("clienthax", "doubletapjump", true);
+    g_doubleTap = ReadIniBool("clienthax", "doubletapjump", false);
     DebugMessage("Bounce: built-in jump-quest list %u ranges; doubletapjump=%d",
         static_cast<unsigned>(bounce::BuiltinJumpQuestRanges().size()), g_doubleTap ? 1 : 0);
     if (!g_doubleTap) return;

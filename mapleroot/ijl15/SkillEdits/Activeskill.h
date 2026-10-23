@@ -533,8 +533,8 @@ void restoreVelocityChange()
 // use from the skill and the character's job family (thieves / Night Walkers keep MapleRoot's
 // values, everyone else is toned down; the server can retune all four sets). It writes the same
 // three immediates applyVelocityChange / restoreVelocityChange above used to. Hermit Flash Jump
-// (4111006) also gets its values written first, so a Vertical Bounce used just before can no
-// longer leave it with the vertical impulse.
+// (4111006) never reaches this cave (the stock code branches on it at 0x0096BF02), so its
+// impulse is written from the DoActiveSkill detour instead (SlumsBounce_BlockSkill).
 extern "C" void __cdecl SlumsBounce_ApplyImpulse(int nSkillID);
 const DWORD FlashJumpVar = 0x0096BF52;
 const DWORD FlashJumpRet = 0x0096BF12;
@@ -555,17 +555,6 @@ void __declspec(naked)FlashJumpAll() {
 		je[applyFj]
 		cmp     eax, 20001054
 		je[applyFj]
-		cmp     eax, 4111006
-		je[applyHermit]
-
-		jmp FlashJumpRet
-
-		applyHermit:
-		pushad
-		push eax
-		call SlumsBounce_ApplyImpulse
-		add esp, 4
-		popad
 		jmp FlashJumpRet
 
 		applyFj:

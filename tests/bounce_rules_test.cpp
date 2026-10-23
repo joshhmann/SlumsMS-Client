@@ -158,6 +158,31 @@ int main(int argc, char** argv) {
             Check(kImpulseLeftVx == 0x0096C00B && kImpulseRightVx == 0x0096C024 && kImpulseVy == 0x0096C032, "immediates");
         }
 
+        // ---- a double-tap is EXACTLY the Ninja Bounce hotkey: same skill, so same impulse ----
+        {
+            const auto d2 = Hex(kImpulsesDefault);
+            BounceImpulses server;
+            Check(DecodeImpulsesSync(d2.data() + 2, d2.size() - 2, server), "decode");
+            for (const BounceImpulses& cfg : {BounceImpulses{}, server}) {
+                for (int job : {0, 100, 112, 200, 232, 300, 322, 400, 412, 422, 500, 522, 900, 1000, 1100, 1400, 1412, 1500, 2000, 2112}) {
+                    const int family = job / 1000 == 1 ? 10001050 : (job / 1000 == 2 ? 20001050 : 1050);
+                    // everything a character can have: all three bounces, and real Flash Jump for thieves
+                    Levels lv{{{1050, 1}, {10001050, 1}, {20001050, 1}, {1054, 1}, {4111006, 20}, {14101004, 20}}};
+                    DoubleTapInput tap;
+                    tap.lParam = 0x00390001;
+                    tap.air = Air();
+                    const int tapSkill = DecideDoubleTap(tap, lv, family);
+                    Check(tapSkill == family, "double-tap uses the job family's Ninja Bounce");
+                    Impulse viaTap, viaHotkey;
+                    Check(ImpulseFor(tapSkill, job, cfg, viaTap), "double-tap goes through the cave's impulse choice");
+                    for (int hotkey : kNinjaBounce) {
+                        Check(ImpulseFor(hotkey, job, cfg, viaHotkey) && viaHotkey == viaTap,
+                              "Ninja Bounce hotkey and double-tap give the same impulse for the same job");
+                    }
+                }
+            }
+        }
+
         // ---- double-tap never uses Vertical Bounce ----
         {
             Levels all{{{1050, 1}, {10001050, 1}, {20001050, 1}, {1054, 1}, {10001054, 1}, {20001054, 1}}};
@@ -216,9 +241,9 @@ int main(int argc, char** argv) {
         Check(ChooseDoubleTapSkill(beginner, 20001050) == 20001050, "aran");
         Check(ChooseDoubleTapSkill(beginner, 0) == 1050, "before the server packet");
         Levels hermit{{{1050, 1}, {4111006, 20}}};
-        Check(ChooseDoubleTapSkill(hermit, 1050) == 4111006, "real FJ first");
+        Check(ChooseDoubleTapSkill(hermit, 1050) == 1050, "a hermit's double-tap is its Ninja Bounce, not Flash Jump");
         Levels nw{{{10001050, 1}, {14101004, 10}}};
-        Check(ChooseDoubleTapSkill(nw, 10001050) == 14101004, "night walker FJ");
+        Check(ChooseDoubleTapSkill(nw, 10001050) == 10001050, "a night walker's double-tap is its Ninja Bounce");
         Levels cygOnly{{{10001050, 1}}};
         Check(ChooseDoubleTapSkill(cygOnly, 1050) == 10001050, "native missing -> any bounce owned");
         Check(ChooseDoubleTapSkill(Levels{}, 1050) == 0, "nothing learned");
@@ -242,9 +267,9 @@ int main(int argc, char** argv) {
         in.air = Air();
         in.here = jq;
         Check(DecideDoubleTap(in, beginner, 1050) == 0, "jump quest: no bounce");
-        Check(DecideDoubleTap(in, hermit, 1050) == 0, "jump quest: no Flash Jump either");
+        Check(DecideDoubleTap(in, hermit, 1050) == 0, "jump quest: no bounce for a hermit either");
         in.here = bounceOnly;
-        Check(DecideDoubleTap(in, hermit, 1050) == 4111006, "FJ where only bounces are blocked");
+        Check(DecideDoubleTap(in, hermit, 1050) == 0, "double-tap is a bounce, so it is blocked where bounces are");
         Check(DecideDoubleTap(in, beginner, 1050) == 0, "bounce blocked there");
 
         // ---- the static patch ----
@@ -279,6 +304,8 @@ int main(int argc, char** argv) {
                 {0x007046AC, "558bec515157", "CVecCtrl swim/fly test"},
                 {0x00A1238B, "e87c56a2ff85c0", "CWvsContext::GetCurFieldID"},
                 {0x007616F6, "558bec51894dfc", "CSkillInfo::GetSkillLevel"},
+                {0x0096BEF8, "bb9eba3e003bc38945f0744e", "BoundJump: Hermit FJ 4111006 jumps to 0x0096BF52 BEFORE the FlashJumpAll cave"},
+                {0x0096BFCA, "395df0c787582b0000010000007410817df00c2ad700", "BoundJump: level doubled only for ids that are not 4111006/14101004"},
                 {0x0096C00A, "baa2feffff", "BoundJump: mov edx, -350 (left impulse)"},
                 {0x0096C021, "8d0ccd5e010000", "BoundJump: lea ecx, [ecx*8+350] (right impulse)"},
                 {0x0096C031, "b906ffffff", "BoundJump: mov ecx, -250 (vertical impulse)"},

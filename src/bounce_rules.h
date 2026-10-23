@@ -20,14 +20,14 @@
 //     foothold and skill-request gates (0x0096BED2/BEE2/BF59/BF86/BFAE).
 //
 // SlumsMS adds two things on top, and touches none of those bytes:
-//   1. Double-tap jump ([clienthax] doubletapjump, default true): the jump
+//   1. Double-tap jump ([clienthax] doubletapjump, default false): the jump
 //      key's call to CUserLocal::Jump in CUserLocal::OnKeyDown (0x0094F5A7,
 //      E8 rel32 -> 0x0094C383) is redirected once at startup. A FRESH press
 //      (lParam bit 30 clear: not keyboard auto-repeat) while the character is
 //      airborne by the client's own physics state -- no foothold, not on a
 //      ladder or rope, not swimming or in a fly map -- also asks
-//      DoActiveSkill for the best bounce the character has: real Flash Jump
-//      (4111006 / 14101004) first, else the Ninja Bounce of its job family.
+//      DoActiveSkill for the Ninja Bounce of its job family: the same call a
+//      Ninja Bounce hotkey makes, so the same impulse (never real Flash Jump).
 //      Holding jump never bounces; the stock "one bound jump per airtime" flag
 //      (CUserLocal+0x2B58) still limits it to one per jump.
 //   2. Bounce block zones: on a blocked map, DoActiveSkill refuses the six
@@ -253,13 +253,17 @@ inline bool IsAirborne(const AirState& s) {
 // WM_KEYDOWN lParam: bit 30 = the key was already down (auto-repeat), bit 31 = key up.
 inline bool IsFreshPress(std::uint32_t lParam) { return (lParam & 0xC0000000u) == 0; }
 
-// The bounce a double-tap uses: real Flash Jump if learned, else the job family's Ninja Bounce
+// The bounce a double-tap uses: EXACTLY the Ninja Bounce a hotkey would use -- the job family's
 // (nativeBounce from the server; 0 = unknown), else any Ninja Bounce the character has. 0 = none.
+//
+// Never real Flash Jump, and never Vertical Bounce. It used to prefer Flash Jump 4111006 / 14101004
+// when learned, which made a thief's double-tap a different jump from their Ninja Bounce hotkey:
+// DoActiveSkill_BoundJump doubles the skill level into the impulse only for ids that are NOT
+// 4111006 / 14101004 (0x0096BFCA..0x0096BFE9), and Hermit Flash Jump branches to the jump at
+// 0x0096BF02, before MapleRoot's FlashJumpAll cave at 0x0096BF0B, so it never had its impulse
+// chosen at all (it flew with whatever the last bounce wrote). Flash Jump stays on its own hotkey.
 template <typename LevelOf>
 int ChooseDoubleTapSkill(LevelOf levelOf, int nativeBounce) {
-    for (int id : {kFlashJumpHermit, kFlashJumpNightWalker}) {
-        if (levelOf(id) > 0) return id;
-    }
     if (IsNinjaBounce(nativeBounce) && levelOf(nativeBounce) > 0) return nativeBounce;
     for (int id : kNinjaBounce) {
         if (levelOf(id) > 0) return id;
