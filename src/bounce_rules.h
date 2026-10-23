@@ -164,6 +164,77 @@ inline bool DecodeZonesSync(const unsigned char* body, std::size_t size, ZonesSy
     return true;
 }
 
+// ---- bounce impulses (LP BOUNCE_ZONES_SYNC version 2) ----
+// The bound-jump impulse is three immediates inside CUserLocal::DoActiveSkill_BoundJump that
+// MapleRoot's FlashJumpAll cave rewrites per use (SkillEdits/Activeskill.h):
+//   0x0096C00A+1  mov edx, imm32          sideways speed facing left   (stock -350)
+//   0x0096C021+3  lea ecx, [ecx*8+imm32]  sideways speed facing right  (stock +350)
+//   0x0096C031+1  mov ecx, imm32          vertical speed               (stock -250)
+// The thieves keep MapleRoot's strong values; everyone else gets stock Flash Jump strength
+// for Ninja Bounce and a short hop for Vertical Bounce. The server sends all four sets in a
+// SECOND 0x3737 packet with version 2, after the version 1 zones packet: a client that only
+// knows version 1 rejects it as unknown and keeps its zones; a server that never sends it
+// leaves today's MapleRoot values everywhere.
+constexpr std::uint32_t kImpulseLeftVx = 0x0096C00A + 1;
+constexpr std::uint32_t kImpulseRightVx = 0x0096C021 + 3;
+constexpr std::uint32_t kImpulseVy = 0x0096C031 + 1;
+constexpr std::uint8_t kBounceImpulsesVersion = 2;
+constexpr std::int32_t kMaxImpulse = 5000;
+
+struct Impulse {
+    std::int32_t leftVx = 0;
+    std::int32_t rightVx = 0;
+    std::int32_t vy = 0;
+    bool operator==(const Impulse& o) const { return leftVx == o.leftVx && rightVx == o.rightVx && vy == o.vy; }
+};
+
+// MapleRoot as shipped (YourStuff.h startup bytes and Activeskill.h applyVelocityChange).
+constexpr Impulse kMapleRootNinja = {-683, 606, -688};
+constexpr Impulse kMapleRootVertical = {-1, 0, -1200};
+constexpr Impulse kStockFlashJump = {-350, 350, -250};
+
+struct BounceImpulses {
+    Impulse ninjaNative = kMapleRootNinja;      // thieves (4xx) and Night Walkers (14xx)
+    Impulse ninjaOther = kMapleRootNinja;       // everyone else
+    Impulse verticalNative = kMapleRootVertical;
+    Impulse verticalOther = kMapleRootVertical;
+};
+
+// The families whose own skill book has Flash Jump: Thief (400, 41x, 42x) and Night Walker (14xx).
+inline bool IsFlashJumpFamily(int job) {
+    return job / 100 == 4 || job / 100 == 14;
+}
+
+// The immediates for this bound jump, or false for an id the cave does not handle. Real Flash Jump
+// keeps the native Ninja Bounce values, which is what MapleRoot gives it today.
+inline bool ImpulseFor(int skillId, int job, const BounceImpulses& cfg, Impulse& out) {
+    const bool native = IsFlashJumpFamily(job);
+    if (IsFlashJump(skillId)) { out = cfg.ninjaNative; return true; }
+    if (IsNinjaBounce(skillId)) { out = native ? cfg.ninjaNative : cfg.ninjaOther; return true; }
+    if (IsVerticalBounce(skillId)) { out = native ? cfg.verticalNative : cfg.verticalOther; return true; }
+    return false;
+}
+
+// Version 2 body after the opcode: version(1) = 2, count(1) = 4, then count x (leftVx(4),
+// rightVx(4), vy(4)) little-endian, in the order ninjaNative, ninjaOther, verticalNative,
+// verticalOther. False (out untouched) on anything else or an impulse beyond +-kMaxImpulse.
+inline bool DecodeImpulsesSync(const unsigned char* body, std::size_t size, BounceImpulses& out) {
+    if (!body || size != 2 + 4 * 12 || body[0] != kBounceImpulsesVersion || body[1] != 4) return false;
+    Impulse v[4];
+    for (int i = 0; i < 4; ++i) {
+        const unsigned char* p = body + 2 + i * 12;
+        v[i] = {ReadLe32(p), ReadLe32(p + 4), ReadLe32(p + 8)};
+        for (std::int32_t x : {v[i].leftVx, v[i].rightVx, v[i].vy}) {
+            if (x > kMaxImpulse || x < -kMaxImpulse) return false;
+        }
+    }
+    out.ninjaNative = v[0];
+    out.ninjaOther = v[1];
+    out.verticalNative = v[2];
+    out.verticalOther = v[3];
+    return true;
+}
+
 // ---- decisions ----
 
 // The client's own movement state of the local user's CVecCtrl.

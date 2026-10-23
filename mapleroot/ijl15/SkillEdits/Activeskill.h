@@ -529,42 +529,51 @@ void restoreVelocityChange()
 }
 
 //FLASH BOUNCE STUFF
+// SlumsMS (src/bounce.cpp): the impulse for every bound jump this cave handles is now picked per
+// use from the skill and the character's job family (thieves / Night Walkers keep MapleRoot's
+// values, everyone else is toned down; the server can retune all four sets). It writes the same
+// three immediates applyVelocityChange / restoreVelocityChange above used to. Hermit Flash Jump
+// (4111006) also gets its values written first, so a Vertical Bounce used just before can no
+// longer leave it with the vertical impulse.
+extern "C" void __cdecl SlumsBounce_ApplyImpulse(int nSkillID);
 const DWORD FlashJumpVar = 0x0096BF52;
 const DWORD FlashJumpRet = 0x0096BF12;
 void __declspec(naked)FlashJumpAll() {
 	_asm {
 
 		cmp     eax, 0xD72A0C
-		je[applyDefault]
+		je[applyFj]
 		cmp     eax, 1050
-		je[applyDefault]
+		je[applyFj]
 		cmp     eax, 10001050
-		je[applyDefault]
+		je[applyFj]
 		cmp     eax, 20001050
-		je[applyDefault]
+		je[applyFj]
 		cmp     eax, 1054
-		je[applyOverride]
+		je[applyFj]
 		cmp     eax, 10001054
-		je[applyOverride]
+		je[applyFj]
 		cmp     eax, 20001054
-		je[applyOverride]
+		je[applyFj]
+		cmp     eax, 4111006
+		je[applyHermit]
 
 		jmp FlashJumpRet
 
-		applyOverride:
-		push ebp
-		mov ebp, esp
-		call applyVelocityChange
-		mov esp, ebp
-		pop ebp
-		jmp [fjvar]
+		applyHermit:
+		pushad
+		push eax
+		call SlumsBounce_ApplyImpulse
+		add esp, 4
+		popad
+		jmp FlashJumpRet
 
-		applyDefault:
-		push ebp
-		mov ebp, esp
-		call restoreVelocityChange
-		mov esp, ebp
-		pop ebp
+		applyFj:
+		pushad
+		push eax
+		call SlumsBounce_ApplyImpulse
+		add esp, 4
+		popad
 		jmp [fjvar]
 
 		fjvar : jmp[FlashJumpVar]

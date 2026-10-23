@@ -23,6 +23,10 @@ std::vector<unsigned char> Hex(const std::string& h) {
 
 // The shipped bounce-zones.yaml (only jump_quests on), native bounce 1050.
 const char* kShipped = "3737011a0400001000cae1f505cae1f505a4230506a823050644ab23064dab2306b6c94206bcc9420671aa7f0603ac7f0680d17f0684d17f0606ef1c0d06ef1c0d20c4b01021c4b0101448453614484536809af436809af4360044f8361344f836283d6a3a953d6a3a10416a3a7d416a3af8446a3a65456a3ae0486a3a48496a3af8dc3d3bf9dc3d3b1000cae1f505cae1f505a4230506a823050644ab23064dab2306b6c94206bcc9420671aa7f0603ac7f0680d17f0684d17f0606ef1c0d06ef1c0d20c4b01021c4b0101448453614484536809af436809af4360044f8361344f836283d6a3a953d6a3a10416a3a7d416a3af8446a3a65456a3ae0486a3a48496a3af8dc3d3bf9dc3d3b";
+// The version 2 bounce strengths: the server defaults (ninja -683/606/-688 for thieves and Night Walkers, -350/350/-250
+// for everyone else; vertical -1/0/-1200 and -1/0/-750), and a custom set (BounceZonePacketsTest IMPULSES_*).
+const char* kImpulsesDefault = "3737020455fdffff5e02000050fdffffa2feffff5e01000006ffffffffffffff0000000050fbffffffffffff0000000012fdffff";
+const char* kImpulsesCustom = "3737020444fdffff5802000044fdffffd4feffff2c01000038fffffffeffffff00000000b4fbffff00000000000000000cfeffff";
 // Two bounce ranges, one Flash Jump range, a Cygnus (10001050).
 const char* kSmall = "3737019a9a98000200a4230506a823050620c4b01021c4b0100100a4230506a8230506";
 
@@ -93,6 +97,75 @@ int main(int argc, char** argv) {
             Check(!DecodeZonesSync(b.data() + 2, b.size() - 2, z), "bad native bounce refused");
             const auto empty = Hex("3737011a04000000000000");
             Check(DecodeZonesSync(empty.data() + 2, empty.size() - 2, z) && z.bounce.empty() && z.flashJump.empty(), "empty");
+        }
+
+        // ---- bounce strengths (version 2) ----
+        {
+            BounceImpulses before;   // no server packet: MapleRoot everywhere, exactly as before
+            Impulse v;
+            Check(ImpulseFor(1050, 230, before, v) && v == kMapleRootNinja, "no packet: a mage keeps MapleRoot's bounce");
+            Check(ImpulseFor(1054, 230, before, v) && v == kMapleRootVertical, "no packet: MapleRoot vertical");
+            Check(kMapleRootNinja == Impulse{-683, 606, -688} && kMapleRootVertical == Impulse{-1, 0, -1200}, "MapleRoot values");
+            Check(kStockFlashJump == Impulse{-350, 350, -250}, "stock FJ");
+
+            const auto d = Hex(kImpulsesDefault);
+            Check(d[0] == 0x37 && d[1] == 0x37, "opcode");
+            BounceImpulses imp;
+            Check(DecodeImpulsesSync(d.data() + 2, d.size() - 2, imp), "default impulses decode");
+            Check(imp.ninjaNative == kMapleRootNinja && imp.ninjaOther == kStockFlashJump, "ninja sets");
+            Check(imp.verticalNative == kMapleRootVertical && imp.verticalOther == Impulse{-1, 0, -750}, "vertical sets");
+            // thieves and Night Walkers unchanged
+            for (int job : {400, 410, 411, 412, 420, 421, 422, 1400, 1410, 1411, 1412}) {
+                Check(ImpulseFor(1050, job, imp, v) && v == kMapleRootNinja, "thief ninja bounce unchanged");
+                Check(ImpulseFor(1054, job, imp, v) && v == kMapleRootVertical, "thief vertical unchanged");
+                Check(ImpulseFor(10001050, job, imp, v) && v == kMapleRootNinja, "any bounce id, thief family");
+            }
+            // everyone else toned down
+            for (int job : {0, 100, 112, 200, 232, 300, 322, 500, 522, 900, 910, 1000, 1100, 1200, 1300, 1500, 2000, 2100, 2112}) {
+                Check(ImpulseFor(1050, job, imp, v) && v == kStockFlashJump, "non-thief ninja bounce = stock FJ");
+                Check(ImpulseFor(20001050, job, imp, v) && v == kStockFlashJump, "aran ninja bounce = stock FJ");
+                Check(ImpulseFor(10001054, job, imp, v) && v == Impulse{-1, 0, -750}, "non-thief vertical -750");
+            }
+            // real Flash Jump keeps the native values whatever the job reads
+            Check(ImpulseFor(4111006, 412, imp, v) && v == kMapleRootNinja, "hermit FJ");
+            Check(ImpulseFor(14101004, 1411, imp, v) && v == kMapleRootNinja, "night walker FJ");
+            Check(ImpulseFor(4111006, -1, imp, v) && v == kMapleRootNinja, "FJ with the job unreadable");
+            Check(!ImpulseFor(2001002, 230, imp, v), "not a bound jump");
+            Check(IsFlashJumpFamily(400) && IsFlashJumpFamily(1412) && !IsFlashJumpFamily(500) && !IsFlashJumpFamily(-1)
+                      && !IsFlashJumpFamily(2100), "families");
+
+            const auto c = Hex(kImpulsesCustom);
+            Check(DecodeImpulsesSync(c.data() + 2, c.size() - 2, imp), "custom impulses decode");
+            Check(imp.ninjaNative == Impulse{-700, 600, -700} && imp.ninjaOther == Impulse{-300, 300, -200}
+                      && imp.verticalNative == Impulse{-2, 0, -1100} && imp.verticalOther == Impulse{0, 0, -500}, "custom sets");
+
+            // refused, out untouched
+            BounceImpulses keep = imp;
+            auto bad = c;
+            bad.push_back(0);
+            Check(!DecodeImpulsesSync(bad.data() + 2, bad.size() - 2, imp), "trailing byte refused");
+            Check(!DecodeImpulsesSync(c.data() + 2, c.size() - 3, imp), "short refused");
+            bad = c; bad[3] = 3;
+            Check(!DecodeImpulsesSync(bad.data() + 2, bad.size() - 2, imp), "count must be 4");
+            bad = c; bad[7] = 0x7f;  // ninjaNative.leftVx huge
+            Check(!DecodeImpulsesSync(bad.data() + 2, bad.size() - 2, imp), "beyond +-5000 refused");
+            Check(imp.ninjaNative == keep.ninjaNative && imp.verticalOther == keep.verticalOther, "out untouched");
+            // the two packets never cross-decode: a 1.5.0-rc4 client drops version 2 and keeps its zones
+            ZonesSync zs;
+            Check(!DecodeZonesSync(d.data() + 2, d.size() - 2, zs), "version 1 decoder refuses the impulses packet");
+            const auto smallBytes = Hex(kSmall);
+            Check(!DecodeImpulsesSync(smallBytes.data() + 2, smallBytes.size() - 2, imp), "impulse decoder refuses zones");
+            Check(kImpulseLeftVx == 0x0096C00B && kImpulseRightVx == 0x0096C024 && kImpulseVy == 0x0096C032, "immediates");
+        }
+
+        // ---- double-tap never uses Vertical Bounce ----
+        {
+            Levels all{{{1050, 1}, {10001050, 1}, {20001050, 1}, {1054, 1}, {10001054, 1}, {20001054, 1}}};
+            for (int native : {0, 1050, 10001050, 20001050, 1054}) {
+                Check(!IsVerticalBounce(ChooseDoubleTapSkill(all, native)), "double-tap picked a Vertical Bounce");
+            }
+            Levels verticalOnly{{{1054, 1}, {10001054, 1}, {20001054, 1}}};
+            Check(ChooseDoubleTapSkill(verticalOnly, 1050) == 0, "vertical bounce stays hotkey-only");
         }
 
         // ---- the built-in list is the shipped jump_quests category ----
@@ -206,6 +279,9 @@ int main(int argc, char** argv) {
                 {0x007046AC, "558bec515157", "CVecCtrl swim/fly test"},
                 {0x00A1238B, "e87c56a2ff85c0", "CWvsContext::GetCurFieldID"},
                 {0x007616F6, "558bec51894dfc", "CSkillInfo::GetSkillLevel"},
+                {0x0096C00A, "baa2feffff", "BoundJump: mov edx, -350 (left impulse)"},
+                {0x0096C021, "8d0ccd5e010000", "BoundJump: lea ecx, [ecx*8+350] (right impulse)"},
+                {0x0096C031, "b906ffffff", "BoundJump: mov ecx, -250 (vertical impulse)"},
             };
             for (const auto& s : stock) {
                 const auto want = Hex(s.hex);
@@ -215,7 +291,7 @@ int main(int argc, char** argv) {
             std::cout << "PASS: client exe holds the stock bytes at the jump key call and the helpers used\n";
         }
 
-        std::cout << "PASS: wire format, built-in list == server golden, airborne/fresh-press decisions, skill choice, patch bytes\n";
+        std::cout << "PASS: wire format, built-in list == server golden, airborne/fresh-press decisions, skill choice, patch bytes, bounce strengths\n";
         return 0;
     } catch (const std::exception& e) {
         std::cerr << "FAIL: " << e.what() << "\n";

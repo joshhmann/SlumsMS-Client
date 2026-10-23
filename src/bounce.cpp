@@ -9,6 +9,7 @@
 //   * LP 0x3737 BOUNCE_ZONES_SYNC through the shared packet dispatcher (packetdispatcher.cpp).
 #include "pch.h"
 #include "hook.h"
+#include "patch_common.h"
 #include "constants.h"
 #include "wvs/packet.h"
 #include "bounce_rules.h"
@@ -31,6 +32,9 @@ auto CVecCtrl__IsOnLadder = reinterpret_cast<int(__thiscall*)(void*)>(0x00705309
 auto CVecCtrl__IsOnRope = reinterpret_cast<int(__thiscall*)(void*)>(0x00705343);
 auto CVecCtrl__IsSwimOrFly = reinterpret_cast<int(__thiscall*)(void*)>(0x007046AC);
 auto CWvsContext__GetCurFieldID = reinterpret_cast<int(__thiscall*)(void*)>(0x00A1238B);
+// CUserLocal::GetJobCode, as MapleRoot's Discord presence calls it (YourStuff.h GetJobCode).
+constexpr uintptr_t kAddr_CUserLocal = 0x00BEBF98;
+auto CUserLocal__GetJobCode = reinterpret_cast<int(__thiscall*)(void*)>(0x0095FFC3);
 
 bool g_doubleTap = true;
 DWORD g_jumpKeyLParam = 0; // written by JumpKeyThunk, game thread only
@@ -40,12 +44,24 @@ bounce::ZoneSet g_zones = bounce::ZoneSet::FromRanges(bounce::BuiltinJumpQuestRa
 bounce::ZoneSet g_fjZones = bounce::ZoneSet::FromRanges(bounce::BuiltinJumpQuestRanges());
 int g_nativeBounce = 0;
 bool g_fromServer = false;
+// Main thread reads it per bound jump; the receive thread replaces it under g_zoneGate.
+bounce::BounceImpulses g_impulses;
+bool g_impulsesFromServer = false;
 
 int CurrentFieldId() {
     __try {
         return CWvsContext__GetCurFieldID(nullptr);
     } __except (EXCEPTION_EXECUTE_HANDLER) {
         return 0;
+    }
+}
+
+int CurrentJob() {
+    __try {
+        void* user = *reinterpret_cast<void**>(kAddr_CUserLocal);
+        return user ? CUserLocal__GetJobCode(user) : -1;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return -1;
     }
 }
 
@@ -124,6 +140,26 @@ bool ReadIniBool(const char* section, const char* key, bool fallback) {
 
 } // namespace
 
+// Called by MapleRoot's FlashJumpAll cave (SkillEdits/Activeskill.h) for every bound jump it
+// handles, right before CUserLocal::DoActiveSkill_BoundJump reads its impulse: writes the three
+// immediates for this skill and this character's job family. Same bytes, same moment as
+// MapleRoot's applyVelocityChange / restoreVelocityChange, which this replaces.
+extern "C" void __cdecl SlumsBounce_ApplyImpulse(int nSkillID) {
+    bounce::BounceImpulses cfg;
+    {
+        std::lock_guard<std::mutex> lock(g_zoneGate);
+        cfg = g_impulses;
+    }
+    const int job = CurrentJob();
+    bounce::Impulse v;
+    if (!bounce::ImpulseFor(nSkillID, job, cfg, v)) return;
+    PatchInt(bounce::kImpulseLeftVx, v.leftVx);
+    PatchInt(bounce::kImpulseRightVx, v.rightVx);
+    PatchInt(bounce::kImpulseVy, v.vy);
+    LOG_ONCE_PER_ID(nSkillID, "Bounce: skill %d as job %d -> impulse %d / %d / %d (%s)", nSkillID, job,
+        v.leftVx, v.rightVx, v.vy, g_impulsesFromServer ? "server values" : "MapleRoot defaults");
+}
+
 // Called by MapleRoot's DoActiveSkill detour before anything else (Activeskill.h).
 extern "C" int __cdecl SlumsBounce_BlockSkill(int nSkillID) {
     if (!bounce::IsUniversalBounce(nSkillID) && !bounce::IsFlashJump(nSkillID)) return 0;
@@ -138,6 +174,26 @@ void BounceZones_HandleSync(CInPacket* packet) {
     const unsigned char* bytes = packet->CurrentPublic();
     const size_t length = packet->LengthPublic();
     if (!bytes || length < start + 2) return;
+    // Version 2 carries the bounce impulses; version 1 the zones (see bounce_rules.h).
+    if (length >= start + 3 && bytes[2] == bounce::kBounceImpulsesVersion) {
+        bounce::BounceImpulses imp;
+        if (!bounce::DecodeImpulsesSync(bytes + 2, length - start - 2, imp)) {
+            DebugMessage("Bounce: malformed bounce impulse sync (%u bytes), keeping the current values",
+                static_cast<unsigned>(length - start));
+            return;
+        }
+        {
+            std::lock_guard<std::mutex> lock(g_zoneGate);
+            g_impulses = imp;
+            g_impulsesFromServer = true;
+        }
+        DebugMessage("Bounce: server impulses ninja %d/%d/%d (other jobs %d/%d/%d), vertical %d/%d/%d (other jobs %d/%d/%d)",
+            imp.ninjaNative.leftVx, imp.ninjaNative.rightVx, imp.ninjaNative.vy,
+            imp.ninjaOther.leftVx, imp.ninjaOther.rightVx, imp.ninjaOther.vy,
+            imp.verticalNative.leftVx, imp.verticalNative.rightVx, imp.verticalNative.vy,
+            imp.verticalOther.leftVx, imp.verticalOther.rightVx, imp.verticalOther.vy);
+        return;
+    }
     bounce::ZonesSync sync;
     if (!bounce::DecodeZonesSync(bytes + 2, length - start - 2, sync)) {
         DebugMessage("Bounce: malformed BOUNCE_ZONES_SYNC (%u bytes), keeping the current list",
