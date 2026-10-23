@@ -163,6 +163,12 @@ extern "C" void __cdecl SlumsBounce_ApplyImpulse(int nSkillID) {
 // Called by MapleRoot's DoActiveSkill detour before anything else (Activeskill.h).
 extern "C" int __cdecl SlumsBounce_BlockSkill(int nSkillID) {
     if (!bounce::IsUniversalBounce(nSkillID) && !bounce::IsFlashJump(nSkillID)) return 0;
+    // Ninja Bounce on the ground: a no-op. Returning here is before DoActiveSkill does anything, so
+    // no skill request is sent and no MP, cooldown or animation is used (hotkey, macro or double-tap).
+    if (bounce::IsNinjaBounce(nSkillID)) {
+        void* user = *reinterpret_cast<void**>(kAddr_CUserLocal);
+        if (user && bounce::RefuseOnGround(nSkillID, ReadAirState(user))) return 1;
+    }
     const int mapId = CurrentFieldId();
     if (!bounce::ShouldBlockSkill(nSkillID, MapBlocked(mapId))) {
         // Hermit Flash Jump branches to the bound jump at 0x0096BF02, before MapleRoot's

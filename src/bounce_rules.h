@@ -277,6 +277,15 @@ struct MapBlock {
     bool flashJump = false;
 };
 
+// Ninja Bounce only in the air, like stock Flash Jump. MapleRoot NOPed the bound jump's foothold
+// gate (0x0096BF59) for every id, so a Ninja Bounce hotkey also fired from the ground: a weak hop
+// with no jump under it. Vertical Bounce keeps working from the ground (that gate stays NOPed);
+// real Flash Jump is untouched. An unreadable movement state (no CVecCtrl) allows the skill, so a
+// bad read can never take the bounce away.
+inline bool RefuseOnGround(int skillId, const AirState& air) {
+    return IsNinjaBounce(skillId) && air.hasVecCtrl && !IsAirborne(air);
+}
+
 // Whether DoActiveSkill must refuse this skill on this map.
 inline bool ShouldBlockSkill(int skillId, const MapBlock& here) {
     return (IsUniversalBounce(skillId) && here.bounce) || (IsFlashJump(skillId) && here.flashJump);

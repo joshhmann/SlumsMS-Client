@@ -183,6 +183,31 @@ int main(int argc, char** argv) {
             }
         }
 
+        // ---- Ninja Bounce only in the air; Vertical Bounce and real Flash Jump unchanged ----
+        {
+            AirState ground = Air(); ground.onFoothold = true;
+            AirState rope = Air(); rope.onRope = true;
+            AirState ladder = Air(); ladder.onLadder = true;
+            AirState swim = Air(); swim.swimOrFly = true;
+            for (int id : kNinjaBounce) {
+                Check(RefuseOnGround(id, ground), "Ninja Bounce on the ground is refused");
+                Check(RefuseOnGround(id, rope) && RefuseOnGround(id, ladder) && RefuseOnGround(id, swim),
+                      "Ninja Bounce on a rope / ladder / swimming is refused");
+                Check(!RefuseOnGround(id, Air()), "Ninja Bounce in the air is allowed");
+                Check(!RefuseOnGround(id, AirState{}), "unreadable movement state never takes the bounce away");
+            }
+            for (int id : kVerticalBounce) Check(!RefuseOnGround(id, ground), "Vertical Bounce works from the ground");
+            for (int id : {kFlashJumpHermit, kFlashJumpNightWalker}) Check(!RefuseOnGround(id, ground), "Flash Jump unchanged");
+            Check(!RefuseOnGround(2001002, ground), "other skills unaffected");
+            // the double-tap only ever asks in the air, so the ground refusal never blocks it
+            Levels lv{{{1050, 1}}};
+            DoubleTapInput tap;
+            tap.lParam = 0x00390001;
+            tap.air = Air();
+            const int skill = DecideDoubleTap(tap, lv, 1050);
+            Check(skill == 1050 && !RefuseOnGround(skill, tap.air), "double-tap bounce passes the air test");
+        }
+
         // ---- double-tap never uses Vertical Bounce ----
         {
             Levels all{{{1050, 1}, {10001050, 1}, {20001050, 1}, {1054, 1}, {10001054, 1}, {20001054, 1}}};
