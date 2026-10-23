@@ -613,18 +613,18 @@ struct ComTreeOps {
 
     std::vector<std::wstring> Children(const Node& n) { return ChildNames(n); }
 
-    tintwalk::Kind Get(const Node& parent, const std::wstring& name, Node* sub, Canvas* cv) {
+    tintwalk::Kind Get(const Node& parent, const std::wstring& name, Node& sub, Canvas& cv) {
         if (!parent) return tintwalk::Kind::None;
         IUnknownPtr pUnk = get_unknown(parent->item[name.c_str()]);
         if (!pUnk) return tintwalk::Kind::None;          // delay / z ints, origin vectors
         IWzCanvasPtr pCanvas;
         if (SUCCEEDED(pUnk.QueryInterface(__uuidof(IWzCanvas), &pCanvas)) && pCanvas) {
-            *cv = pCanvas;
+            cv = pCanvas;
             return tintwalk::Kind::Canvas;
         }
         IWzPropertyPtr pSub;
         if (SUCCEEDED(pUnk.QueryInterface(__uuidof(IWzProperty), &pSub)) && pSub) {
-            *sub = pSub;
+            sub = pSub;
             return tintwalk::Kind::Property;
         }
         return tintwalk::Kind::None;

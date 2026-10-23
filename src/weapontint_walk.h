@@ -25,7 +25,8 @@
 //   using Node   = ...;   // a property node (copyable handle)
 //   using Canvas = ...;   // a canvas (copyable handle)
 //   std::vector<std::wstring> Children(const Node&);
-//   Kind Get(const Node& parent, const std::wstring& name, Node* sub, Canvas* canvas);
+//   Kind Get(const Node& parent, const std::wstring& name, Node& sub, Canvas& canvas);
+//        -- out-params by reference: _com_ptr_t overloads operator&.
 //        -- Canvas FIRST: a WZ canvas also answers as a property (origin / z / map).
 //   bool IsOurs(const Canvas&);        // a tinted clone this module made
 //   bool Swap(const Node& parent, const std::wstring& name, const Canvas& original);
@@ -97,17 +98,17 @@ public:
         Canvas cv;
         for (const std::wstring& n : { action, std::wstring(L"default") }) {
             if (n.empty()) continue;
-            if (ops_.Get(img, n, &sub, &cv) == Kind::Property) { SwapLayerOf(sub, layer); st_.matched = true; }
+            if (ops_.Get(img, n, sub, cv) == Kind::Property) { SwapLayerOf(sub, layer); st_.matched = true; }
         }
         // Cash weapons nest one level deeper, under the numeric code of the weapon type the
         // sticker is worn over (01702000.img/33/stand1/0/weapon).
         for (const std::wstring& name : ops_.Children(img)) {
             if (!IsWeaponTypeNode(name)) continue;
             Node type;
-            if (ops_.Get(img, name, &type, &cv) != Kind::Property) continue;
+            if (ops_.Get(img, name, type, cv) != Kind::Property) continue;
             for (const std::wstring& n : { action, std::wstring(L"default") }) {
                 if (n.empty()) continue;
-                if (ops_.Get(type, n, &sub, &cv) == Kind::Property) { SwapLayerOf(sub, layer); st_.matched = true; }
+                if (ops_.Get(type, n, sub, cv) == Kind::Property) { SwapLayerOf(sub, layer); st_.matched = true; }
             }
         }
         if (st_.matched || !wholeImgWhenUnmatched) return;
@@ -115,7 +116,7 @@ public:
         st_.wholeImg = true;
         for (const std::wstring& name : ops_.Children(img)) {
             if (name == L"info") continue;
-            if (ops_.Get(img, name, &sub, &cv) == Kind::Property) SwapLayerOf(sub, layer);
+            if (ops_.Get(img, name, sub, cv) == Kind::Property) SwapLayerOf(sub, layer);
         }
     }
 
@@ -132,7 +133,7 @@ public:
             if (layer == Layer::Body && IsEffectPart(name.c_str())) continue;
             Node sub;
             Canvas cv;
-            const Kind k = ops_.Get(node, name, &sub, &cv);
+            const Kind k = ops_.Get(node, name, sub, cv);
             if (k == Kind::Canvas) TintCanvas(node, name, cv);
             else if (k == Kind::Property) SwapSubtree(sub, depth + 1, layer);
         }
@@ -146,7 +147,7 @@ public:
             const bool isEffect = IsEffectPart(name.c_str());
             Node sub;
             Canvas cv;
-            const Kind k = ops_.Get(node, name, &sub, &cv);
+            const Kind k = ops_.Get(node, name, sub, cv);
             if (k == Kind::Canvas) {
                 if (isEffect) TintCanvas(node, name, cv);
                 continue;

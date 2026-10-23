@@ -110,13 +110,13 @@ struct FakeOps {
         for (const Child& c : n->kids) v.push_back(c.name);
         return v;
     }
-    tintwalk::Kind Get(const Node& parent, const std::wstring& name, Node* sub, Canvas* cv) {
+    tintwalk::Kind Get(const Node& parent, const std::wstring& name, Node& sub, Canvas& cv) {
         Child* c = parent->Find(name);
         if (!c) return tintwalk::Kind::None;
         CanvasPtr rc = c->canvas; PropPtr rp = c->prop;
         if (!c->uol.empty() && !ResolveUol(parent.get(), c->uol, &rc, &rp)) return tintwalk::Kind::None;
-        if (rc) { *cv = rc; return tintwalk::Kind::Canvas; }
-        if (rp) { *sub = rp; return tintwalk::Kind::Property; }
+        if (rc) { cv = rc; return tintwalk::Kind::Canvas; }
+        if (rp) { sub = rp; return tintwalk::Kind::Property; }
         return tintwalk::Kind::None;
     }
     bool IsOurs(const Canvas& cv) { return cache.IsOurs(cv.get()); }
