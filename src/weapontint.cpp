@@ -56,6 +56,7 @@
 #include "debug.h"
 #include "weapontint.h"
 #include "weapontint_proto.h"
+#include "weapontint_walk.h"
 
 #include "wvs/avatar.h"
 #include "wvs/packet.h"
@@ -494,39 +495,46 @@ IWzCanvasPtr CloneTinted(IWzCanvasPtr pSrc, const WeaponTint& t) {
 // =====================================================
 // CACHE
 // =====================================================
-// Keyed by ORIGINAL CANVAS **and** TINT.
+// Keyed by ORIGINAL CANVAS **and** TINT, and holding a reference to the original.
 //
 // Keying on the canvas alone and dropping the map whenever the tint changed was correct
 // while one tint was live at a time, but a single frame now applies SEVERAL: an outfit
 // can carry a different colour per item, and each item's effect layers carry a second
-// one of their own. Each lookup would invalidate the map the previous one had just
-// filled, so every canvas would be re-cloned every frame. Pointers are 32-bit in this
-// client, so the pair packs into a uint64 exactly.
-inline uint64_t CloneKey(IWzCanvas* raw, const WeaponTint& t) {
-    return (static_cast<uint64_t>(reinterpret_cast<uintptr_t>(raw)) << 32) | t.Key();
-}
-std::unordered_map<uint64_t, IWzCanvasPtr> g_clones;
+// one of their own.
+//
+// The reference to the original is the 1.5.0-rc4 floating-weapon fix: the key is an
+// ADDRESS, ResMan frees an img that has gone 60 s untouched, and a re-parse can put a
+// different canvas at a freed address -- after which the cache handed back another
+// frame's clone, origin and hand point. See tintwalk::CloneCache.
+tintwalk::CloneCache<IWzCanvas, IWzCanvasPtr> g_clones;
+
+// Past this many clones the cache is emptied between layer builds; the avatar layers
+// keep their own references, so nothing on screen changes. A full outfit with effects
+// is a few hundred; this only bounds a long session of map changes and dye previews.
+constexpr size_t kMaxCachedClones = 4096;
 
 // The iris path keeps its OWN clone map. Sharing g_clones would be a latent aliasing
 // bug -- one key mapping to two different transforms if a canvas were ever reachable
 // from both paths -- and the invalidation rule is identical, so separating costs nothing.
-std::unordered_map<IWzCanvas*, IWzCanvasPtr> g_irisClones;
+// It holds its originals for the same reason g_clones does.
+tintwalk::CloneCache<IWzCanvas, IWzCanvasPtr> g_irisClones;
 uint32_t g_irisClonesKey = 0;
 bool     g_irisClonesValid = false;
 
 void ClearClones() {
-    g_clones.clear();
-    g_irisClones.clear();
+    g_clones.Clear();
+    g_irisClones.Clear();
     g_irisClonesValid = false;
 }
 
 IWzCanvasPtr GetTinted(IWzCanvasPtr pSrc, const WeaponTint& t) {
     if (!pSrc) return nullptr;
-    const uint64_t key = CloneKey(pSrc, t);
-    auto it = g_clones.find(key);
-    if (it != g_clones.end()) return it->second;
-    IWzCanvasPtr clone = CloneTinted(pSrc, t);
-    g_clones.emplace(key, clone);   // cache the failure too, so it is not retried per frame
+    IWzCanvas* raw = pSrc;
+    IWzCanvasPtr clone;
+    if (g_clones.Find(raw, t.Key(), &clone)) return clone;
+    clone = CloneTinted(pSrc, t);
+    // Cache the failure too, so it is not retried per frame.
+    g_clones.Put(raw, pSrc, t.Key(), clone ? static_cast<IWzCanvas*>(clone) : nullptr, clone);
     return clone;
 }
 
@@ -561,10 +569,9 @@ auto get_action_name_from_code =
 
 // The prism dyes the weapon, not its glow: the modern dialog says so outright
 // ("Special effects will not be dyed"), and effect canvases are additively
-// blended, so hue-rotating them reads as a bug rather than a recolor.
-bool IsEffectPart(const wchar_t* name) {
-    return name && _wcsnicmp(name, L"effect", 6) == 0;
-}
+// blended, so hue-rotating them reads as a bug rather than a recolor. Effects carry
+// their own tint (the window's Effects tab) and are walked separately.
+using tintwalk::IsEffectPart;
 
 // Every child name of a property node, read out in full before the caller touches
 // the node.
@@ -590,88 +597,60 @@ std::vector<std::wstring> ChildNames(IWzPropertyPtr pNode) {
     return names;
 }
 
-// Recursively replace every canvas under `pNode` with its tinted clone, to any
-// depth, remembering the originals in g_swaps.
+// The swap walk itself is tintwalk::Walker (weapontint_walk.h), which is what the
+// native tests drive with a fake tree. This is its adapter onto the live WZ tree.
 //
-// RECURSIVE ON PURPOSE. The categories do not agree on depth:
-//     Accessory (face/eye/ear)   <emotion>/<canvas>              2 levels
-//     Coat/Pants/Shoes/Glove/... <action>/<frame>/<part>         3
-//     Cap/Cape                   same, plus a default/default    3
-//     Cash weapon                <weaponType>/<action>/<frame>/<part>  4
-// Walking for canvases instead of assuming a shape means one routine covers all of
-// them, and anything not looked at yet.
-// Which half of an item's art a walk is allowed to touch. The two are dyed separately --
-// the reference dialog has a whole tab for effects -- and they must never be swapped in
-// the same pass, because each carries its own tint.
-enum class Layer { Body, Effects };
+// Canvas FIRST in Get: a canvas also answers QueryInterface(IWzProperty), because it
+// carries origin / z / map as children, so testing for a property first would walk
+// INTO the canvas and find only vectors and ints.
+using tintwalk::Layer;
+using SwapRecord = Swap;   // ComTreeOps has a member named Swap
 
-void SwapSubtree(IWzPropertyPtr pNode, const WeaponTint& t, int depth, Layer layer);
+struct ComTreeOps {
+    using Node = IWzPropertyPtr;
+    using Canvas = IWzCanvasPtr;
+    const WeaponTint& t;
 
-// Effects live under a node whose NAME starts with "effect", so an effects walk descends
-// only into those and a body walk skips them. `effectItemID` is a property, not art, and
-// is excluded from both by the canvas check further down.
-void SwapEffectSubtrees(IWzPropertyPtr pNode, const WeaponTint& t, int depth) {
-    if (!pNode || depth > 4) return;
-    for (const std::wstring& name : ChildNames(pNode)) {
-        IUnknownPtr pUnk = get_unknown(pNode->item[name.c_str()]);
-        if (!pUnk) continue;
-        const bool isEffect = IsEffectPart(name.c_str());
+    std::vector<std::wstring> Children(const Node& n) { return ChildNames(n); }
 
-        // AN EFFECT IS USUALLY THE CANVAS, NOT A FOLDER OF THEM. The common shape is
-        // <action>/<frame>/effect, a leaf canvas sitting beside the `weapon` canvas it
-        // plays over; a folder of frames under `effect` is the rare one. Measured over
-        // every equip that has effect art: 922 leaf canvases against 1 folder.
-        //
-        // So the canvas test has to come FIRST, and it has to happen here rather than in
-        // SwapSubtree. A canvas answers QueryInterface(IWzProperty) too, because it
-        // carries origin / z / map as children, so descending on the property interface
-        // walks INTO the effect and finds only vectors and ints. That silently tinted
-        // nothing at all: no crash, no log line, just an untinted glow.
-        if (isEffect) {
-            IWzCanvasPtr pOrig;
-            if (SUCCEEDED(pUnk.QueryInterface(__uuidof(IWzCanvas), &pOrig)) && pOrig) {
-                IWzCanvasPtr pTinted = GetTinted(pOrig, t);
-                if (!pTinted) continue;
-                g_swapSink->push_back(Swap{ pNode, name, pOrig });
-                pNode->item[name.c_str()] = static_cast<IUnknown*>(pTinted);
-                continue;
-            }
-        }
-
-        IWzPropertyPtr pSub;
-        if (FAILED(pUnk.QueryInterface(__uuidof(IWzProperty), &pSub)) || !pSub) continue;
-        if (isEffect) SwapSubtree(pSub, t, depth + 1, Layer::Effects);
-        else          SwapEffectSubtrees(pSub, t, depth + 1);
-    }
-}
-
-void SwapSubtree(IWzPropertyPtr pNode, const WeaponTint& t, int depth, Layer layer) {
-    if (!pNode || depth > 4) return;
-    for (const std::wstring& name : ChildNames(pNode)) {
-        // On a BODY walk these are skipped -- the real game says special effects are not
-        // dyed with the item, and an additive glow reads as a bug when hue-rotated. On an
-        // EFFECTS walk the caller has already descended into one, so everything below is
-        // fair game.
-        if (layer == Layer::Body && IsEffectPart(name.c_str())) continue;
-
-        Ztl_variant_t v = pNode->item[name.c_str()];
-        IUnknownPtr pUnk = get_unknown(v);
-        if (!pUnk) continue;                 // delay / z ints, origin vectors
-
-        // Canvas first: a canvas node also carries child properties (origin, z,
-        // map), so testing for IWzProperty first would recurse into it instead.
-        IWzCanvasPtr pOrig;
-        if (SUCCEEDED(pUnk.QueryInterface(__uuidof(IWzCanvas), &pOrig)) && pOrig) {
-            IWzCanvasPtr pTinted = GetTinted(pOrig, t);
-            if (!pTinted) continue;
-            g_swapSink->push_back(Swap{ pNode, name, pOrig });
-            pNode->item[name.c_str()] = static_cast<IUnknown*>(pTinted);
-            continue;
+    tintwalk::Kind Get(const Node& parent, const std::wstring& name, Node* sub, Canvas* cv) {
+        if (!parent) return tintwalk::Kind::None;
+        IUnknownPtr pUnk = get_unknown(parent->item[name.c_str()]);
+        if (!pUnk) return tintwalk::Kind::None;          // delay / z ints, origin vectors
+        IWzCanvasPtr pCanvas;
+        if (SUCCEEDED(pUnk.QueryInterface(__uuidof(IWzCanvas), &pCanvas)) && pCanvas) {
+            *cv = pCanvas;
+            return tintwalk::Kind::Canvas;
         }
         IWzPropertyPtr pSub;
         if (SUCCEEDED(pUnk.QueryInterface(__uuidof(IWzProperty), &pSub)) && pSub) {
-            SwapSubtree(pSub, t, depth + 1, layer);
+            *sub = pSub;
+            return tintwalk::Kind::Property;
         }
+        return tintwalk::Kind::None;
+    }
+
+    bool IsOurs(const Canvas& cv) { return g_clones.IsOurs(static_cast<IWzCanvas*>(cv)); }
+
+    bool Swap(const Node& parent, const std::wstring& name, const Canvas& orig) {
+        IWzCanvasPtr pTinted = GetTinted(orig, t);
+        if (!pTinted) return false;
+        g_swapSink->push_back(SwapRecord{ parent, name, orig });
+        parent->item[name.c_str()] = static_cast<IUnknown*>(pTinted);
+        return true;
+    }
+};
+
+// Recursively replace every canvas under `pNode` with its tinted clone, remembering
+// the originals in g_swapSink. Body walks skip effect* nodes.
+void SwapSubtree(IWzPropertyPtr pNode, const WeaponTint& t, int depth, Layer layer) {
+    if (!pNode) return;
+    ComTreeOps ops{ t };
+    tintwalk::Walker<ComTreeOps> walk(ops);
+    try {
+        walk.SwapSubtree(pNode, depth, layer);
+    } catch (...) {
+        // Whatever landed in the swap list is still undone by its owner.
     }
 }
 
@@ -702,18 +681,13 @@ const wchar_t* CharacterSubdirOf(int itemId) {
     }
 }
 
-// Dispatch a subtree to whichever walk the layer asks for.
-void SwapLayerOf(IWzPropertyPtr p, const WeaponTint& t, Layer layer) {
-    if (layer == Layer::Effects) SwapEffectSubtrees(p, t, 0);
-    else                         SwapSubtree(p, t, 0, Layer::Body);
-}
-
 // Tint one worn item's sprites for the action currently being built.
 //
-// Scoped to the action on purpose. Walking a whole img would be a few hundred
-// canvases per item, and a full outfit re-tinted at drag speed would stall the
-// client; one action is a handful. Items with no body actions (accessories, which
-// are keyed by face emotion) have so few canvases that all of them are walked.
+// Scoped to the action on purpose: a whole img is a few hundred canvases per item.
+// AND ONLY THE ACTION: an item whose img has no node for it (a cash weapon on a rope
+// or ladder, sitting, swimming, most skill actions) is not drawn for that action, so
+// nothing is walked. 1.5.0-rc4 walked the whole img instead, which froze the client
+// on every rope grab. Only emotion-keyed Accessory imgs fall back to walking everything.
 void SwapInTintFor(int itemId, const wchar_t* actionName, const WeaponTint& t, Layer layer) {
     const wchar_t* subdir = CharacterSubdirOf(itemId);
     if (!subdir) return;
@@ -723,34 +697,21 @@ void SwapInTintFor(int itemId, const wchar_t* actionName, const WeaponTint& t, L
                      L"Character/%s/%08d.img", subdir, itemId);
         IWzPropertyPtr pImg = get_rm()->GetObjectA(path).GetUnknown();
         if (!pImg) return;
-
-        bool matched = false;
-        // The action itself, plus the static `default` node Cap/Cape carry.
-        for (const wchar_t* n : { actionName, L"default" }) {
-            if (!n) continue;
-            IWzPropertyPtr p = pImg->item[n].GetUnknown();
-            if (p) { SwapLayerOf(p, t, layer); matched = true; }
+        ComTreeOps ops{ t };
+        tintwalk::Walker<ComTreeOps> walk(ops);
+        walk.SwapItem(pImg, actionName ? std::wstring(actionName) : std::wstring(), layer,
+                      tintwalk::WalkWholeImgWhenUnmatched(subdir));
+        const tintwalk::Stats& st = walk.stats();
+        if (!st.matched && !st.wholeImg) {
+            LOG_ONCE("weapontint: item %d has no '%ls' frames, so nothing is dyed for that "
+                     "action (1.5.0-rc4 dyed its whole img here: the rope freeze)",
+                     itemId, actionName ? actionName : L"");
         }
-        // Cash weapons nest one level deeper, under the numeric code of the weapon
-        // type the sticker is worn over (e.g. 01702000.img/33/stand1/0/weapon).
-        for (const std::wstring& name : ChildNames(pImg)) {
-            if (name.empty() || !iswdigit(name[0])) continue;
-            IWzPropertyPtr pType = pImg->item[name.c_str()].GetUnknown();
-            if (!pType) continue;
-            for (const wchar_t* n : { actionName, L"default" }) {
-                if (!n) continue;
-                IWzPropertyPtr p = pType->item[n].GetUnknown();
-                if (p) { SwapLayerOf(p, t, layer); matched = true; }
-            }
-        }
-        if (matched) return;
-
-        // No node named for this action: an emotion-keyed img (Accessory). Those
-        // hold one canvas per emotion, so walking every one of them is cheap.
-        for (const std::wstring& name : ChildNames(pImg)) {
-            if (name == L"info") continue;
-            IWzPropertyPtr p = pImg->item[name.c_str()].GetUnknown();
-            if (p) SwapLayerOf(p, t, layer);
+        if (st.skippedOurs > 0) {
+            LOG_ONCE_PER_ID(itemId,
+                "weapontint: item %d action %ls: %d canvases, %d swapped, %d already ours "
+                "(UOL'd duplicates, not re-tinted)", itemId, actionName ? actionName : L"",
+                st.canvases, st.swapped, st.skippedOurs);
         }
     } catch (...) {
         // Whatever landed in g_swaps is still undone by SwapOut.
@@ -1048,15 +1009,16 @@ IWzCanvasPtr CloneIrisTinted(IWzCanvasPtr pSrc, const FaceIrisPlan& plan,
 IWzCanvasPtr GetIrisTinted(IWzCanvasPtr pSrc, const FaceIrisPlan& plan, const WeaponTint& t) {
     if (!pSrc) return nullptr;
     if (!g_irisClonesValid || g_irisClonesKey != t.Key()) {
-        g_irisClones.clear();
+        g_irisClones.Clear();
         g_irisClonesKey = t.Key();
         g_irisClonesValid = true;
     }
     IWzCanvas* raw = pSrc;
-    auto it = g_irisClones.find(raw);
-    if (it != g_irisClones.end()) return it->second;
-    IWzCanvasPtr clone = CloneIrisTinted(pSrc, plan, t);
-    g_irisClones.emplace(raw, clone);    // cache failures too, so they are not retried per frame
+    IWzCanvasPtr clone;
+    if (g_irisClones.Find(raw, t.Key(), &clone)) return clone;
+    clone = CloneIrisTinted(pSrc, plan, t);
+    // Cache failures too, so they are not retried per frame.
+    g_irisClones.Put(raw, pSrc, t.Key(), clone ? static_cast<IWzCanvas*>(clone) : nullptr, clone);
     return clone;
 }
 
@@ -1487,6 +1449,12 @@ void __fastcall PrepareActionLayer_Hook(void* pThis, void* /*edx*/,
     if (action < 0) {
         PrepareActionLayer_Orig(pThis, nActionSpeed, nWalkSpeed, bKeyDown);
         return;
+    }
+    // Between builds, never inside one: see tintwalk::CloneCache. The layers already
+    // built keep their own references to the clones they use.
+    if (g_clones.Trim(kMaxCachedClones)) {
+        LOG_ONCE("weapontint: clone cache passed %u entries and was emptied",
+                 static_cast<unsigned>(kMaxCachedClones));
     }
 
     int items[kAvatarEquipSlots + 1];

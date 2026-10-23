@@ -4,6 +4,9 @@
 #include "weathercanvas.h"
 #include "lamps.h"
 #include "debug.h"
+#include "constants.h"
+#include "attackstop_patch.h"   // integration::ParseIniBool
+#include "weather_object_policy.h"
 #include "wvs/util.h"
 #include "ztl/ztl.h"
 #include <cmath>
@@ -862,6 +865,26 @@ bool BuildFrames(const Plan& pl, SwayObj* pOut) {
     return true;
 }
 
+// config.ini [weather] sway / ropesway, read once per process. The owner's A/B switches
+// for the bend: ropesway=false leaves every rope and ladder exactly as the map draws it
+// (its own layer, no generated frames), sway=false does that for everything.
+bool ReadWeatherIniBool(const char* key, bool fallback) {
+    char value[32] = {};
+    GetPrivateProfileStringA("weather", key, "", value, sizeof(value), ".\\" CONSTANTS_CONFIG_NAME);
+    return integration::ParseIniBool(value).value_or(fallback);
+}
+bool SwayKindEnabled(unsigned char kind) {
+    static const bool bSwayAll = ReadWeatherIniBool("sway", true);
+    static const bool bRopeSway = ReadWeatherIniBool("ropesway", true);
+    static bool bLogged = false;
+    if (!bLogged) {
+        bLogged = true;
+        DebugMessage("weathersway: config [weather] sway=%d ropesway=%d",
+                     bSwayAll ? 1 : 0, bRopeSway ? 1 : 0);
+    }
+    return WeatherSwayKindEnabled(kind, bSwayAll, bRopeSway);
+}
+
 // One pass over every candidate: read its geometry, then join rope and ladder segments
 // that share a column so they lean as one structure.
 void BuildPlan() {
@@ -913,8 +936,8 @@ void BuildPlan() {
     const int kOverlayDY = 3;
     for (int i = 0; i < n && (int)g_vPlan.size() < SWAY_MAX_OBJ; ++i) {
         const unsigned char kind = Weather_ObjSwayKind(i);
-        if (kind == 0) {
-            ++nNotFoliage;
+        if (!SwayKindEnabled(kind)) {
+            ++nNotFoliage;      // also a kind switched off in config.ini [weather]
             continue;
         }
         ++nSeen;

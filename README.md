@@ -50,6 +50,15 @@ MapleRoot's single `[clienthax] moveattack` switch is split into three keys, one
 
 Precedence: a key that is set wins for its own patch. A missing `attackjump`/`chargemove` follows the legacy `moveattack=` (default `true`; `moveattack=false` turns both off). `attackwalk` never follows `moveattack`; it is off unless `attackwalk=true`. A disabled site is restored to vanilla bytes if something else (such as a stray MapleRoot `ijl15.dll`) already patched it. `jumpshoot` and `jumpmagic` stay separate keys.
 
+## Weather sway switches
+
+`src/weathersway.cpp` bends plants, trees, hanging signs, ropes and ladders by building sheared frames of each map object when the map loads. Two `config.ini` keys turn it off for A/B testing; they are read once at startup:
+
+| Key | What | Default |
+| --- | --- | --- |
+| `[weather] sway` | `false`: nothing bends; every object keeps the map's own layer | `true` |
+| `[weather] ropesway` | `false`: ropes and ladders keep the map's own layer; plants still bend | `true` |
+
 ## Bounces: double-tap jump and blocked maps
 
 The server gives every character MapleRoot's Ninja Bounce (1050 / 10001050 / 20001050, "Jump Around!") and Vertical Bounce (1054 / 10001054 / 20001054, "Jump Upwards!"). MapleRoot makes them work by routing those ids through `CUserLocal::DoActiveSkill` (its detour) into the thieves' bound jump, `CUserLocal::DoActiveSkill_BoundJump` (`0x0096BE38`, cave at `0x0096BF0B`). `src/bounce.cpp` and `src/bounce_rules.h` add:

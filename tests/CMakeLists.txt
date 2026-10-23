@@ -70,6 +70,8 @@ if(MAPLEROOT_COLOR_PRISM)
     add_test(NAME colorprism_item_text COMMAND coloringprism_text_test)
     add_executable(coloringprism_layout_test coloringprism_layout_test.cpp)
     add_test(NAME colorprism_window_layout COMMAND coloringprism_layout_test)
+    add_executable(weapontint_walk_test weapontint_walk_test.cpp)
+    add_test(NAME colorprism_swap_walk COMMAND weapontint_walk_test)
 endif()
 
 if(MAPLEROOT_ATTACK_DIAG)
