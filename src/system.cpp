@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "hook.h"
 #include "constants.h"
+#include "settings_window.h"
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -44,6 +45,7 @@ static CreateWindowExA_t CreateWindowExA_orig = reinterpret_cast<CreateWindowExA
 static WNDPROC g_WndProc;
 
 LRESULT WndProc_hook(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    if (HandleSlumsSettingsMessage(hWnd, msg, wParam, lParam)) return 0;
     static POINT ptOffset;
     static bool bMoving;
     switch (msg) {
@@ -111,6 +113,7 @@ HWND WINAPI CreateWindowExA_hook(DWORD dwExStyle, LPCSTR lpClassName, LPCSTR lpW
     }
     HWND hWnd = CreateWindowExA_orig(dwExStyle, lpClassName, lpWindowName, 0xCA0000, CW_USEDEFAULT, CW_USEDEFAULT, nWidth, nHeight, hWndParent, hMenu, hInstance, lpParam);
     g_WndProc = reinterpret_cast<WNDPROC>(SetWindowLongPtrA(hWnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(&WndProc_hook)));
+    AddSlumsSettingsMenu(hWnd);
     return hWnd;
 }
 

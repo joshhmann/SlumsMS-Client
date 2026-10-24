@@ -2,6 +2,7 @@
 add_library(injector SHARED
     injector.cpp
     system.cpp
+    settings_window.cpp
     bypass.cpp
     inlink.cpp
     resman.cpp

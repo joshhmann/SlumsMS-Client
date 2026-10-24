@@ -91,3 +91,14 @@ Upstream Kaentake usage and notices are preserved in docs/KAENTAKE-UPSTREAM.md. 
 ## Parsec startup workaround
 
 On the deployment PC, starting the client while connected to a Parsec virtual display produced `-2147467259` during graphics initialization, before login. Disconnecting Parsec, launching the game, then reconnecting allowed entry with the original checkpoint files. This is an observed workaround for that machine/session; the underlying driver cause is not confirmed. Resolution changes, a GPU preference override and removing the DirectX wrapper did not resolve it, and those trials were reverted. No driver reset or client code change was required.
+
+## SlumsMS settings window (1.6.0 trial)
+
+Press **Ctrl+F10**, or choose **SlumsMS settings** in the window's system menu (Alt+Space).
+The panel saves supported movement, appearance, Discord and compiled weather options to this client's config.ini.
+Save applies after restarting the game; Cancel writes nothing. The game Options window still controls resolution
+and sound. The panel opens only when requested and leaves the game message loop running.
+
+`[clienthax] settingswindow=false` disables the panel and menu entry. Existing defaults and legacy moveattack
+fallback are preserved. No host/port, launcher key or unrelated config value is edited. Actual visual/input/restart
+checks remain pending until the owner's TEST client window is available.
