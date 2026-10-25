@@ -1,6 +1,9 @@
 #include "pch.h"
 #include "hook.h"
 #include "constants.h"
+#ifdef MAPLEROOT_INTEGRATION
+#include "d3d9host.h"
+#endif
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -44,6 +47,9 @@ static CreateWindowExA_t CreateWindowExA_orig = reinterpret_cast<CreateWindowExA
 static WNDPROC g_WndProc;
 
 LRESULT WndProc_hook(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+#ifdef MAPLEROOT_INTEGRATION
+    if (D3D9Host_HandleMessage(hWnd, msg, wParam, lParam)) return 0;   // the ImGui overlay (Ctrl+F10)
+#endif
     static POINT ptOffset;
     static bool bMoving;
     switch (msg) {
@@ -221,4 +227,7 @@ void AttachSystemHooks() {
     ATTACH_HOOK(CreateWindowExA_orig, CreateWindowExA_hook);
     ATTACH_HOOK(RegCreateKeyExA_orig, RegCreateKeyExA_hook);
     ATTACH_HOOK(WSPStartup_orig, WSPStartup_hook);
+#ifdef MAPLEROOT_INTEGRATION
+    AttachD3D9Host();   // before the game creates its Direct3D objects
+#endif
 }

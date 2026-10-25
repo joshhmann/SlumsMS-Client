@@ -72,6 +72,9 @@ if(MAPLEROOT_SHUTDOWN_SMOKE_TEST)
 endif()
 if(MAPLEROOT_INTEGRATION)
     target_sources(injector PRIVATE mapleroot.cpp crash_diagnostics.cpp bounce.cpp)
+    # D3D9 host and ImGui overlay; ImGui itself (1.91.4, DX9 + Win32 backends) is built into the companion.
+    target_sources(injector PRIVATE d3d9host.cpp settings_overlay.cpp)
+    target_include_directories(injector PRIVATE "${PROJECT_SOURCE_DIR}/mapleroot/ijl15/ImGui")
     target_compile_definitions(injector PRIVATE MAPLEROOT_INTEGRATION)
     # The MapleRoot companion is part of slums.dll; the game loads the real Intel ijl15.dll again.
     target_link_libraries(injector PRIVATE mapleroot_companion)
