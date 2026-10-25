@@ -59,6 +59,14 @@ Precedence: a key that is set wins for its own patch. A missing `attackjump`/`ch
 | `[weather] sway` | `false`: nothing bends; every object keeps the map's own layer | `true` |
 | `[weather] ropesway` | `false`: ropes and ladders keep the map's own layer; plants still bend | `true` |
 
+## Mob touch damage and low defence (1.6.0)
+
+The client computes the damage a mob's touch does to you (`CalcDamage` mob physical damage, `0x0079309F`) and the server applies it. Stock v83 compares your defence with `StandardPDD.img`'s value for your job class and level; below it, the defence term turns into extra damage scaled by STR/DEX/INT/LUK. A level 200 admin with 32767 stats took ~900 from a snail after `!job` (GM jobs have no table row, so the standard is 0 until the job changes). `src/mobdamage.cpp` reroutes the branch at `0x0079328D` so a defence below the standard counts as the standard: defence only ever reduces damage. Characters at or above their standard are unchanged. `src/mobdamage_patch.h` has the formula and the checked bytes.
+
+| Key | What | Default |
+| --- | --- | --- |
+| `[clienthax] lowdefensepenalty` | `true`: keep the stock rule (low defence adds damage) | `false` |
+
 ## Bounces: double-tap jump and blocked maps
 
 The server gives every character MapleRoot's Ninja Bounce (1050 / 10001050 / 20001050, "Jump Around!") and Vertical Bounce (1054 / 10001054 / 20001054, "Jump Upwards!"). MapleRoot makes them work by routing those ids through `CUserLocal::DoActiveSkill` (its detour) into the thieves' bound jump, `CUserLocal::DoActiveSkill_BoundJump` (`0x0096BE38`, cave at `0x0096BF0B`). `src/bounce.cpp` and `src/bounce_rules.h` add:
