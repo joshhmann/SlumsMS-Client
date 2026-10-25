@@ -82,6 +82,14 @@ void CheckGeometry() {
     Check(FlashBase(34, 68) == 2 * kStockTabPitch, "stock tab 2 keeps the stock flash position");
     Check(FlashBase(0, 88) - kFlashPlateOff + kFlashW / 2 == kTabCtrlLeft + 44, "stretched tab: plate centred");
 
+    // Saved size round-trips; junk reads as stock.
+    int sc = 0, sr = 0;
+    Check(UnpackSize(PackSize(10, 6), sc, sr) && sc == 10 && sr == 6, "10x6 round-trips");
+    Check(UnpackSize(PackSize(16, 7), sc, sr) && sc == 16 && sr == 7, "16x7 round-trips");
+    Check(!UnpackSize(PackSize(16, 8), sc, sr) && sc == 4 && sr == 6, "over 120 cells reads as 4x6");
+    Check(!UnpackSize(0, sc, sr) && sc == 4 && sr == 6, "zero reads as 4x6");
+    Check(!UnpackSize(0x01000A06, sc, sr) && sc == 4 && sr == 6, "high bits set reads as 4x6");
+
     Check(ValidSize(4, 6) && ValidSize(16, 7) && ValidSize(8, 14) && ValidSize(10, 12), "sizes inside the ceiling");
     Check(!ValidSize(16, 8) && !ValidSize(9, 14) && !ValidSize(3, 6) && !ValidSize(4, 15), "sizes outside");
 }

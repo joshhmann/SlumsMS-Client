@@ -130,6 +130,22 @@ constexpr bool ValidSize(int cols, int rows) {
     return cols >= kMinCols && cols <= kMaxCols && rows >= kMinRows && rows <= kMaxRows && cols * rows <= kMaxCells;
 }
 
+// Saved size: one DWORD per character, (cols << 8) | rows. Anything invalid reads as the stock 4x6.
+constexpr std::uint32_t PackSize(int cols, int rows) {
+    return (static_cast<std::uint32_t>(cols) << 8) | static_cast<std::uint32_t>(rows);
+}
+constexpr bool UnpackSize(std::uint32_t v, int& cols, int& rows) {
+    const int c = static_cast<int>((v >> 8) & 0xFF), r = static_cast<int>(v & 0xFF);
+    if ((v >> 16) != 0 || !ValidSize(c, r)) {
+        cols = kStockCols;
+        rows = kStockRows;
+        return false;
+    }
+    cols = c;
+    rows = r;
+    return true;
+}
+
 // 0 = none, 1 = right edge, 2 = bottom edge, 3 = corner; window-relative coordinates. Grips start at
 // y >= kGridTop, below the 25px title drag area, so a grip press never starts a window move.
 constexpr int GripAt(int W, int H, int rx, int ry) {

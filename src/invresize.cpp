@@ -3,8 +3,8 @@
 //
 // Ported from the community "invresize" mod (docs/PROVENANCE.md). invresize_patch.h has the addresses, the stock
 // bytes and the analysis. On by default; config.ini [clienthax] invresize=false patches nothing, which keeps the
-// stock 4x6 window and its 4-tab "full" view. The size is saved per character in CConfig's CHARACTER_OPT
-// ("invCols" / "invRows"). Client only: no server half, no WZ edit; the frame is composited at runtime from
+// stock 4x6 window and its 4-tab "full" view. The size is saved per character in HKCU\Software\SlumsMS\Inventory
+// (value w<world>_c<id>). Client only: no server half, no WZ edit; the frame is composited at runtime from
 // UI/UIWindow.img/Item/FullBackgrnd.
 //
 // Drivers: InvResize_HandleMouseMessage from CWndMan::TranslateMessage_hook (grip press/drag/release; records a
@@ -18,7 +18,6 @@
 #include "constants.h"
 #include "attackstop_patch.h"
 #include "invresize_patch.h"
-#include "wvs/config.h"
 #include "wvs/util.h"
 #include "wvs/wnd.h"
 #include "ztl/ztl.h"
@@ -33,7 +32,9 @@ bool g_bInstalled = false;
 int  g_nCols = kStockCols;          // what the patched immediates currently say
 int  g_nRows = kStockRows;
 bool g_bLoaded = false;
-bool g_bCharacterLoaded = false;   // set by CConfig::LoadCharacter; CHARACTER_OPT is empty before it
+bool g_bCharacterLoaded = false;   // set by CConfig::LoadCharacter; the size is per character
+int g_nWorldID = 0;
+unsigned g_dwCharacterID = 0;
 
 int  g_pendCols = 0, g_pendRows = 0;   // requested from the WndProc, applied in Tick
 bool g_bDragging = false;
@@ -328,28 +329,37 @@ void ApplySize(int cols, int rows) {
     Invalidate(pThis);
 }
 
-void SaveSize() {
-    CConfig* pCfg = CConfig::GetInstance();
-    if (!pCfg) return;
-    pCfg->SetOpt_Int(CConfig::CHARACTER_OPT, "invCols", g_nCols);
-    pCfg->SetOpt_Int(CConfig::CHARACTER_OPT, "invRows", g_nRows);
-    DebugMessage("Inventory resize: saved %dx%d for this character", g_nCols, g_nRows);
+// The size lives in our own key, one DWORD per character. Not in CConfig's CHARACTER_OPT: the client deletes and
+// rewrites that registry key with its fixed option list when the character enters the field (TEST, 2026-10-25:
+// invCols survived exit and the login screen, then was gone in the field), so anything added there is lost.
+constexpr const char* kStoreKey = "Software\\SlumsMS\\Inventory";
+
+void StoreValueName(char (&name)[32]) {
+    sprintf_s(name, "w%d_c%u", g_nWorldID, g_dwCharacterID);
 }
 
-// CHARACTER_OPT values are read and written straight to the character's registry key (GetOpt_Int/SetOpt_Int call
-// RegQueryValueEx/RegSetValueEx), which CConfig::LoadCharacter (0x0049D0B6) opens. CConfig exists from the login
-// screen, and reading before that returned the 4x6 default for good; so wait for the load, once per character.
+void SaveSize() {
+    if (!g_bCharacterLoaded) return;
+    char name[32];
+    StoreValueName(name);
+    const DWORD v = PackSize(g_nCols, g_nRows);
+    const LSTATUS st = RegSetKeyValueA(HKEY_CURRENT_USER, kStoreKey, name, REG_DWORD, &v, sizeof(v));
+    DebugMessage("Inventory resize: saved %dx%d for %s (%ld)", g_nCols, g_nRows, name, st);
+}
+
+// Once per character load (InvResize_OnLoadCharacter); a missing or invalid value means the stock 4x6.
 void LoadSizeOnce() {
     if (g_bLoaded || !g_bCharacterLoaded) return;
-    CConfig* pCfg = CConfig::GetInstance();
-    if (!pCfg) return;
     g_bLoaded = true;
-    const int c = pCfg->GetOpt_Int(CConfig::CHARACTER_OPT, "invCols", kStockCols, kMinCols, kMaxCols);
-    const int r = pCfg->GetOpt_Int(CConfig::CHARACTER_OPT, "invRows", kStockRows, kMinRows, kMaxRows);
-    if (ValidSize(c, r) && (c != g_nCols || r != g_nRows)) {
-        ApplyLayoutConstants(c, r);
+    char name[32];
+    StoreValueName(name);
+    DWORD v = 0, cb = sizeof(v);
+    int c = kStockCols, r = kStockRows;
+    if (RegGetValueA(HKEY_CURRENT_USER, kStoreKey, name, RRF_RT_REG_DWORD, nullptr, &v, &cb) == ERROR_SUCCESS) {
+        UnpackSize(v, c, r);
     }
-    DebugMessage("Inventory resize: %dx%d for this character", g_nCols, g_nRows);
+    if (c != g_nCols || r != g_nRows) ApplyLayoutConstants(c, r);
+    DebugMessage("Inventory resize: %dx%d for %s", g_nCols, g_nRows, name);
 }
 
 // ===================================================================================================
@@ -601,9 +611,11 @@ bool InvResize_HandleMouseMessage(UINT& msg) {
     return false;
 }
 
-// From CConfig::LoadCharacter_hook (resolution.cpp), after the character's options are loaded.
-void InvResize_OnLoadCharacter() {
+// From CConfig::LoadCharacter_hook (resolution.cpp): the character whose size the tick loads next.
+void InvResize_OnLoadCharacter(int nWorldID, unsigned int dwCharacterId) {
     using namespace InvResize;
+    g_nWorldID = nWorldID;
+    g_dwCharacterID = dwCharacterId;
     g_bCharacterLoaded = true;
     g_bLoaded = false;
 }
