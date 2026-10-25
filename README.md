@@ -66,6 +66,7 @@ Built with `-DMAPLEROOT_INV_RESIZE=ON`. Drag the inventory's right edge, bottom 
 | Key | What | Default |
 | --- | --- | --- |
 | `[clienthax] invresize` | `false`: patch nothing; the stock 4x6 window with its 4-tab expanded view | `true` |
+
 ## Mob touch damage and low defence (1.6.0)
 
 The client computes the damage a mob's touch does to you (`CalcDamage` mob physical damage, `0x0079309F`) and the server applies it. Stock v83 compares your defence with `StandardPDD.img`'s value for your job class and level; below it, the defence term turns into extra damage scaled by STR/DEX/INT/LUK. A level 200 admin with 32767 stats took ~900 from a snail after `!job` (GM jobs have no table row, so the standard is 0 until the job changes). `src/mobdamage.cpp` reroutes the branch at `0x0079328D` so a defence below the standard counts as the standard: defence only ever reduces damage. Characters at or above their standard are unchanged. `src/mobdamage_patch.h` has the formula and the checked bytes.
