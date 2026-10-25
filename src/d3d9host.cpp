@@ -9,7 +9,7 @@
 //   - when CreateDevice fails it is retried on the other adapters, then with software vertex processing
 //     (d3d9host_policy.h), and every attempt is logged.
 // On the created device, EndScene and Reset are detoured to host Dear ImGui (the 1.91.4 build the MapleRoot
-// companion already links, with its DX9 and Win32 backends). Ctrl+F10 opens the settings window; while it is open
+// companion already links, with its DX9 and Win32 backends). Ctrl+F10 opens the HUD window; while it is open
 // the overlay takes the mouse and keyboard messages ImGui wants. Nothing is drawn or allocated until it opens.
 //
 // config.ini [graphics] d3d9host=false turns all of it off; [graphics] adapterfallback=false keeps the logging
@@ -303,7 +303,7 @@ void AttachD3D9Host() {
         return;
     }
     if (ATTACH_HOOK(g_Direct3DCreate9, Direct3DCreate9_hook)) {
-        DebugMessage("D3D9: host on (adapter fallback %s, settings window %s)", g_bFallback ? "on" : "off",
+        DebugMessage("D3D9: host on (adapter fallback %s, HUD %s)", g_bFallback ? "on" : "off",
             g_bSettingsWindow ? "on" : "off");
     }
 }

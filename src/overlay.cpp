@@ -1,9 +1,9 @@
 // ============================================================
 // overlay.cpp: the ImGui HUD framework on the D3D9 host (1.6.0): theme, font scale, widget layout, freeze.
 //
-// Widgets are always on (each can be hidden in the settings window) and keep their place: positions and sizes are
+// Widgets are always on (each can be hidden in the HUD window) and keep their place: positions and sizes are
 // stored as screen fractions (overlay_policy.h) in HKCU\Software\SlumsMS\Overlay, so they follow resolution
-// changes. One freeze toggle (Ctrl+F11 or the settings window): unfrozen, widgets have a title bar and can be dragged
+// changes. One freeze toggle (Ctrl+F11 or the HUD window): unfrozen, widgets have a title bar and can be dragged
 // and resized; frozen, they are fixed and click-through, so the game gets every click. The theme is the client's
 // blue and cream (or plain ImGui); the font is one large Tahoma atlas scaled to the screen height.
 // ============================================================
@@ -32,7 +32,7 @@ void WritePref(const char* name, DWORD v) {
 
 struct Widget {
     const char* id;      // registry prefix and ImGui window id
-    const char* title;   // shown while unfrozen and in the settings window
+    const char* title;   // shown while unfrozen and in the HUD window
     void (*draw)();
     int rows;            // content rows: the window is exactly as tall as its content (+ title bar when unfrozen)
     int defX, defY, defW, defH;   // default layout, fractions x 10000 (height is derived from rows)
@@ -212,10 +212,9 @@ void Overlay_DrawHud() {
     }
 }
 
-// The HUD part of the settings window: applies at once, no restart.
+// The HUD window's controls: they apply at once, no restart.
 void Overlay_DrawSettings() {
     LoadPrefs();
-    ImGui::SeparatorText("HUD (applies now)");
     for (auto& w : g_widgets) {
         char label[96];
         sprintf_s(label, "Show %s", w.title);
