@@ -27,6 +27,11 @@ extern void WeatherSway_Frame();
 #include <windows.h>
 #include <comdef.h>
 
+#ifdef MAPLEROOT_INV_RESIZE
+bool InvResize_HandleMouseMessage(UINT& msg);   // invresize.cpp
+void InvResize_Tick();
+#endif
+
 #pragma comment(lib, "winmm.lib")
 #pragma warning(disable : 4996)
 
@@ -258,6 +263,9 @@ void CWvsApp::CallUpdate_hook(int tCurTime) {
 #ifdef MAPLEROOT_MONSTER_BOOK
     MonsterBook_Tick();
 #endif
+#ifdef MAPLEROOT_INV_RESIZE
+    InvResize_Tick();
+#endif
 #ifdef MAPLEROOT_COLOR_PRISM
     WeaponTint_Tick();
 #endif
@@ -415,6 +423,10 @@ int CLogin::SendCheckPasswordPacket_hook(char* sID, char* sPasswd) {
 
 
 int CWndMan::TranslateMessage_hook(UINT& msg, WPARAM& wParam, LPARAM& lParam, LRESULT* plResult) {
+#ifdef MAPLEROOT_INV_RESIZE
+    // Inventory grips: a consumed press/release is rewritten to WM_NULL, which the client ignores.
+    InvResize_HandleMouseMessage(msg);
+#endif
     if (msg == WM_MOUSEWHEEL) {
         // CWndMan::ProcessMouse(this, msg, wParam, lParam);
         *plResult = reinterpret_cast<LRESULT(__thiscall*)(CWndMan*, UINT, WPARAM, LPARAM)>(0x009E3AE6)(this, msg, wParam, lParam);

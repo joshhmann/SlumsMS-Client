@@ -59,6 +59,14 @@ Precedence: a key that is set wins for its own patch. A missing `attackjump`/`ch
 | `[weather] sway` | `false`: nothing bends; every object keeps the map's own layer | `true` |
 | `[weather] ropesway` | `false`: ropes and ladders keep the map's own layer; plants still bend | `true` |
 
+## Resizable item inventory (1.6.0)
+
+Built with `-DMAPLEROOT_INV_RESIZE=ON`. Drag the inventory's right edge, bottom edge or bottom-right corner to change how many columns (4-16) and rows (3-14) are visible, at most 120 slots; the grid snaps to whole slots and the size is saved per character (`HKCU\Software\SlumsMS\Inventory`, value `w<world>_c<id>`; the client rewrites its own per-character key on login, so it cannot live there). The expand button becomes a 4 <-> 8 column switch: the 4-tab expanded view is gone while this is on. `src/invresize.cpp` replaces `CUIItem::GetSlotRect` (`0x0081E2C8`) and `GetSlotPositionFromPoint` (`0x0081DB7E`), detours `OnCreate` (`0x0081C6C9`), replaces `ToggleFull` (`0x0081E541`) and rewrites 14 layout operands; `src/invresize_patch.h` lists every site and its stock bytes. Slots the tab does not have yet (past the character's slot count) show the client's own locked-slot art (`Item/disabled`), and the new-item tab flash is centred on the stretched tab instead of the stock 34px position (`Draw` detour at `0x0081DC20`, call at `0x0081E658`). If any byte differs nothing is patched and the stock window stays.
+
+| Key | What | Default |
+| --- | --- | --- |
+| `[clienthax] invresize` | `false`: patch nothing; the stock 4x6 window with its 4-tab expanded view | `true` |
+
 ## Bounces: double-tap jump and blocked maps
 
 The server gives every character MapleRoot's Ninja Bounce (1050 / 10001050 / 20001050, "Jump Around!") and Vertical Bounce (1054 / 10001054 / 20001054, "Jump Upwards!"). MapleRoot makes them work by routing those ids through `CUserLocal::DoActiveSkill` (its detour) into the thieves' bound jump, `CUserLocal::DoActiveSkill_BoundJump` (`0x0096BE38`, cave at `0x0096BF0B`). `src/bounce.cpp` and `src/bounce_rules.h` add:

@@ -26,6 +26,15 @@ else()
     add_test(NAME createblock_never_blocked COMMAND createblock_patch_test)
 endif()
 
+add_executable(invresize_patch_test invresize_patch_test.cpp)
+set(INVRESIZE_TEST_EXE "Z:/MSv83/SlumsMS-dev/client-1.5.0-fixes2/exe-copy/MapleStory.exe" CACHE FILEPATH
+    "MapleStory.exe whose bytes the inventory-resize test checks (optional)")
+if(INVRESIZE_TEST_EXE AND EXISTS "${INVRESIZE_TEST_EXE}")
+    add_test(NAME invresize_sites COMMAND invresize_patch_test "${INVRESIZE_TEST_EXE}")
+else()
+    add_test(NAME invresize_sites COMMAND invresize_patch_test)
+endif()
+
 set(MOVEMENTKEYS_TEST_CLIENT "${CMAKE_SOURCE_DIR}/../Addons/WeatherWork/TestClient" CACHE PATH "Client for loose UI and movement checks")
 if(MAPLEROOT_MOVEMENT_KEYS AND (EXISTS "${MOVEMENTKEYS_TEST_CLIENT}/Data/UI/UIWindow.img" OR EXISTS "${MOVEMENTKEYS_TEST_CLIENT}/UI.wz"))
     add_executable(movementkeys_wz_test movementkeys_wz_test.cpp ../src/movementkeys.cpp ../src/hook.cpp ../src/debug.cpp)
