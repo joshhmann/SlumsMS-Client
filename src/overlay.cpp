@@ -19,6 +19,7 @@ namespace {
 
 constexpr const char* kKey = "Software\\SlumsMS\\Overlay";
 constexpr float kAtlasPx = 32.0f;   // fonts are baked once at this size and scaled down
+constexpr uintptr_t kAddr_UserLocal = 0x00BEBF98;   // CUserLocal*: set only while a character is in the field
 
 DWORD ReadPref(const char* name, DWORD fallback) {
     DWORD v = 0, cb = sizeof(v);
@@ -157,6 +158,8 @@ void Overlay_ToggleFreeze() {
 
 void Overlay_DrawHud() {
     LoadPrefs();
+    // HUD widgets belong to the field: nothing over the login, world, channel or character screens.
+    if (!*reinterpret_cast<void* const*>(kAddr_UserLocal)) return;
     const ImVec2 screen = ImGui::GetIO().DisplaySize;
     if (screen.x < 1 || screen.y < 1) return;
     if (screen.x != g_fLastW || screen.y != g_fLastH) {   // first frame or a resolution change
