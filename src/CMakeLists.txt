@@ -15,6 +15,7 @@ add_library(injector SHARED
     proposalgender.cpp
     createblock.cpp
     mobdamage.cpp
+    hpmp.cpp
     tempstat.cpp
     stringpool.cpp
     debug.cpp

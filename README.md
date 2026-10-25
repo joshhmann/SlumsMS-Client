@@ -75,6 +75,10 @@ The client computes the damage a mob's touch does to you (`CalcDamage` mob physi
 | --- | --- | --- |
 | `[clienthax] lowdefensepenalty` | `true`: keep the stock rule (low defence adds damage) | `false` |
 
+
+## 4-byte HP and MP (1.6.0)
+
+The 1.6.0 server sends HP, MaxHP, MP and MaxMP as 4 bytes, so they can go past 32,767 (cap 99,999). `src/hpmp.cpp` is always on and needs a 1.6.0 server; the build stamp (10600 and up) is what the server checks. The client reads the 9 widened packet fields with `Decode4`, stores the four stats raw (checksum 0) instead of as encrypted shorts, and detours `_ZtlSecureFuse<short>` to return them whole. It also widens the 57 places that cut a read-back value to 16 bits and raises the four 30,000 caps. `src/hpmp_patch.h` has the site table and how it was derived. Every site's bytes are checked first. If any differ, or another patch later overwrites one, the client shows an error and exits rather than misreading the server's stats.
 ## Bounces: double-tap jump and blocked maps
 
 The server gives every character MapleRoot's Ninja Bounce (1050 / 10001050 / 20001050, "Jump Around!") and Vertical Bounce (1054 / 10001054 / 20001054, "Jump Upwards!"). MapleRoot makes them work by routing those ids through `CUserLocal::DoActiveSkill` (its detour) into the thieves' bound jump, `CUserLocal::DoActiveSkill_BoundJump` (`0x0096BE38`, cave at `0x0096BF0B`). `src/bounce.cpp` and `src/bounce_rules.h` add:
