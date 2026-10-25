@@ -33,6 +33,7 @@ bool g_bInstalled = false;
 int  g_nCols = kStockCols;          // what the patched immediates currently say
 int  g_nRows = kStockRows;
 bool g_bLoaded = false;
+bool g_bCharacterLoaded = false;   // set by CConfig::LoadCharacter; CHARACTER_OPT is empty before it
 
 int  g_pendCols = 0, g_pendRows = 0;   // requested from the WndProc, applied in Tick
 bool g_bDragging = false;
@@ -332,9 +333,10 @@ void SaveSize() {
     pCfg->SetOpt_Int(CConfig::CHARACTER_OPT, "invRows", g_nRows);
 }
 
-// Deferred: CHARACTER_OPT is only filled by CConfig::LoadCharacter (0x0049D0B6), long after attach.
+// Deferred: CHARACTER_OPT is only filled by CConfig::LoadCharacter (0x0049D0B6), long after attach. Reading it
+// earlier (CConfig exists from the login screen) returns the 4x6 default; the size is then re-read per character.
 void LoadSizeOnce() {
-    if (g_bLoaded) return;
+    if (g_bLoaded || !g_bCharacterLoaded) return;
     CConfig* pCfg = CConfig::GetInstance();
     if (!pCfg) return;
     g_bLoaded = true;
@@ -587,6 +589,13 @@ bool InvResize_HandleMouseMessage(UINT& msg) {
         // Not consumed: the move flows on so the cursor keeps tracking.
     }
     return false;
+}
+
+// From CConfig::LoadCharacter_hook (resolution.cpp), after the character's options are loaded.
+void InvResize_OnLoadCharacter() {
+    using namespace InvResize;
+    g_bCharacterLoaded = true;
+    g_bLoaded = false;
 }
 
 void InvResize_Tick() {

@@ -18,6 +18,10 @@
 #include <strsafe.h>
 #include <intrin.h>
 
+#ifdef MAPLEROOT_INV_RESIZE
+void InvResize_OnLoadCharacter();   // invresize.cpp
+#endif
+
 #define SCREEN_WIDTH_MAX     1920
 #define SCREEN_HEIGHT_MAX    1080
 #define SCREEN_MESSAGE_WIDTH 400
@@ -134,6 +138,9 @@ void CConfig::GetUIWndPos_hook(int nUIType, int* x, int* y, int* op) {
 
 void CConfig::LoadCharacter_hook(int nWorldID, unsigned int dwCharacterId) {
     CConfig::LoadCharacter(this, nWorldID, dwCharacterId);
+#ifdef MAPLEROOT_INV_RESIZE
+    InvResize_OnLoadCharacter();   // the per-character inventory size is readable from here on
+#endif
     for (size_t i = 0; i < 34; ++i) {
         int nDefaultX;
         int nDefaultY;
