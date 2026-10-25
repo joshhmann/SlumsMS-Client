@@ -1,8 +1,8 @@
 // ============================================================
 // buildshow.cpp: the release and build in the login screen's bottom-right corner (1.6.0).
 //
-// "SlumsMS 1.6.0 · build 10600" (buildshow_text.h), white Dotum 12 with a dark shadow, on its own layer above the
-// login UI. BuildShow_Tick (CWvsApp::CallUpdate) shows it while the stage is a CLogin (vftable 0x00AF6B24, stored by
+// "SlumsMS 1.6.0 <middle dot> build 10600" (buildshow_text.h), white Dotum 12 with a dark shadow, on its own layer
+// above the login UI. BuildShow_Tick (CWvsApp::CallUpdate) shows it while the stage is a CLogin (vftable 0x00AF6B24, stored by
 // CLogin::CLogin 0x005F3C59) and drops it on any other stage. It is rebuilt when the resolution changes.
 // ============================================================
 

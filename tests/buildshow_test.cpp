@@ -22,7 +22,7 @@ int main() {
 
         wchar_t label[96];
         BuildShow::LoginLabel(label, 96, "1.6.0", 10600);
-        Check(std::wcscmp(label, L"SlumsMS 1.6.0 · build 10600") == 0, "login label with a middle dot");
+        Check(std::wcscmp(label, L"SlumsMS 1.6.0 \x00B7 build 10600") == 0, "login label with a middle dot");
         wchar_t small[8];
         BuildShow::LoginLabel(small, 8, "1.6.0", 10600);
         Check(std::wcslen(small) == 7 && std::wcsncmp(small, L"SlumsMS", 7) == 0, "truncates inside the buffer");
