@@ -34,7 +34,8 @@ struct Widget {
     const char* id;      // registry prefix and ImGui window id
     const char* title;   // shown while unfrozen and in the settings window
     void (*draw)();
-    int defX, defY, defW, defH;   // default layout, fractions x 10000
+    int rows;            // content rows: the window is exactly as tall as its content (+ title bar when unfrozen)
+    int defX, defY, defW, defH;   // default layout, fractions x 10000 (height is derived from rows)
     bool on;
     int fx, fy, fw, fh;
     bool loaded;
@@ -44,7 +45,7 @@ struct Widget {
 // The HUD's widgets. The pilot is HP/MP/EXP (ticket 91); buff timers, the damage/EXP meter and the bot panel
 // join this list.
 Widget g_widgets[] = {
-    {"vitals", "HP / MP / EXP", &HudVitals_Draw, 100, 1800, 3000, 1300, true, 0, 0, 0, 0, false, true},
+    {"vitals", "HP / MP / EXP", &HudVitals_Draw, 3, 100, 1800, 3000, 1300, true, 0, 0, 0, 0, false, true},
 };
 
 bool g_bLoaded = false;
@@ -179,11 +180,19 @@ void Overlay_DrawHud() {
             flags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                 ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoBringToFrontOnFocus;
         }
+        // Height follows the content and the font size; only the width is the player's.
+        const ImGuiStyle& st = ImGui::GetStyle();
+        const float fontPx = ImGui::GetIO().FontGlobalScale * kAtlasPx;
+        const float rowH = fontPx + st.FramePadding.y * 2;
+        const float h = w.rows * rowH + (w.rows - 1) * st.ItemSpacing.y + st.WindowPadding.y * 2 +
+            (g_bFrozen ? 0.0f : fontPx + st.FramePadding.y * 2);
         const OverlayPolicy::Rect r =
-            OverlayPolicy::FromFractions(w.fx, w.fy, w.fw, w.fh, screen.x, screen.y, minW, minH);
+            OverlayPolicy::FromFractions(w.fx, w.fy, w.fw, OverlayPolicy::ToFraction(h, screen.y), screen.x, screen.y,
+                minW, (std::min)(minH, h));
+        ImGui::SetNextWindowSizeConstraints(ImVec2(minW, h), ImVec2(screen.x, h));
         if (w.place || g_bFrozen) {
             ImGui::SetNextWindowPos(ImVec2(r.x, r.y), ImGuiCond_Always);
-            ImGui::SetNextWindowSize(ImVec2(r.w, r.h), ImGuiCond_Always);
+            ImGui::SetNextWindowSize(ImVec2(r.w, h), ImGuiCond_Always);
             w.place = false;
         }
         char title[96];
