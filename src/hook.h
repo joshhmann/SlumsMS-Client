@@ -67,6 +67,7 @@ void AttachIconIconMod();
 void AttachPetEquipFlagMod();   // petequipflag.cpp: newer pets overflow the 128-bit pet flag
 void AttachProposalGenderMod(); // proposalgender.cpp: any gender may use an engagement ring box
 void AttachCreateBlockMod();    // createblock.cpp: no random "high population" block on character creation
+void AttachMobDamageMod();      // mobdamage.cpp: low defence never adds mob touch damage, [clienthax] lowdefensepenalty
 void AttachTempStatMod();
 #ifdef MAPLEROOT_INV_RESIZE
 void AttachInvResizeMod();   // invresize.cpp: drag-to-resize item inventory, config.ini [clienthax] invresize
@@ -231,6 +232,11 @@ inline void AttachClientHooks() {
 #ifdef MAPLEROOT_INTEGRATION
     VerifyKaentakeHooks("AttachInvResizeMod");
 #endif
+#endif
+    DebugMessage("Installing: AttachMobDamageMod();");
+    AttachMobDamageMod();
+#ifdef MAPLEROOT_INTEGRATION
+    VerifyKaentakeHooks("AttachMobDamageMod");
 #endif
 #ifndef MAPLEROOT_INTEGRATION
     DebugMessage("Installing: AttachTempStatMod();");

@@ -33,6 +33,13 @@ if(INVRESIZE_TEST_EXE AND EXISTS "${INVRESIZE_TEST_EXE}")
     add_test(NAME invresize_sites COMMAND invresize_patch_test "${INVRESIZE_TEST_EXE}")
 else()
     add_test(NAME invresize_sites COMMAND invresize_patch_test)
+add_executable(mobdamage_patch_test mobdamage_patch_test.cpp)
+set(MOBDAMAGE_TEST_EXE "Z:/MSv83/SlumsMS-dev/client-1.5.0-fixes2/exe-copy/MapleStory.exe" CACHE FILEPATH
+    "MapleStory.exe whose bytes the mob-damage test checks (optional)")
+if(MOBDAMAGE_TEST_EXE AND EXISTS "${MOBDAMAGE_TEST_EXE}")
+    add_test(NAME mobdamage_low_defence COMMAND mobdamage_patch_test "${MOBDAMAGE_TEST_EXE}")
+else()
+    add_test(NAME mobdamage_low_defence COMMAND mobdamage_patch_test)
 endif()
 
 set(MOVEMENTKEYS_TEST_CLIENT "${CMAKE_SOURCE_DIR}/../Addons/WeatherWork/TestClient" CACHE PATH "Client for loose UI and movement checks")
