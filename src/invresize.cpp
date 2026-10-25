@@ -39,6 +39,8 @@ int  g_pendCols = 0, g_pendRows = 0;   // requested from the WndProc, applied in
 bool g_bDragging = false;
 int  g_nDragMode = 0;                  // 1 = right edge, 2 = bottom edge, 3 = corner
 void* g_pDragWnd = nullptr;            // latched at grip-down; a mismatch aborts
+int  g_nDragStartCols = 0, g_nDragStartRows = 0;
+bool g_bSaveAfterDrag = false;         // a drag ended: save once its final size is applied
 int  g_nCursorState = 0;
 
 constexpr int kCursor_Arrow  = 0;
@@ -331,10 +333,12 @@ void SaveSize() {
     if (!pCfg) return;
     pCfg->SetOpt_Int(CConfig::CHARACTER_OPT, "invCols", g_nCols);
     pCfg->SetOpt_Int(CConfig::CHARACTER_OPT, "invRows", g_nRows);
+    DebugMessage("Inventory resize: saved %dx%d for this character", g_nCols, g_nRows);
 }
 
-// Deferred: CHARACTER_OPT is only filled by CConfig::LoadCharacter (0x0049D0B6), long after attach. Reading it
-// earlier (CConfig exists from the login screen) returns the 4x6 default; the size is then re-read per character.
+// CHARACTER_OPT values are read and written straight to the character's registry key (GetOpt_Int/SetOpt_Int call
+// RegQueryValueEx/RegSetValueEx), which CConfig::LoadCharacter (0x0049D0B6) opens. CConfig exists from the login
+// screen, and reading before that returned the 4x6 default for good; so wait for the load, once per character.
 void LoadSizeOnce() {
     if (g_bLoaded || !g_bCharacterLoaded) return;
     CConfig* pCfg = CConfig::GetInstance();
@@ -345,6 +349,7 @@ void LoadSizeOnce() {
     if (ValidSize(c, r) && (c != g_nCols || r != g_nRows)) {
         ApplyLayoutConstants(c, r);
     }
+    DebugMessage("Inventory resize: %dx%d for this character", g_nCols, g_nRows);
 }
 
 // ===================================================================================================
@@ -469,6 +474,9 @@ void __fastcall OnCreate_hook(void* pThis, void* /*edx*/, void* pData) {
 void __fastcall ToggleFull_hook(void* /*pThis*/, void* /*edx*/) {
     g_pendCols = (g_nCols >= 8) ? kMinCols : 8;
     g_pendRows = g_nRows;
+    g_nDragStartCols = g_nCols;   // saved by the tick once applied, like a drag
+    g_nDragStartRows = g_nRows;
+    g_bSaveAfterDrag = true;
 }
 
 // ===================================================================================================
@@ -503,13 +511,17 @@ void ReconcileLiveWindow() {
     ApplySize(g_nCols, g_nRows);
 }
 
-void AbortDrag() {
+// Every way a drag ends comes here: the WM_LBUTTONUP, the tick seeing the button already up (it usually polls
+// GetAsyncKeyState before the message arrives, which used to end the drag without saving), or the window going
+// away. The last pending size is kept unless the window is gone, and the tick saves once it is applied.
+void EndDrag(bool bKeepPending) {
     if (!g_bDragging) return;
     g_bDragging = false;
     g_nDragMode = 0;
     g_pDragWnd = nullptr;
-    g_pendCols = g_pendRows = 0;
+    if (!bKeepPending) g_pendCols = g_pendRows = 0;
     if (g_nCursorState) { SetCursorState(kCursor_Arrow); g_nCursorState = 0; }
+    g_bSaveAfterDrag = true;
 }
 
 bool TargetsMatch() {
@@ -544,23 +556,21 @@ bool InvResize_HandleMouseMessage(UINT& msg) {
         g_bDragging = true;
         g_nDragMode = nGrip;
         g_pDragWnd = pWnd;
+        g_nDragStartCols = g_nCols;
+        g_nDragStartRows = g_nRows;
         msg = WM_NULL;   // no window move, no click into the grid underneath
         return true;
     }
 
     if (msg == WM_LBUTTONUP && g_bDragging) {
-        g_bDragging = false;
-        g_nDragMode = 0;
-        g_pDragWnd = nullptr;
-        if (g_nCursorState) { SetCursorState(kCursor_Arrow); g_nCursorState = 0; }
-        SaveSize();
+        EndDrag(true);
         msg = WM_NULL;
         return true;
     }
 
     if (msg == WM_MOUSEMOVE && g_bDragging) {
         void* pThis = SehInstance();
-        if (!pThis || pThis != g_pDragWnd) { AbortDrag(); return false; }
+        if (!pThis || pThis != g_pDragWnd) { EndDrag(false); return false; }
         POINT sp;
         if (!GetAbsCursor(sp)) return false;
         int absL = 0, absT = 0;
@@ -608,10 +618,10 @@ void InvResize_Tick() {
     // tick calling CWnd::Destroy on freed memory.
     if (g_bDragging) {
         void* pNow = SehInstance();
-        if (!pNow || pNow != g_pDragWnd || !(GetAsyncKeyState(VK_LBUTTON) & 0x8000)) {
-            const bool bHadPending = g_pendCols != 0;
-            AbortDrag();
-            if (bHadPending) SaveSize();   // the button-up was lost, not the size
+        if (!pNow || pNow != g_pDragWnd) {
+            EndDrag(false);
+        } else if (!(GetAsyncKeyState(VK_LBUTTON) & 0x8000)) {
+            EndDrag(true);
         }
     }
 
@@ -619,6 +629,11 @@ void InvResize_Tick() {
         ApplySize(g_pendCols, g_pendRows);
     }
     g_pendCols = g_pendRows = 0;
+
+    if (g_bSaveAfterDrag && !g_bDragging) {
+        g_bSaveAfterDrag = false;
+        if (g_nCols != g_nDragStartCols || g_nRows != g_nDragStartRows) SaveSize();
+    }
 
     ReconcileLiveWindow();
 
