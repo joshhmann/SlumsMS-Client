@@ -37,6 +37,13 @@ struct Vitals {
     long hp, maxHp, mp, maxMp;
 };
 
+// Stock entry bytes, or a detour's jmp: MapleRoot detours _ZtlSecureFuse<long> (its pass-through ztlfuse), and
+// calling through a detour still reaches the function.
+bool StockOrDetoured(uintptr_t addr, const unsigned char* stock, size_t n) {
+    const auto* p = reinterpret_cast<const unsigned char*>(addr);
+    return p[0] == 0xE9 || memcmp(p, stock, n) == 0;
+}
+
 // The entry bytes of the client functions called here (MapleStory.exe 86e4e6be...ac90); checked once.
 bool ClientMatches() {
     static int s_state = -1;
@@ -44,9 +51,9 @@ bool ClientMatches() {
         const unsigned char fuseShort[] = {0x55, 0x8B, 0xEC, 0x51, 0x51, 0x8B, 0x45, 0x08};
         const unsigned char fuseLong[] = {0x55, 0x8B, 0xEC, 0x8B, 0x45, 0x08, 0x53, 0x8B};
         const unsigned char getCd[] = {0x55, 0x8B, 0xEC, 0x51, 0x8B, 0x81, 0xB8, 0x20};
-        s_state = memcmp(reinterpret_cast<void*>(kAddr_FuseShort), fuseShort, sizeof(fuseShort)) == 0 &&
-            memcmp(reinterpret_cast<void*>(kAddr_FuseLong), fuseLong, sizeof(fuseLong)) == 0 &&
-            memcmp(reinterpret_cast<void*>(kAddr_GetCharacterData), getCd, sizeof(getCd)) == 0;
+        s_state = StockOrDetoured(kAddr_FuseShort, fuseShort, sizeof(fuseShort)) &&
+            StockOrDetoured(kAddr_FuseLong, fuseLong, sizeof(fuseLong)) &&
+            StockOrDetoured(kAddr_GetCharacterData, getCd, sizeof(getCd));
         if (!s_state) DebugMessage("HUD vitals: unexpected client bytes; the widget stays empty");
     }
     return s_state == 1;
