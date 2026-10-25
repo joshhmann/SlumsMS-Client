@@ -49,22 +49,23 @@ void SettingsOverlay_Draw(bool* pOpen) {
         ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
     if (ImGui::Begin("SlumsMS settings", pOpen,
             ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings)) {
-        ImGui::TextUnformatted("Changes apply after restarting the game.");
+        ImGui::SeparatorText("Game options (apply after a restart)");
         ImGui::TextDisabled("Resolution and sound are in the game's Options.");
         ImGui::Separator();
         for (std::size_t i = 0; i < kCount; ++i) {
             ImGui::Checkbox(slums_settings::preferences[i].label, &s_values[i]);
         }
-        ImGui::Separator();
-        if (ImGui::Button("Save")) {
+        if (ImGui::Button("Save game options")) {
             s_status = slums_settings::save(s_values, ReadValue, WriteValue, kCount)
                 ? "Saved. Restart the game to apply."
                 : "Could not write config.ini; nothing was changed.";
         }
-        ImGui::SameLine();
-        if (ImGui::Button("Close")) *pOpen = false;
-        ImGui::TextDisabled("Ctrl+F10 or Esc closes this window.");
         if (!s_status.empty()) ImGui::TextUnformatted(s_status.c_str());
+        Overlay_DrawSettings();
+        ImGui::Separator();
+        if (ImGui::Button("Close")) *pOpen = false;
+        ImGui::SameLine();
+        ImGui::TextDisabled("Ctrl+F10 or Esc also closes this window.");
     }
     ImGui::End();
     if (!*pOpen) s_bLoaded = false;   // reopening shows what is saved, not unsaved edits

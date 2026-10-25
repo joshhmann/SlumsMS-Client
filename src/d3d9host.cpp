@@ -150,7 +150,7 @@ void InitImGui(IDirect3DDevice9* dev) {
     io.IniFilename = nullptr;   // no imgui.ini next to the game
     io.LogFilename = nullptr;
     io.ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange;
-    ImGui::StyleColorsDark();
+    Overlay_Setup();   // theme, font, saved HUD layout
     ImGui_ImplWin32_Init(g_hWnd);
     ImGui_ImplDX9_Init(dev);
     g_bImGuiReady = true;
@@ -158,14 +158,17 @@ void InitImGui(IDirect3DDevice9* dev) {
 }
 
 void DrawOverlay(IDirect3DDevice9* dev) {
-    if (!g_bVisible) return;
+    if (!g_bVisible && !(g_bSettingsWindow && Overlay_HasHud())) return;
     try {
         if (!g_bImGuiReady) InitImGui(dev);
-        ImGui::GetIO().MouseDrawCursor = true;   // the game's own cursor is drawn under the overlay
+        ImGuiIO& io = ImGui::GetIO();
+        // Only over an overlay window: elsewhere the game's own cursor is the one on top.
+        io.MouseDrawCursor = io.WantCaptureMouse;
         ImGui_ImplDX9_NewFrame();
         ImGui_ImplWin32_NewFrame();
         ImGui::NewFrame();
-        SettingsOverlay_Draw(&g_bVisible);
+        Overlay_DrawHud();
+        if (g_bVisible) SettingsOverlay_Draw(&g_bVisible);
         ImGui::EndFrame();
         ImGui::Render();
         ImGui_ImplDX9_RenderDrawData(ImGui::GetDrawData());
@@ -202,7 +205,7 @@ void HookDevice(IDirect3DDevice9* dev, HWND hWnd) {
     const bool okReset = ATTACH_HOOK(g_Reset, Reset_hook);
     const bool okEnd = ATTACH_HOOK(g_EndScene, EndScene_hook);
     g_bDeviceHooked = okReset && okEnd;
-    DebugMessage("D3D9: overlay %s (Ctrl+F10 opens settings)", g_bDeviceHooked ? "ready" : "unavailable: hook failed");
+    DebugMessage("D3D9: overlay %s (Ctrl+F10 settings, Ctrl+F11 freezes the HUD)", g_bDeviceHooked ? "ready" : "unavailable: hook failed");
 }
 
 // ---- CreateDevice -----------------------------------------------------------------------------------------------
@@ -263,15 +266,22 @@ IDirect3D9* WINAPI Direct3DCreate9_hook(UINT sdk) {
 bool D3D9Host_HandleMessage(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     if (!g_bDeviceHooked || !g_bSettingsWindow) return false;
     const bool bKeyDown = msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN;   // F10 arrives as WM_SYSKEYDOWN
-    if (bKeyDown && wParam == VK_F10 && (GetKeyState(VK_CONTROL) & 0x8000) && !(lParam & (1 << 30))) {
+    const bool bCtrlFresh = (GetKeyState(VK_CONTROL) & 0x8000) && !(lParam & (1 << 30));
+    if (bKeyDown && wParam == VK_F10 && bCtrlFresh) {
         g_bVisible = !g_bVisible;
         return true;
     }
-    if (!g_bVisible || !g_bImGuiReady) return false;
-    if (bKeyDown && wParam == VK_ESCAPE) {
+    if (bKeyDown && wParam == VK_F11 && bCtrlFresh) {
+        Overlay_ToggleFreeze();
+        return true;
+    }
+    if (!g_bImGuiReady) return false;
+    if (g_bVisible && bKeyDown && wParam == VK_ESCAPE) {
         g_bVisible = false;
         return true;
     }
+    // ImGui sees every message (hover, drags); the game loses only what an overlay window wants. A frozen HUD
+    // takes no input, so then nothing is held back.
     ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam);
     const ImGuiIO& io = ImGui::GetIO();
     if (msg >= WM_MOUSEFIRST && msg <= WM_MOUSELAST && io.WantCaptureMouse) return true;
