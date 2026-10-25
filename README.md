@@ -33,6 +33,9 @@ without the stamp (1.4.1 and older) count as build 0.
   the server release sets `MIN_CLIENT_BUILD` to that build (SlumsMS `tools/release/set-min-client-build`).
 - One-off builds may pass `-DSLUMS_RELEASE_OVERRIDE=` / `-DSLUMS_BUILD_NUMBER_OVERRIDE=` (remove with `-U`).
 - `buildstamp_wire_format` (ctest) checks the bytes against the server's golden packet.
+- Players see the same numbers: the window title is `SlumsMS <release> (<build>)`, the login screen's bottom-right
+  corner shows `SlumsMS <release> · build <build>` (`src/buildshow.cpp`), and slums.dll carries a version resource
+  (FileVersion `1.6.0.10600`, ProductVersion the release, custom `SlumsBuild` = the build; `src/slums.rc.in`).
 
 ## Server address
 

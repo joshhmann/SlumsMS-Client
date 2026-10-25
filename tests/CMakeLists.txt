@@ -3,6 +3,9 @@ target_include_directories(buildstamp_proto_test PRIVATE ../src)
 target_compile_definitions(buildstamp_proto_test PRIVATE SLUMS_BUILD_NUMBER=${SLUMS_BUILD_NUMBER} "SLUMS_RELEASE=\"${SLUMS_RELEASE}\"")
 add_test(NAME buildstamp_wire_format COMMAND buildstamp_proto_test)
 
+add_executable(buildshow_test buildshow_test.cpp)
+add_test(NAME buildshow_text COMMAND buildshow_test)
+
 add_executable(checked_hook_test checked_hook_test.cpp)
 add_test(NAME checked_hook_transactions COMMAND checked_hook_test)
 

@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "hook.h"
 #include "constants.h"
+#include "buildshow_text.h"
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -109,7 +110,12 @@ HWND WINAPI CreateWindowExA_hook(DWORD dwExStyle, LPCSTR lpClassName, LPCSTR lpW
     if (!lpClassName || strcmp(lpClassName, "MapleStoryClass") != 0) {
         return CreateWindowExA_orig(dwExStyle, lpClassName, lpWindowName, dwStyle, X, Y, nWidth, nHeight, hWndParent, hMenu, hInstance, lpParam);
     }
-    HWND hWnd = CreateWindowExA_orig(dwExStyle, lpClassName, lpWindowName, 0xCA0000, CW_USEDEFAULT, CW_USEDEFAULT, nWidth, nHeight, hWndParent, hMenu, hInstance, lpParam);
+    // "SlumsMS 1.6.0 (10600)": the same release and build as the login stamp. Set again after creation in case
+    // another CreateWindowExA hook (MapleRoot's has its own name) sits inside this one.
+    char sTitle[96];
+    BuildShow::WindowTitle(sTitle, sizeof(sTitle), SLUMS_RELEASE, SLUMS_BUILD_NUMBER);
+    HWND hWnd = CreateWindowExA_orig(dwExStyle, lpClassName, sTitle, 0xCA0000, CW_USEDEFAULT, CW_USEDEFAULT, nWidth, nHeight, hWndParent, hMenu, hInstance, lpParam);
+    if (hWnd) SetWindowTextA(hWnd, sTitle);
     g_WndProc = reinterpret_cast<WNDPROC>(SetWindowLongPtrA(hWnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(&WndProc_hook)));
     return hWnd;
 }
