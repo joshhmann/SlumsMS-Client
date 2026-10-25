@@ -20,6 +20,7 @@
 #include "invresize_patch.h"
 #include "wvs/config.h"
 #include "wvs/util.h"
+#include "wvs/wnd.h"
 #include "ztl/ztl.h"
 
 #include <windows.h>
@@ -345,8 +346,108 @@ void LoadSizeOnce() {
 }
 
 // ===================================================================================================
+// Locked slots: cells past the tab's capacity get the client's own Item/disabled art (or a grey wash).
+// ===================================================================================================
+IWzCanvas* DisabledSlotArt() {
+    static bool bTried = false;
+    static IWzCanvasPtr pArt;
+    if (!bTried) {
+        bTried = true;
+        try {
+            pArt = get_unknown(get_rm()->GetObjectA(L"UI/UIWindow.img/Item/disabled"));
+        } catch (...) {
+        }
+        if (!pArt) LOG_ONCE("Inventory resize: Item/disabled is missing; locked slots get a grey wash");
+    }
+    return pArt;
+}
+
+// +0x14 is the client's own "created" test: CreateWnd sets it from a counter (0x009DE4DF), Destroy early-outs on
+// 0 (0x009E00C2) and clears it (0x009E013D). The singleton outlives a close and CreateWnd would REOPEN a closed
+// window, so without this the catch-up resize would pop the inventory open every frame.
+bool IsWindowLive(void* pThis) {
+    return pThis && SehReadInt(pThis, kOff_CreateId) != 0;
+}
+
+void DrawLockedCells(void* pThis) {
+    const int cells = g_nCols * g_nRows;
+    const int nFirst = SehReadInt(pThis, kOff_FirstSlot);
+    const int v0 = FirstLockedCell(nFirst, SehTabSlotCount(pThis), cells);
+    if (v0 >= cells) return;
+    try {
+        IWzCanvasPtr pCanvas = reinterpret_cast<CWnd*>(pThis)->GetCanvas();
+        if (!pCanvas) return;
+        IWzCanvas* pArt = DisabledSlotArt();
+        for (int v = v0; v < cells; ++v) {
+            SlotRect r;
+            if (!SlotRectFor(nFirst + v, nFirst, nFirst + cells, g_nCols, r)) continue;
+            if (pArt) {
+                pCanvas->CopyEx(r.left, r.top, pArt, CANVAS_ALPHATYPE::CA_OVERWRITE, kIcon, kIcon, 0, 0, kIcon, kIcon);
+            } else {
+                pCanvas->raw_DrawRectangle(r.left, r.top, kIcon, kIcon, 0x80808080);   // blends: greys the cell
+            }
+        }
+    } catch (...) {
+        LOG_ONCE("Inventory resize: drawing locked slots failed; they stay plain");
+    }
+}
+
+// ===================================================================================================
+// New-item tab flash, centred on the stretched tab (see invresize_patch.h).
+// ===================================================================================================
+bool SehTabEdges(void* pThis, int nTab, int& left, int& right) {
+    __try {
+        char* pCtrl = *reinterpret_cast<char**>(reinterpret_cast<char*>(pThis) + kOff_TabCtrl);
+        if (!pCtrl) return false;
+        const int idx = nTab - 1;
+        if (idx < 0 || idx >= *reinterpret_cast<int*>(pCtrl + kOff_TabCount)) return false;
+        At<void(__thiscall*)(void*)>(kAddr_TabLayout)(pCtrl);   // the edges are only set by a layout pass
+        char* pTab = At<char*(__thiscall*)(void*, int)>(kAddr_TabGetAt)(pCtrl + kOff_TabList, idx);
+        if (!pTab) return false;
+        left = *reinterpret_cast<int*>(pTab + kOff_TabLeft);
+        right = *reinterpret_cast<int*>(pTab + kOff_TabRight);
+        return right > left;
+    } __except (EXCEPTION_EXECUTE_HANDLER) { return false; }
+}
+
+}  // namespace
+
+int __stdcall NewTabBase(void* pThis, int nTab) {
+    const int stock = nTab * kStockTabPitch;
+    if (g_nCols == kStockCols) return stock;
+    int left = 0, right = 0;
+    if (!SehTabEdges(pThis, nTab, left, right)) return stock;
+    return FlashBase(left, right);
+}
+
+// Replaces `mov ecx,eax / imul ecx,ecx,0x22` (5 bytes): in eax = tab, esi = CUIItem; out ecx = base.
+__declspec(naked) void NewTabX_thunk() {
+    __asm {
+        push edx
+        push eax
+        push eax
+        push esi
+        call NewTabBase
+        mov ecx, eax
+        pop eax
+        pop edx
+        ret
+    }
+}
+
+namespace {
+
+// ===================================================================================================
 // Hooks
 // ===================================================================================================
+typedef void(__thiscall* t_Draw)(void*, const RECT*);
+auto CUIItem_Draw = reinterpret_cast<t_Draw>(static_cast<uintptr_t>(kAddr_Draw));
+
+void __fastcall Draw_hook(void* pThis, void* /*edx*/, const RECT* pRect) {
+    CUIItem_Draw(pThis, pRect);
+    if (IsWindowLive(pThis)) DrawLockedCells(pThis);
+}
+
 typedef void(__thiscall* t_OnCreate)(void*, void*);
 auto CUIItem_OnCreate = reinterpret_cast<t_OnCreate>(static_cast<uintptr_t>(kAddr_OnCreate));
 
@@ -386,13 +487,6 @@ int GripUnderCursor(void*& pOutWnd) {
     if (absL <= 0 && absT <= 0) return 0;
     pOutWnd = pThis;
     return GripAt(W, H, sp.x - absL, sp.y - absT);
-}
-
-// +0x14 is the client's own "created" test: CreateWnd sets it from a counter (0x009DE4DF), Destroy early-outs on
-// 0 (0x009E00C2) and clears it (0x009E013D). The singleton outlives a close and CreateWnd would REOPEN a closed
-// window, so without this the catch-up resize would pop the inventory open every frame.
-bool IsWindowLive(void* pThis) {
-    return pThis && SehReadInt(pThis, kOff_CreateId) != 0;
 }
 
 // The first window of a session can be built before the per-character size is known; fix it up once live.
@@ -552,6 +646,10 @@ void AttachInvResizeMod() {
     if (!(ATTACH_HOOK(CUIItem_OnCreate, OnCreate_hook))) {
         DebugMessage("Inventory resize: OnCreate detour failed; background stays stock");
     }
+    if (!(ATTACH_HOOK(CUIItem_Draw, Draw_hook))) {
+        DebugMessage("Inventory resize: Draw detour failed; slots past the tab's size are not marked");
+    }
+    PatchCall(kAddr_NewTabX, &NewTabX_thunk);
 
     g_bInstalled = true;
     DebugMessage("Inventory resize: ready (grid %d-%d cols x %d-%d rows, max %d cells; narrow mode forced at 0x%08X)",

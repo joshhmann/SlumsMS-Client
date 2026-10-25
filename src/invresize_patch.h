@@ -53,6 +53,32 @@ constexpr std::uint32_t kAddr_InputSystem      = 0x00BEC33C;
 constexpr std::uint32_t kAddr_GetCursorPos     = 0x0059A388;
 constexpr std::uint32_t kAddr_SetCursorState   = 0x0059A6D9;
 
+// Locked slots. CUIItem::Draw (0x0081DC20, ret 4, vtable entry 0x00B39134) draws slots [first, min(first + cells,
+// count)), where count is the tab's ZArray size and slot 0 is unused, so a 24-slot tab has count 25. Cells past it
+// are drawn after the stock Draw with the client's own locked-slot art, Item/disabled (32x32, sits on the icon).
+constexpr std::uint32_t kAddr_Draw = 0x0081DC20;
+
+// New-item tab flash. 0x0081E5DA shows the effect for CWvsContext's new item (+0x38C4 id, +0x38C8 slot): the tab is
+// id / 1000000 and its Item/New/Tab0|Tab1 plate (34px) goes to x = tab*34 - 31 (label tab*34 - 25), the stock
+// 34px tab positions. With the strip stretched to W - 5 that lands on the wrong tab, so `mov ecx,eax / imul
+// ecx,ecx,0x22` at 0x0081E658 becomes a call that returns the same tab*34 at stock width and otherwise a base that
+// centres the plate on the real tab. esi is the CUIItem there; eax (the tab) and edx are preserved.
+constexpr std::uint32_t kAddr_NewTabX       = 0x0081E658;
+constexpr std::uint32_t kAddr_TabLayout     = 0x004DE15F;   // CCtrlTab: recompute each tab's left/right (plain ret)
+constexpr std::uint32_t kAddr_TabGetAt      = 0x004DE8CB;   // ZList<TAB>::GetAt(index), ret 4
+constexpr int kOff_TabCtrl   = 0x5B4;   // CUIItem -> CCtrlTab*
+constexpr int kOff_TabList   = 0x40;    // CCtrlTab ZList of tabs; its count at +0x48
+constexpr int kOff_TabCount  = 0x48;
+constexpr int kOff_TabLeft   = 0x4;     // TAB left / right, relative to the control
+constexpr int kOff_TabRight  = 0x8;
+constexpr int kTabCtrlLeft   = 3;       // CreateCtrl(parent, 0x7D0, type 1, l 3, t 0x17, w, 0) at 0x0081C964
+constexpr int kStockTabPitch = 34;
+constexpr int kFlashW        = 34;      // Item/New/Tab0|Tab1 width
+constexpr int kFlashPlateOff = 31;      // plate x = base - 31, label x = base - 25
+
+// The base for tab `tab` whose stretched edges are [left, right) inside the control: plate centred on the tab.
+constexpr int FlashBase(int left, int right) { return kTabCtrlLeft + (left + right) / 2 - kFlashW / 2 + kFlashPlateOff; }
+
 // ---- CUIItem field offsets ----------------------------------------------------------------------
 constexpr int kOff_CreateId  = 0x14;    // CreateWnd's serial; Destroy zeroes it: the "window is built" test
 constexpr int kOff_Width     = 0x24;
@@ -91,6 +117,14 @@ constexpr int SnapCols(int wantW) { return (wantW - 13) / kColPitch; }
 constexpr int SnapRows(int wantH) { return (wantH - 68) / kRowPitch; }
 
 constexpr int Clamp(int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); }
+
+// First visible cell index (0-based) that is past the tab's capacity; cells from here on are locked.
+// count <= 0 means the tab could not be read: lock nothing.
+constexpr int FirstLockedCell(int nFirst, int nCount, int cells) {
+    if (nCount <= 0) return cells;
+    const int v = nCount - nFirst;
+    return v < 0 ? 0 : (v > cells ? cells : v);
+}
 
 constexpr bool ValidSize(int cols, int rows) {
     return cols >= kMinCols && cols <= kMaxCols && rows >= kMinRows && rows <= kMaxRows && cols * rows <= kMaxCells;
@@ -212,10 +246,15 @@ inline constexpr unsigned char kDrawLimit[]   = {0x83, 0xC0, 0x18, 0x3B, 0xC1}; 
 inline constexpr unsigned char kRangeBias[]   = {0x83, 0xC0, 0xEA, 0x6A, 0x04};      // add eax,-0x16 / push 4
 inline constexpr unsigned char kStrideA[]     = {0x8D, 0x04, 0xBD, 0x01, 0x00, 0x00, 0x00};
 inline constexpr unsigned char kStrideB[]     = {0x8D, 0x04, 0x85, 0x01, 0x00, 0x00, 0x00};
+inline constexpr unsigned char kDraw[]        = {0xB8, 0x7C, 0x21, 0xAC, 0x00, 0xE8, 0x6E, 0x2F, 0x24, 0x00};
+inline constexpr unsigned char kNewTabX[]     = {0x8B, 0xC8, 0x6B, 0xC9, 0x22, 0x89, 0x4D, 0x90};  // mov ecx,eax / imul ecx,ecx,0x22 / mov [ebp-0x70],ecx
+inline constexpr unsigned char kTabCreate[]   = {0x6A, 0x17, 0x6A, 0x03, 0x6A, 0x01, 0x68, 0xD0, 0x07, 0x00, 0x00};  // push 0x17 / 3 / 1 / 0x7D0
+inline constexpr unsigned char kTabLayout[]   = {0xB8, 0x42, 0x67, 0xA8, 0x00, 0xE8, 0x2F, 0x2A, 0x58, 0x00};
+inline constexpr unsigned char kTabGetAt[]    = {0x8B, 0x51, 0x08, 0x8B, 0xC2, 0x56, 0x8B, 0x74, 0x24, 0x08};
 }  // namespace detail
 
 // kRangeBias also covers the scroll divisor (push 4 at 0x0081D296), so every Imm site is guarded.
-constexpr std::array<Guard, 18> kGuards = {{
+constexpr std::array<Guard, 23> kGuards = {{
     {kAddr_GetSlotRect, detail::kGetSlotRect, sizeof(detail::kGetSlotRect), "GetSlotRect"},
     {kAddr_GetSlotPosPoint, detail::kHitTest, sizeof(detail::kHitTest), "GetSlotPositionFromPoint"},
     {kAddr_OnCreate, detail::kOnCreate, sizeof(detail::kOnCreate), "OnCreate"},
@@ -234,6 +273,11 @@ constexpr std::array<Guard, 18> kGuards = {{
     {0x0081D293, detail::kRangeBias, sizeof(detail::kRangeBias), "scroll range bias"},
     {0x0081D083, detail::kStrideA, sizeof(detail::kStrideA), "scroll stride (SetTab)"},
     {0x0081D2C4, detail::kStrideB, sizeof(detail::kStrideB), "scroll stride (OnScroll)"},
+    {kAddr_Draw, detail::kDraw, sizeof(detail::kDraw), "Draw"},
+    {kAddr_NewTabX, detail::kNewTabX, sizeof(detail::kNewTabX), "new-item tab x"},
+    {0x0081C96C, detail::kTabCreate, sizeof(detail::kTabCreate), "tab strip position"},
+    {kAddr_TabLayout, detail::kTabLayout, sizeof(detail::kTabLayout), "tab layout"},
+    {kAddr_TabGetAt, detail::kTabGetAt, sizeof(detail::kTabGetAt), "tab lookup"},
 }};
 
 }  // namespace InvResize

@@ -69,6 +69,19 @@ void CheckGeometry() {
     Check(GripAt(W, H, 50, 100) == 0, "inside the grid");
     Check(GripAt(W, H, W, 100) == 0, "outside the window");
 
+    // Locked cells: count includes the unused slot 0, so 24 slots = count 25 = cells 0..23 usable.
+    Check(FirstLockedCell(1, 25, 24) == 24, "stock 4x6 with 24 slots locks nothing");
+    Check(FirstLockedCell(1, 25, 96) == 24, "8x12 with 24 slots locks from the 25th cell");
+    Check(FirstLockedCell(1, 97, 96) == 96, "a full 96-slot tab locks nothing");
+    Check(FirstLockedCell(1, 0, 96) == 96, "an unreadable tab locks nothing");
+    Check(FirstLockedCell(5, 25, 24) == 20, "scrolled by a row: the last 4 visible cells are past 24 slots");
+    Check(FirstLockedCell(30, 25, 24) == 0, "scrolled past the end: everything locked");
+
+    // New-item flash: centred on the tab. A stock 34px tab at [0,34) gives the stock base 34 (plate x 3).
+    Check(FlashBase(0, 34) == 1 * kStockTabPitch, "stock tab 1 keeps the stock flash position");
+    Check(FlashBase(34, 68) == 2 * kStockTabPitch, "stock tab 2 keeps the stock flash position");
+    Check(FlashBase(0, 88) - kFlashPlateOff + kFlashW / 2 == kTabCtrlLeft + 44, "stretched tab: plate centred");
+
     Check(ValidSize(4, 6) && ValidSize(16, 7) && ValidSize(8, 14) && ValidSize(10, 12), "sizes inside the ceiling");
     Check(!ValidSize(16, 8) && !ValidSize(9, 14) && !ValidSize(3, 6) && !ValidSize(4, 15), "sizes outside");
 }
@@ -166,6 +179,12 @@ void CheckClient(const char* path) {
     Check(std::memcmp(exe.At(0x0081E3A3, 3), "\xC2\x08\x00", 3) == 0, "GetSlotRect ret 8");
     Check(std::memcmp(exe.At(0x0081DC1D, 3), "\xC2\x08\x00", 3) == 0, "GetSlotPositionFromPoint ret 8");
     Check(*exe.At(0x0081E5D9, 1) == 0xC3, "ToggleFull plain ret");
+    Check(std::memcmp(exe.At(0x0081E252, 3), "\xC2\x04\x00", 3) == 0, "Draw ret 4");
+    Check(*exe.At(0x004DE470, 1) == 0xC3, "tab layout plain ret");
+    Check(std::memcmp(exe.At(0x004DE91B, 3), "\xC2\x04\x00", 3) == 0, "tab lookup ret 4");
+    Check(exe.CallersOf(0x0081E5DA) == 4, "the new-item effect has 4 callers, all in CUIItem");
+    // The call written at kAddr_NewTabX covers exactly mov ecx,eax / imul ecx,ecx,0x22 and leaves the store.
+    Check(std::memcmp(exe.At(kAddr_NewTabX + 5, 3), "\x89\x4D\x90", 3) == 0, "mov [ebp-0x70],ecx follows the call");
 }
 }  // namespace
 
