@@ -476,6 +476,17 @@ void AttachUiLayoutMod() {
     if (!(ATTACH_HOOK(g_pBarHitTest, BarHitTest_hook))) DebugMessage("UI layout: could not hook CUIStatusBar::HitTest");
 }
 
+// For hud_native.cpp: a control group's pixel offset from its stock place, and the bar window's top-left.
+bool UiLayout_GroupOffset(int e, int& dx, int& dy, int& winX, int& winY) {
+    dx = dy = 0;
+    Rect win;
+    if (e < kFirstGroup || e > kLastGroup || !BarWindow(win)) return false;
+    GroupOffsetPx(e, dx, dy);
+    winX = win.left;
+    winY = win.top;
+    return true;
+}
+
 // For hud_native.cpp: where a native module draws now (screen pixels, its top-left).
 void UiLayout_NativeRect(int e, int /*w*/, int /*h*/, int& x, int& y) {
     Rect home;

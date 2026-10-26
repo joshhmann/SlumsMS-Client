@@ -35,6 +35,7 @@ int get_screen_width();
 int get_screen_height();
 bool HudVitals_Read(long& hp, long& maxHp, long& mp, long& maxMp);   // hud_vitals.cpp
 void UiLayout_NativeRect(int e, int sliceW, int sliceH, int& x, int& y);   // uilayout.cpp
+bool UiLayout_GroupOffset(int e, int& dx, int& dy, int& winX, int& winY);   // uilayout.cpp
 
 namespace {
 
@@ -79,6 +80,12 @@ struct Module {
     int x = INT_MIN, y = INT_MIN;
 };
 Module g_mod[4];   // HP, MP, EXP, level
+
+// The chat input row's art (base/backgrnd2 x 0-563, rows 7-28; on the bar canvas at y 514), carried along when the
+// chat input group moves: the stock row is cleared and this copy follows the box.
+constexpr int kChatRowTop = 7, kChatRowH = 22, kChatRowW = 563;
+IWzGr2DLayer* g_pChatRow = nullptr;
+int g_nChatX = INT_MIN, g_nChatY = INT_MIN;
 bool g_bBuilt = false, g_bFailed = false;
 void* g_pBar = nullptr;
 IWzFontPtr g_fontJob, g_fontName;
@@ -187,6 +194,8 @@ bool Build() {
     const int lw = kLevelPlateR - kLevelPlateL;
     g_mod[3].plate = NewLayer(Slice(plate, kLevelPlateL, kPlateTop, lw, kPlateH), lw, kPlateH, kZPlate);
     g_mod[3].text = NewLayer(NewCanvas(1, 1), 1, 1, kZTop);
+    g_pChatRow = NewLayer(Slice(plate, 0, kChatRowTop, kChatRowW, kChatRowH), kChatRowW, kChatRowH, kZPlate);
+    if (g_pChatRow) g_pChatRow->visible = 0;
     g_fontJob = MakeFont(11, 0xFFFFFFFF);
     g_fontName = MakeFont(11, 0xFFFFFFFF);
     return g_mod[3].plate && g_mod[3].text;
@@ -336,7 +345,32 @@ void UpdateLevel() {
     }
 }
 
+void UpdateChatRow() {
+    if (!g_pChatRow || !CUIStatusBar::IsInstantiated()) return;
+    int dx = 0, dy = 0, wx = 0, wy = 0;
+    if (!UiLayout_GroupOffset(UiLayout::kChatInput, dx, dy, wx, wy)) return;
+    const bool moved = dx || dy;
+    if (moved) {
+        // Stock row: cleared on the plate art canvas (+0xCD0) every frame, as the other stock pieces.
+        char* b = reinterpret_cast<char*>(CUIStatusBar::GetInstance());
+        IWzGr2DLayer* plateLayer = *reinterpret_cast<IWzGr2DLayer**>(b + kOff_PlateCanvasLayer);
+        if (plateLayer) {
+            IWzCanvasPtr pc = plateLayer->Getcanvas(Ztl_variant_t(0L));
+            if (pc) pc->DrawRectangle(0, 507 + kChatRowTop, kChatRowW, kChatRowH, 0x00FFFFFF);
+        }
+        const int x = wx + dx, y = wy + 507 + kChatRowTop + dy;
+        if (x != g_nChatX || y != g_nChatY) {
+            g_nChatX = x;
+            g_nChatY = y;
+            Place(g_pChatRow, x, y);
+        }
+    }
+    if (g_pChatRow->visible != (moved ? 1 : 0)) g_pChatRow->visible = moved ? 1 : 0;
+}
+
 void DropAll() {
+    Drop(g_pChatRow);
+    g_nChatX = g_nChatY = INT_MIN;
     for (Module& m : g_mod) {
         Drop(m.plate);
         Drop(m.slice);
@@ -386,6 +420,7 @@ void HudNative_Tick() {
         UpdateGauge(1, mp, maxMp, false);
         UpdateGauge(2, MapleRoot_CurrentExp(), MapleRoot_NextLevelExp(), true);
         UpdateLevel();
+        UpdateChatRow();
         SetStockPiecesVisible(false);
         ClearStockArt();
     } catch (...) {
