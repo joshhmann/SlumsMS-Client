@@ -104,3 +104,26 @@ Done:
 
 Next: the chat input and selector as a module, a level/job/name module, then hiding the painted parts the modules replace. Known: the game menu still pops up at its stock place above the bar, not next to a moved Menu button.
 
+## The owner's split (2026-10-26, docs/160-ui-split-reference.png)
+
+Separate pieces: chat log, chat input row, level/job/name, HP, MP, EXP, the main buttons, the icon row, and the quick
+slots. What the stock bar is made of (status bar layers, logged on TEST):
+
+| Layer (CUIStatusBar +) | Size | What |
+| --- | --- | --- |
+| 0x18 (window layer) | 1920x578 | level number, job, name, HP/MP/EXP numbers (drawn text) |
+| 0xCD0 | 800x578 | bar art: the level plate, the gauge plate, the chat row |
+| 0xCCC | 800x578 | the light background strip |
+| 0xCD4 | 340x31 | the three gauge bars with their HP/MP/EXP labels |
+| 0xBB8 / 0xBBC / 0xBC0 (+0xBC4) | 1x16 stretched | HP / MP / EXP gauge covers (width follows the value) |
+| 0xCB8 | 434x14 | the chat input line |
+| 0xCC4 (+0xCC8, 0xD80) | 1008x80 | the quick slot |
+
+Moving layers works for whole pieces (the quick slot, the gauge bars as one strip), but HP, MP, EXP and level/name
+each span several shared canvases. They become **native modules**: our own game layers, built from the stock
+UI.wz art (gauge, plate and number sprites) and the game font, placed and sized freely. Then the stock pieces they
+replace are hidden (their layers, and their areas of the shared canvases). Same look as stock, fully split, and the
+base for an ElvUI-style skin later.
+
+Done in the split: buttons, icon row, chat input (moves, types, survives chat open/close).
+
