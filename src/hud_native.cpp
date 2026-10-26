@@ -132,7 +132,6 @@ int DrawNumbers(IWzCanvasPtr c, int x, int y, const char* s) {
 
 bool Build() {
     IWzCanvasPtr bar = Sprite(L"UI/StatusBar.img/gauge/bar");
-    IWzCanvasPtr grad = Sprite(L"UI/StatusBar.img/gauge/graduation");
     if (!bar || !CWndMan::IsInstantiated()) return false;
     for (int i = 0; i < 3; ++i) {
         const Gauge& g = kGauges[i];
@@ -140,7 +139,6 @@ bool Build() {
         IWzCanvasPtr slice = NewCanvas(w, kStripH);
         if (!slice) return false;
         slice->CopyEx(0, 0, bar, CANVAS_ALPHATYPE::CA_OVERWRITE, w, kStripH, g.sliceL, 0, w, kStripH);
-        if (grad) slice->Copy(-g.sliceL, 0, grad);   // tick marks over the gauge (Copy clips to the slice)
         g_mod[i].slice = NewLayer(slice, w, kStripH);
         g_mod[i].cover = NewLayer(NewCanvas(1, kInH), 1, kInH);
         g_mod[i].text = NewLayer(NewCanvas(1, 11), 1, 11);
@@ -161,6 +159,15 @@ void SetStockGaugesVisible(bool on) {
         for (int off : kOff_Covers) set(off);
     } catch (...) {
     }
+}
+
+// The stock HP/MP/EXP numbers are drawn on the bar window's own canvas (+0x18, 1920x578, layer at origin y + 22), in
+// the strip's label row: canvas x 218-558, y 545-558. Cleared every frame while the modules show (the bar redraws
+// them whenever a value changes, after this tick).
+void ClearStockNumbers() {
+    if (!CUIStatusBar::IsInstantiated()) return;
+    IWzCanvasPtr c = CUIStatusBar::GetInstance()->m_pLayer->Getcanvas(Ztl_variant_t(0L));
+    if (c) c->DrawRectangle(218, 545, 340, 13, 0x00FFFFFF);
 }
 
 void Update(int i, long long value, long long max, bool exp) {
@@ -256,6 +263,7 @@ void HudNative_Tick() {
         Update(1, mp, maxMp, false);
         Update(2, MapleRoot_CurrentExp(), MapleRoot_NextLevelExp(), true);
         SetStockGaugesVisible(false);
+        ClearStockNumbers();
     } catch (...) {
         DropAll();
         g_bFailed = true;
