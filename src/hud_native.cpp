@@ -1,13 +1,19 @@
 // ============================================================
-// hud_native.cpp: HP, MP and EXP as separate stock-art modules (1.6.0, the owner's split of the status bar).
+// hud_native.cpp: HP, MP, EXP and level/job/name as separate stock-art modules (1.6.0, the owner's split of the
+// status bar).
 //
-// The stock bar draws its three gauges as one strip (CUIStatusBar +0xCD4, UI/StatusBar.img/gauge/bar, 340x31), with
-// a gray cover per gauge for the missing part (+0xBB8 HP, +0xBBC MP, +0xBC0/+0xBC4 EXP, gauge/gray stretched) and the
-// numbers drawn on the bar. Each module here is our own game layers built from those same sprites: its slice of the
-// strip, its own gray cover, and its numbers from UI/StatusBar.img/number. They move like the other Edit UI elements
-// (uilayout.cpp: UiLayout_NativeRect / kNativeHp..kNativeExp); the stock strip and covers are hidden while they show.
-// Measured on TEST (1600x900): the strip sits at bar origin + (218, 567); covers start at +60 (HP), +168 (MP),
-// +223 (EXP) for the values then, which puts the gauge interiors at x 2-107, 109-215 and 223-338, rows 14-30.
+// The stock bar paints these pieces across shared canvases:
+//   plate art     base/backgrnd2 on the 800x578 canvas of CUIStatusBar +0xCD0 (x 0-209 level plate, 209-563 gauge
+//                 plate, rows 36-69, from canvas y 507)
+//   gauge strip   gauge/bar on +0xCD4 (340x31, at plate x 218, 2 px below the plate top)
+//   gauge covers  gauge/gray stretched on +0xBB8 HP, +0xBBC MP, +0xBC0/+0xBC4 EXP
+//   text          on the bar window's canvas (+0x18): HP/MP/EXP numbers in the strip's label row, the level digits
+//                 (UI/Basic.img/LevelNo, x 50, y 554), job (x 87, y 545) and name (x 87, y 560), by
+//                 CUIStatusBar::SetStatusValue (0x008D82B8) and SetNumberValue
+// Each module here is our own game layers built from the same sprites (its plate slice, its gauge slice and cover or
+// its level digits and text), so it looks like the stock piece and moves on its own (uilayout.cpp: kNativeHp ..
+// kNativeLevel). While they show, the stock strip and covers are hidden and the stock plate art and text are cleared.
+// Gauge interiors, measured on TEST from the stock covers: x 2-107 (HP), 109-215 (MP), 223-338 (EXP), rows 14-30.
 // ============================================================
 
 #include "pch.h"
@@ -23,6 +29,7 @@
 #include <algorithm>
 #include <climits>
 #include <cstdio>
+#include <cstring>
 
 int get_screen_width();
 int get_screen_height();
@@ -32,33 +39,49 @@ void UiLayout_NativeRect(int e, int sliceW, int sliceH, int& x, int& y);   // ui
 namespace {
 
 constexpr uintptr_t kAddr_UserLocal = 0x00BEBF98;
+constexpr uintptr_t kAddr_CWvsContext = 0x00BE7918;
+constexpr uintptr_t kAddr_GetCharacterData = 0x00425D0B;
+constexpr uintptr_t kAddr_ZRefRelease = 0x00428C44;
+constexpr uintptr_t kAddr_FuseShort = 0x004746DD;   // returns int with hpmp.cpp's detour
+constexpr uintptr_t kAddr_FuseByte = 0x0047465D;
+constexpr uintptr_t kAddr_GetJobName = 0x004A77EF;  // const char* get_job_name(int)
+constexpr uintptr_t kAddr_SetFont = 0x0046341A;     // IWzFont::SetFont(face, size, colour, ...)
+constexpr int kOff_PlateCanvasLayer = 0xCD0;
 constexpr int kOff_StripLayer = 0xCD4;
 constexpr int kOff_Covers[] = {0xBB8, 0xBBC, 0xBC0, 0xBC4};
-constexpr int kLayerZ = 3;   // above the bar's own layers (z 1-2), under windows
+constexpr int kZPlate = 3, kZTop = 4;   // above the bar's own layers (z 1-2), under windows
 
-struct Gauge {
-    int elem;          // UiLayout element
-    int sliceL, sliceR;   // the module's slice of gauge/bar
-    int inL, inR;      // the gauge interior inside the strip
-    const wchar_t* label;
-};
-const Gauge kGauges[3] = {
-    {UiLayout::kNativeHp, 0, 109, 2, 107, L"HP"},
-    {UiLayout::kNativeMp, 109, 219, 109, 215, L"MP"},
-    {UiLayout::kNativeExp, 219, 340, 223, 338, L"EXP"},
-};
+constexpr int kPlateTop = 36, kPlateH = 34;   // plate rows in base/backgrnd2
+constexpr int kStripDy = 2;                   // the gauge strip starts 2 px below the plate top
+constexpr int kStripX = 218;                  // the gauge strip's x on the plate art
 constexpr int kInTop = 14, kInH = 16, kStripH = 31;
 
+struct Gauge {
+    int elem;             // UiLayout element
+    int plateL, plateR;   // its slice of base/backgrnd2
+    int sliceL, sliceR;   // its slice of gauge/bar (strip coordinates)
+    int inL, inR;         // the gauge interior (strip coordinates)
+};
+const Gauge kGauges[3] = {
+    {UiLayout::kNativeHp, 209, 327, 0, 109, 2, 107},
+    {UiLayout::kNativeMp, 327, 437, 109, 219, 109, 215},
+    {UiLayout::kNativeExp, 437, 563, 219, 340, 223, 338},
+};
+constexpr int kLevelPlateL = 0, kLevelPlateR = 209;
+
 struct Module {
-    IWzGr2DLayer* slice = nullptr;
-    IWzGr2DLayer* cover = nullptr;
-    IWzGr2DLayer* text = nullptr;
+    IWzGr2DLayer* plate = nullptr;
+    IWzGr2DLayer* slice = nullptr;   // gauges: gauge/bar slice
+    IWzGr2DLayer* cover = nullptr;   // gauges: gray cover
+    IWzGr2DLayer* text = nullptr;    // numbers, or level digits + job + name
     long long shownValue = -1, shownMax = -1;
+    char shownText[64] = {};
     int x = INT_MIN, y = INT_MIN;
 };
-Module g_mod[3];
+Module g_mod[4];   // HP, MP, EXP, level
 bool g_bBuilt = false, g_bFailed = false;
 void* g_pBar = nullptr;
+IWzFontPtr g_fontJob, g_fontName;
 
 IWzCanvasPtr Sprite(const wchar_t* path) {
     try {
@@ -77,8 +100,8 @@ IWzCanvasPtr NewCanvas(int w, int h) {
     return c;
 }
 
-IWzGr2DLayer* NewLayer(IWzCanvasPtr canvas, int w, int h) {
-    IWzGr2DLayerPtr made = get_gr()->CreateLayer(0, 0, w, h, kLayerZ, static_cast<IUnknown*>(canvas), Ztl_variant_t());
+IWzGr2DLayer* NewLayer(IWzCanvasPtr canvas, int w, int h, int z) {
+    IWzGr2DLayerPtr made = get_gr()->CreateLayer(0, 0, w, h, z, static_cast<IUnknown*>(canvas), Ztl_variant_t());
     if (!made) return nullptr;
     made->origin = static_cast<IUnknown*>(CWndMan::GetInstance()->m_pOrgWindow);
     made->color = 0xFFFFFFFF;   // a new layer's colour is 0x00FFFFFF: alpha 0, nothing drawn
@@ -95,33 +118,44 @@ void Drop(IWzGr2DLayer*& p) {
     p = nullptr;
 }
 
-// Replaces a layer's single canvas.
 void SetCanvas(IWzGr2DLayer* layer, IWzCanvasPtr canvas) {
     layer->RemoveCanvas(-2);
     layer->InsertCanvas(canvas, 1000, 255, 255);
     layer->color = 0xFFFFFFFF;
 }
 
-// "[12345/67890]" or "12345[45.67%]" in the bar's own number sprites; returns the drawn width.
-int DrawNumbers(IWzCanvasPtr c, int x, int y, const char* s) {
+IWzFontPtr MakeFont(int size, DWORD col) {
+    IWzFontPtr f;
+    PcCreateObject<IWzFontPtr>(L"Canvas#Font", f, nullptr);
+    if (f) {
+        HRESULT hr = reinterpret_cast<HRESULT(__thiscall*)(IWzFont*, Ztl_bstr_t, unsigned long, unsigned long,
+            const Ztl_variant_t&)>(kAddr_SetFont)(f, L"Dotum", size, col, Ztl_variant_t(L""));
+        if (FAILED(hr)) f = nullptr;
+    }
+    return f;
+}
+
+// Digits and signs from a sprite folder ("UI/StatusBar.img/number" or "UI/Basic.img/LevelNo"); returns the end x.
+int DrawSpriteNumber(IWzCanvasPtr c, int x, int y, const char* s, const wchar_t* folder) {
     for (; *s; ++s) {
-        const wchar_t* name = nullptr;
-        wchar_t digit[48];
+        wchar_t path[96];
+        const wchar_t* leaf = nullptr;
         switch (*s) {
-        case '[': name = L"UI/StatusBar.img/number/Lbracket"; break;
-        case ']': name = L"UI/StatusBar.img/number/Rbracket"; break;
-        case '/': name = L"UI/StatusBar.img/number/slash"; break;
-        case '%': name = L"UI/StatusBar.img/number/percent"; break;
+        case '[': leaf = L"Lbracket"; break;
+        case ']': leaf = L"Rbracket"; break;
+        case '/': leaf = L"slash"; break;
+        case '%': leaf = L"percent"; break;
         case '.':
             c->DrawRectangle(x, y + 6, 1, 1, 0xFFFFFFFF);
             x += 2;
             continue;
         default:
-            if (*s < '0' || *s > '9') continue;
-            swprintf_s(digit, L"UI/StatusBar.img/number/%c", static_cast<wchar_t>(*s));
-            name = digit;
+            break;
         }
-        IWzCanvasPtr sp = Sprite(name);
+        if (leaf) swprintf_s(path, L"%s/%s", folder, leaf);
+        else if (*s >= '0' && *s <= '9') swprintf_s(path, L"%s/%c", folder, static_cast<wchar_t>(*s));
+        else continue;
+        IWzCanvasPtr sp = Sprite(path);
         if (!sp) continue;
         const int top = (*s == '[' || *s == ']') ? y : y + 1;
         c->Copy(x, top, sp);
@@ -130,24 +164,35 @@ int DrawNumbers(IWzCanvasPtr c, int x, int y, const char* s) {
     return x;
 }
 
-bool Build() {
-    IWzCanvasPtr bar = Sprite(L"UI/StatusBar.img/gauge/bar");
-    if (!bar || !CWndMan::IsInstantiated()) return false;
-    for (int i = 0; i < 3; ++i) {
-        const Gauge& g = kGauges[i];
-        const int w = g.sliceR - g.sliceL;
-        IWzCanvasPtr slice = NewCanvas(w, kStripH);
-        if (!slice) return false;
-        slice->CopyEx(0, 0, bar, CANVAS_ALPHATYPE::CA_OVERWRITE, w, kStripH, g.sliceL, 0, w, kStripH);
-        g_mod[i].slice = NewLayer(slice, w, kStripH);
-        g_mod[i].cover = NewLayer(NewCanvas(1, kInH), 1, kInH);
-        g_mod[i].text = NewLayer(NewCanvas(1, 11), 1, 11);
-        if (!g_mod[i].slice || !g_mod[i].cover || !g_mod[i].text) return false;
-    }
-    return true;
+// A slice of a sprite as its own canvas.
+IWzCanvasPtr Slice(IWzCanvasPtr src, int l, int t, int w, int h) {
+    IWzCanvasPtr c = NewCanvas(w, h);
+    if (c && src) c->CopyEx(0, 0, src, CANVAS_ALPHATYPE::CA_OVERWRITE, w, h, l, t, w, h);
+    return c;
 }
 
-void SetStockGaugesVisible(bool on) {
+bool Build() {
+    IWzCanvasPtr bar = Sprite(L"UI/StatusBar.img/gauge/bar");
+    IWzCanvasPtr plate = Sprite(L"UI/StatusBar.img/base/backgrnd2");
+    if (!bar || !plate || !CWndMan::IsInstantiated()) return false;
+    for (int i = 0; i < 3; ++i) {
+        const Gauge& g = kGauges[i];
+        const int pw = g.plateR - g.plateL, sw = g.sliceR - g.sliceL;
+        g_mod[i].plate = NewLayer(Slice(plate, g.plateL, kPlateTop, pw, kPlateH), pw, kPlateH, kZPlate);
+        g_mod[i].slice = NewLayer(Slice(bar, g.sliceL, 0, sw, kStripH), sw, kStripH, kZTop);
+        g_mod[i].cover = NewLayer(NewCanvas(1, kInH), 1, kInH, kZTop);
+        g_mod[i].text = NewLayer(NewCanvas(1, 11), 1, 11, kZTop);
+        if (!g_mod[i].plate || !g_mod[i].slice || !g_mod[i].cover || !g_mod[i].text) return false;
+    }
+    const int lw = kLevelPlateR - kLevelPlateL;
+    g_mod[3].plate = NewLayer(Slice(plate, kLevelPlateL, kPlateTop, lw, kPlateH), lw, kPlateH, kZPlate);
+    g_mod[3].text = NewLayer(NewCanvas(1, 1), 1, 1, kZTop);
+    g_fontJob = MakeFont(11, 0xFFFFFFFF);
+    g_fontName = MakeFont(11, 0xFFFFFFFF);
+    return g_mod[3].plate && g_mod[3].text;
+}
+
+void SetStockPiecesVisible(bool on) {
     if (!CUIStatusBar::IsInstantiated()) return;
     char* b = reinterpret_cast<char*>(CUIStatusBar::GetInstance());
     auto set = [&](int off) {
@@ -161,29 +206,36 @@ void SetStockGaugesVisible(bool on) {
     }
 }
 
-// The stock HP/MP/EXP numbers are drawn on the bar window's own canvas (+0x18, 1920x578, layer at origin y + 22), in
-// the strip's label row: canvas x 218-558, y 545-558. Cleared every frame while the modules show (the bar redraws
-// them whenever a value changes, after this tick).
-void ClearStockNumbers() {
+// The stock plate art (on +0xCD0's canvas) and text (on the window canvas) under the modules, cleared every frame:
+// the bar repaints them on stat changes, after this tick.
+void ClearStockArt() {
     if (!CUIStatusBar::IsInstantiated()) return;
-    IWzCanvasPtr c = CUIStatusBar::GetInstance()->m_pLayer->Getcanvas(Ztl_variant_t(0L));
-    if (c) c->DrawRectangle(218, 545, 340, 13, 0x00FFFFFF);
+    char* b = reinterpret_cast<char*>(CUIStatusBar::GetInstance());
+    IWzCanvasPtr win = CUIStatusBar::GetInstance()->m_pLayer->Getcanvas(Ztl_variant_t(0L));
+    if (win) win->DrawRectangle(0, 507 + kPlateTop - 2, 563, kPlateH + 4, 0x00FFFFFF);
+    IWzGr2DLayer* plateLayer = *reinterpret_cast<IWzGr2DLayer**>(b + kOff_PlateCanvasLayer);
+    if (plateLayer) {
+        IWzCanvasPtr pc = plateLayer->Getcanvas(Ztl_variant_t(0L));
+        if (pc) pc->DrawRectangle(0, 507 + kPlateTop, 563, kPlateH, 0x00FFFFFF);
+    }
 }
 
-void Update(int i, long long value, long long max, bool exp) {
+void Place(IWzGr2DLayer* l, int x, int y) {
+    l->RelMove(x, y, Ztl_variant_t(), Ztl_variant_t());
+}
+
+void UpdateGauge(int i, long long value, long long max, bool exp) {
     Module& m = g_mod[i];
     const Gauge& g = kGauges[i];
-    const int w = g.sliceR - g.sliceL;
     int x = 0, y = 0;
-    UiLayout_NativeRect(g.elem, w, kStripH, x, y);
-    const bool moved = x != m.x || y != m.y;
+    UiLayout_NativeRect(g.elem, g.plateR - g.plateL, kPlateH, x, y);
+    bool place = x != m.x || y != m.y;
     if (value != m.shownValue || max != m.shownMax) {
         m.shownValue = value;
         m.shownMax = max;
         const int inW = g.inR - g.inL;
         const long long v = value < 0 ? 0 : (value > max ? max : value);
-        const int filled = max > 0 ? static_cast<int>(inW * v / max) : 0;
-        const int missing = inW - filled;
+        const int missing = inW - (max > 0 ? static_cast<int>(inW * v / max) : 0);
         IWzCanvasPtr gray = Sprite(L"UI/StatusBar.img/gauge/gray");
         IWzCanvasPtr cover = NewCanvas((std::max)(missing, 1), kInH);
         if (cover && gray && missing > 0) {
@@ -199,32 +251,103 @@ void Update(int i, long long value, long long max, bool exp) {
         }
         IWzCanvasPtr text = NewCanvas(140, 11);
         if (text) {
-            DrawNumbers(text, 0, 0, s);
+            DrawSpriteNumber(text, 0, 0, s, L"UI/StatusBar.img/number");
             SetCanvas(m.text, text);
         }
-        m.x = INT_MIN;   // re-place the cover for its new width
+        place = true;
     }
-    if (moved || m.x == INT_MIN) {
+    if (!place) return;
+    m.x = x;
+    m.y = y;
+    // The strip slice sits where it sits on the stock plate: plate x of the slice = kStripX + sliceL.
+    const int sx = x + (kStripX + g.sliceL - g.plateL), sy = y + kStripDy;
+    const int inW = g.inR - g.inL;
+    const long long v = m.shownValue < 0 ? 0 : (m.shownValue > m.shownMax ? m.shownMax : m.shownValue);
+    const int filled = m.shownMax > 0 ? static_cast<int>(inW * v / m.shownMax) : 0;
+    Place(m.plate, x, y);
+    Place(m.slice, sx, sy);
+    Place(m.cover, sx + (g.inL - g.sliceL) + filled, sy + kInTop);
+    Place(m.text, sx + (exp ? 24 : 17), sy + 2);
+    m.cover->visible = filled < inW ? 1 : 0;
+}
+
+struct Who {
+    bool ok;
+    int level;
+    int job;
+    char name[16];
+};
+
+Who ReadWho() {
+    Who w = {};
+    __try {
+        char* ctx = *reinterpret_cast<char**>(kAddr_CWvsContext);
+        if (!ctx) return w;
+        void* out[2] = {nullptr, nullptr};
+        void* ret = reinterpret_cast<void*(__thiscall*)(void*, void**)>(kAddr_GetCharacterData)(ctx, out);
+        char* cs = *reinterpret_cast<char**>(reinterpret_cast<char*>(ret) + 4);
+        if (out[1]) reinterpret_cast<void(__thiscall*)(void**, int)>(kAddr_ZRefRelease)(out, 0);
+        if (!cs) return w;
+        w.level = static_cast<unsigned char>(reinterpret_cast<unsigned char(__cdecl*)(const void*, unsigned)>(
+            kAddr_FuseByte)(cs + 0x33, *reinterpret_cast<unsigned*>(cs + 0x35)));
+        w.job = static_cast<short>(reinterpret_cast<int(__cdecl*)(const void*, unsigned)>(kAddr_FuseShort)(
+            cs + 0x39, *reinterpret_cast<unsigned*>(cs + 0x3D)));
+        memcpy(w.name, cs + 4, 13);
+        w.name[13] = 0;
+        w.ok = true;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        w.ok = false;
+    }
+    return w;
+}
+
+void UpdateLevel() {
+    Module& m = g_mod[3];
+    const Who w = ReadWho();
+    if (!w.ok) return;
+    int x = 0, y = 0;
+    UiLayout_NativeRect(UiLayout::kNativeLevel, kLevelPlateR - kLevelPlateL, kPlateH, x, y);
+    char key[64];
+    sprintf_s(key, "%d|%d|%s", w.level, w.job, w.name);
+    if (strcmp(key, m.shownText) != 0) {
+        strcpy_s(m.shownText, key);
+        IWzCanvasPtr c = NewCanvas(kLevelPlateR - kLevelPlateL, kPlateH);
+        if (c) {
+            char lv[8];
+            sprintf_s(lv, "%d", w.level);
+            const int adjust = w.level > 99 ? 12 : (w.level > 9 ? 6 : 0);
+            // Stock places (window canvas): digits x 50, y 554; job x 87, y 545; name x 87, y 560. Plate top = 543.
+            DrawSpriteNumber(c, 50 - adjust, 554 - 543 - 1, lv, L"UI/Basic.img/LevelNo");
+            const char* job = reinterpret_cast<const char*(__cdecl*)(int)>(kAddr_GetJobName)(w.job);
+            try {
+                if (g_fontJob && job) c->DrawTextA(87, 545 - 543, Ztl_bstr_t(job), g_fontJob, Ztl_variant_t(), Ztl_variant_t());
+                if (g_fontName) c->DrawTextA(87, 560 - 543, Ztl_bstr_t(w.name), g_fontName, Ztl_variant_t(), Ztl_variant_t());
+            } catch (...) {
+            }
+            SetCanvas(m.text, c);
+        }
+        m.x = INT_MIN;
+    }
+    if (x != m.x || y != m.y) {
         m.x = x;
         m.y = y;
-        const int inW = g.inR - g.inL;
-        const long long v = m.shownValue < 0 ? 0 : (m.shownValue > m.shownMax ? m.shownMax : m.shownValue);
-        const int filled = m.shownMax > 0 ? static_cast<int>(inW * v / m.shownMax) : 0;
-        m.slice->RelMove(x, y, Ztl_variant_t(), Ztl_variant_t());
-        m.cover->RelMove(x + (g.inL - g.sliceL) + filled, y + kInTop, Ztl_variant_t(), Ztl_variant_t());
-        m.text->RelMove(x + (exp ? 24 : 17), y + 2, Ztl_variant_t(), Ztl_variant_t());
-        m.cover->visible = filled < inW ? 1 : 0;
+        Place(m.plate, x, y);
+        Place(m.text, x, y);
     }
 }
 
 void DropAll() {
     for (Module& m : g_mod) {
+        Drop(m.plate);
         Drop(m.slice);
         Drop(m.cover);
         Drop(m.text);
         m.shownValue = m.shownMax = -1;
+        m.shownText[0] = 0;
         m.x = m.y = INT_MIN;
     }
+    g_fontJob = nullptr;
+    g_fontName = nullptr;
     g_bBuilt = false;
 }
 
@@ -251,23 +374,24 @@ void HudNative_Tick() {
             if (!Build()) {
                 DropAll();
                 g_bFailed = true;
-                DebugMessage("Native HUD: could not build the HP/MP/EXP modules; the stock gauges stay");
+                DebugMessage("Native HUD: could not build the modules; the stock bar stays");
                 return;
             }
             g_bBuilt = true;
-            DebugMessage("Native HUD: HP, MP and EXP modules up");
+            DebugMessage("Native HUD: HP, MP, EXP and level modules up");
         }
         long hp = 0, maxHp = 0, mp = 0, maxMp = 0;
         if (!HudVitals_Read(hp, maxHp, mp, maxMp)) return;
-        Update(0, hp, maxHp, false);
-        Update(1, mp, maxMp, false);
-        Update(2, MapleRoot_CurrentExp(), MapleRoot_NextLevelExp(), true);
-        SetStockGaugesVisible(false);
-        ClearStockNumbers();
+        UpdateGauge(0, hp, maxHp, false);
+        UpdateGauge(1, mp, maxMp, false);
+        UpdateGauge(2, MapleRoot_CurrentExp(), MapleRoot_NextLevelExp(), true);
+        UpdateLevel();
+        SetStockPiecesVisible(false);
+        ClearStockArt();
     } catch (...) {
         DropAll();
         g_bFailed = true;
-        SetStockGaugesVisible(true);
-        LOG_ONCE("Native HUD: drawing failed; the stock gauges are back");
+        SetStockPiecesVisible(true);
+        LOG_ONCE("Native HUD: drawing failed; the stock bar is back");
     }
 }

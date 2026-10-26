@@ -41,9 +41,9 @@ constexpr int kOff_QuickSlotLayer = 0xCC4;             // CUIStatusBar: the quic
 // sees and grabs is the bottom strip: the chat input row plus the gauges and buttons.
 constexpr int kBarGripH = 66;
 constexpr const char* kStoreKey = "Software\\SlumsMS\\Layout";
-constexpr const char* kSuffix[kElemCount] = {"bar", "qs", "btn", "icons", "chat", "hp", "mp", "exp"};
+constexpr const char* kSuffix[kElemCount] = {"bar", "qs", "btn", "icons", "chat", "hp", "mp", "exp", "lv"};
 constexpr const char* kLabel[kElemCount] = {"Status bar", "Quick slots", "Buttons", "Icon buttons", "Chat input", "HP",
-    "MP", "EXP"};
+    "MP", "EXP", "Level and name"};
 
 // The status bar's own child controls (CWnd::m_lpChildren, CCtrlWnd per MapleRoot's API header: id +0x14, position
 // vector m_pLTCtrl +0x18, width +0x1C, height +0x20). Listed on TEST 2026-10-26: Shop 1000, Trade 1001, Menu 1002,
@@ -272,10 +272,11 @@ int DrawnWidth(IWzGr2DLayer* layer, int fallback) {
     }
 }
 
-// A native module's stock place: its slice of the stock gauge strip (CUIStatusBar +0xCD4) where the unmoved bar has
-// it. Slices: HP 0-109, MP 109-219, EXP 219-340 (hud_native.cpp).
+// A native module's stock place, where the unmoved bar has it, as hud_native.cpp lays it out: each module is its
+// slice of the bar's plate art (base/backgrnd2 x 0-209 level, 209-327 HP, 327-437 MP, 437-563 EXP), from 2 px above
+// the gauge strip (CUIStatusBar +0xCD4, at x 218 of the plate art), 34 tall.
 bool NativeHome(int e, Rect& r) {
-    static const int kSliceL[3] = {0, 109, 219}, kSliceR[3] = {109, 219, 340};
+    static const int kPlateL[4] = {209, 327, 437, 0}, kPlateR[4] = {327, 437, 563, 209};
     if (e < kFirstNative || e >= kElemCount || !CUIStatusBar::IsInstantiated() || !CWndMan::IsInstantiated()) return false;
     try {
         char* b = reinterpret_cast<char*>(CUIStatusBar::GetInstance());
@@ -284,7 +285,7 @@ bool NativeHome(int e, Rect& r) {
         IWzVector2DPtr lb = CWndMan::ms_pOrgWindowEx[CWnd::UIOrigin::Origin_LB];
         if (!strip || !org || !lb) return false;
         const int i = e - kFirstNative;
-        r = Rect{lb->x - org->x + strip->rx + kSliceL[i], lb->y - org->y + strip->ry, kSliceR[i] - kSliceL[i], 31};
+        r = Rect{lb->x - org->x + strip->rx - 218 + kPlateL[i], lb->y - org->y + strip->ry - 2, kPlateR[i] - kPlateL[i], 34};
         return true;
     } catch (...) {
         return false;
@@ -553,7 +554,7 @@ void UiLayout_DrawGrips() {
     }
     // The buttons and icon row sit inside the status bar's strip: decide who is under the cursor ourselves (smallest
     // first) and let only that grip take the mouse, instead of trusting ImGui's window order.
-    static const int kPriority[kElemCount] = {kNativeHp, kNativeMp, kNativeExp, kMainButtons, kIconRow, kChatInput, kQuickSlot,
+    static const int kPriority[kElemCount] = {kNativeHp, kNativeMp, kNativeExp, kNativeLevel, kMainButtons, kIconRow, kChatInput, kQuickSlot,
         kStatusBar};
     int hot = g_nDragging;
     if (hot < 0) {
