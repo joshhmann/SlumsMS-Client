@@ -139,9 +139,8 @@ void CaptureStock(char* bar) {
         if (!lt) return;
         g_stock[g_nStock++] = StockCtl{c, g, lt->rx, lt->ry, *reinterpret_cast<int*>(c + kOff_CtrlW),
             *reinterpret_cast<int*>(c + kOff_CtrlH)};
-        DebugMessage("UI layout: control %u (group %d) stock %d,%d", *reinterpret_cast<unsigned*>(c + kOff_CtrlId), g,
-            g_stock[g_nStock - 1].x, g_stock[g_nStock - 1].y);
     });
+    LOG_ONCE_PER_ID(g_nStock, "UI layout: %d status bar buttons in movable groups", g_nStock);
 }
 
 // The bar window on screen (its layer's top-left, the window's full size).
@@ -182,40 +181,6 @@ void GroupOffsetPx(int e, int& dx, int& dy) {
     Rect home, bounds;
     if (!GroupHome(e, home, bounds)) return;
     PixelOffsetWithin(g_off[e], home, bounds, get_screen_width(), get_screen_height(), dx, dy);
-}
-
-// After the bar paints itself: a moved group leaves the bar's own art behind (a plate under the buttons), so its
-// stock area is cleared to transparent, which reads as the piece having left the bar. Controls paint after their
-// window, so the buttons themselves are untouched.
-void ClearMovedStockAreas(void* bar) {
-    if (bar != g_pStockBar || g_nStock == 0) return;
-    int off[kElemCount][2] = {};
-    bool any = false;
-    for (int e = kFirstGroup; e < kElemCount; ++e) {
-        GroupOffsetPx(e, off[e][0], off[e][1]);
-        any = any || off[e][0] || off[e][1];
-    }
-    if (!any) return;
-    IWzCanvasPtr canvas = CUIStatusBar::GetInstance()->m_pLayer->Getcanvas(Ztl_variant_t(0L));
-    if (!canvas) return;
-    for (int e = kFirstGroup; e < kElemCount; ++e) {
-        if (!off[e][0] && !off[e][1]) continue;
-        for (int i = 0; i < g_nStock; ++i) {
-            const StockCtl& sc = g_stock[i];
-            if (sc.group == e) canvas->DrawRectangle(sc.x, sc.y, sc.w, sc.h, 0x00FFFFFF);
-        }
-    }
-}
-
-auto g_pBarDraw = reinterpret_cast<void(__thiscall*)(void*, const RECT*)>(0x008D80A4);   // CUIStatusBar::Draw
-
-void __fastcall BarDraw_hook(void* bar, void* /*edx*/, const RECT* rc) {
-    g_pBarDraw(bar, rc);
-    try {
-        ClearMovedStockAreas(bar);
-    } catch (...) {
-        LOG_ONCE("UI layout: could not clear the moved buttons' place on the status bar");
-    }
 }
 
 // Puts every grouped control where its group's offset says; repaints the bar if anything moved.
@@ -421,15 +386,6 @@ void WriteUiState() {
 }
 
 }  // namespace
-
-void AttachUiLayoutMod() {
-    const unsigned char stock[] = {0xB8, 0x64, 0x24, 0xAD, 0x00, 0xE8};   // mov eax, 0xAD2464 / call (SEH prolog)
-    if (std::memcmp(reinterpret_cast<const void*>(0x008D80A4), stock, sizeof(stock)) != 0) {
-        DebugMessage("UI layout: CUIStatusBar::Draw has unexpected bytes; moved buttons leave the bar's art behind");
-        return;
-    }
-    if (!(ATTACH_HOOK(g_pBarDraw, BarDraw_hook))) DebugMessage("UI layout: could not hook CUIStatusBar::Draw");
-}
 
 // From CWvsApp::CallUpdate (bypass.cpp), every frame: keeps the button groups where the player put them, also
 // when the client rebuilds the status bar, and writes the QA state when it is switched on.
