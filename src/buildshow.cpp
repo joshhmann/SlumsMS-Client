@@ -8,6 +8,7 @@
 
 #include "pch.h"
 #include "debug.h"
+#include "constants.h"
 #include "buildshow_text.h"
 #include "buildstamp_proto.h"
 #include "wvs/util.h"
