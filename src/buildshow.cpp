@@ -81,17 +81,13 @@ void Build(int sw, int sh) {
         made->origin = static_cast<IUnknown*>(CWndMan::GetInstance()->m_pOrgWindow);
         made->RelMove(sw - w - kMargin, sh - h - kMargin, Ztl_variant_t(), Ztl_variant_t());
         made->InsertCanvas(canvas, 1000, 255, 255);
+        made->color = 0xFFFFFFFF;   // a new layer's colour is 0x00FFFFFF: alpha 0, nothing drawn
         made->visible = 1;
         g_pLayer = made;
         g_pLayer->AddRef();
         g_nBuiltW = sw;
         g_nBuiltH = sh;
-        IWzVector2DPtr org = CWndMan::GetInstance()->m_pOrgWindow;
-        DebugMessage("Build label: shown at %d,%d (%dx%d) on a %dx%d screen; layer x %d y %d z %d %dx%d color %08X "
-            "visible %d; window origin %d,%d", sw - w - kMargin, sh - h - kMargin, w, h, sw, sh,
-            static_cast<int>(g_pLayer->x), static_cast<int>(g_pLayer->y), g_pLayer->Getz(), g_pLayer->Getwidth(),
-            g_pLayer->Getheight(), static_cast<unsigned>(g_pLayer->Getcolor()), g_pLayer->Getvisible(),
-            static_cast<int>(org->x), static_cast<int>(org->y));
+        DebugMessage("Build label: shown at %d,%d on a %dx%d screen", sw - w - kMargin, sh - h - kMargin, sw, sh);
     } catch (...) {
         Release();
         g_bFailed = true;   // not worth retrying every frame; the title still shows the build
@@ -102,10 +98,6 @@ void Build(int sw, int sh) {
 }  // namespace
 
 void BuildShow_Tick() {
-    void* stage = *reinterpret_cast<void**>(kAddr_CurrentStage);
-    LOG_ONCE_PER_ID(static_cast<int>(stage ? *reinterpret_cast<uintptr_t*>(stage) : 0) + (CWndMan::IsInstantiated() ? 1 : 0),
-        "Build label: stage vftable 0x%08X, window manager %d",
-        static_cast<unsigned>(stage ? *reinterpret_cast<uintptr_t*>(stage) : 0), CWndMan::IsInstantiated() ? 1 : 0);
     if (!OnLoginStage()) {
         Release();
         return;
