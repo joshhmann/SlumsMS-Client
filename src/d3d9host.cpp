@@ -165,6 +165,7 @@ void DrawOverlay(IDirect3DDevice9* dev) {
         ImGuiIO& io = ImGui::GetIO();
         // Only over an overlay window: elsewhere the game's own cursor is the one on top.
         io.MouseDrawCursor = io.WantCaptureMouse;
+        if (Overlay_BeforeFrame()) ImGui_ImplDX9_InvalidateDeviceObjects();   // re-upload the rebaked font
         ImGui_ImplDX9_NewFrame();
         ImGui_ImplWin32_NewFrame();
         ImGui::NewFrame();

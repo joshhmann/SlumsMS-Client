@@ -16,6 +16,7 @@ bool Overlay_HasHud();           // any widget switched on
 void Overlay_DrawHud();
 void Overlay_DrawSettings();     // the HUD section of the settings window
 bool Overlay_IsFrozen();
+bool Overlay_BeforeFrame();    // rebakes the font when its drawn size changed; true when it did
 bool Overlay_SnapOn();         // Edit UI snaps to OverlayPolicy::kGridFrac
 void Overlay_ToggleFreeze();
 

@@ -28,6 +28,7 @@ add_library(mapleroot_companion STATIC
     ijl15/ImGui/imgui_impl_win32.cpp
     ijl15/ImGui/imgui_tables.cpp
     ijl15/ImGui/imgui_widgets.cpp
+    ijl15/ImGui/misc/freetype/imgui_freetype.cpp
     ijl15/MapleClientCollectionTypes/ZAllocEx.cpp
     ijl15/MapleHook.cpp
     ijl15/NMCO/NMDataObject.cpp
@@ -47,10 +48,12 @@ add_library(mapleroot_companion STATIC
 target_compile_definitions(mapleroot_companion PRIVATE
     MAPLEROOT_KAENTAKE MAPLEROOT_SINGLE_DLL _MBCS _WINSOCK_DEPRECATED_NO_WARNINGS _CRT_SECURE_NO_WARNINGS)
 target_compile_options(mapleroot_companion PRIVATE /std:c++latest /permissive- /sdl /W0 /EHsc)
-target_include_directories(mapleroot_companion PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/ijl15/include/wil)
+target_include_directories(mapleroot_companion PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/ijl15/include/wil
+    ${CMAKE_CURRENT_SOURCE_DIR}/ijl15/ImGui)
 
 # Detours 4 (Global.h includes <detours.h> in single-DLL mode) and the Discord SDK import library.
 target_link_libraries(mapleroot_companion PUBLIC
+    freetype
     Detours
     ${CMAKE_CURRENT_SOURCE_DIR}/ijl15/discord_game_sdk.dll.lib
     comsuppw winmm ws2_32 d3d9)
