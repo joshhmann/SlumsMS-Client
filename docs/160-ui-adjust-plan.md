@@ -76,3 +76,17 @@ size), edited in one layout mode. Decisions:
   module: HP/MP/EXP split into separate modules. The rest of the modular HUD (scaling of stock pieces, presets,
   more modules, hiding replaced stock parts) leads 1.7.0.
 
+
+## State at the 1.6.0 merge (2026-10-26)
+
+Shipped in 1.6.0 (checked on TEST, AqClient, 1600x900):
+- **Edit UI:** Ctrl+F11, starts off every session.
+- **Mover:** the status bar and quick slot drag live and are saved per character. Clicks follow the move: the game menu, and items dropped on quick slots.
+- **Modules:** HP, MP and EXP are separate modules with show/hide, text size, opacity and reset.
+- **Editing aids:** a 1.25% snap grid, and "Reset UI layout" (widgets, bar, quick slot, inventory size).
+
+Known, not fixed in 1.6.0:
+- The status bar moves vertically only: its art is 1920 px wide, wider than most screens.
+- The ImGui modules draw over stock windows (inventory, stat window) when they overlap. The overlay draws after the game in EndScene, so drawing under the stock UI is not cheap. Hiding a module while a stock window covers it means walking `CWndMan::ms_lpWindow` for window rects. That is 1.7.0.
+- The stock-art look for modules (client gauge sprites as textures) is 1.7.0.
+- The QA driver (client-mcp) finds a moved status bar. Its chat_open check for a moved bar loads at the next Start-QA restart.
