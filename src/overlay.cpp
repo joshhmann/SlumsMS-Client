@@ -58,7 +58,7 @@ float g_fLastW = 0, g_fLastH = 0;
 void LoadPrefs() {
     if (g_bLoaded) return;
     g_bLoaded = true;
-    g_bFrozen = ReadPref("frozen", 1) != 0;
+    g_bFrozen = true;   // Edit UI is a temporary mode: every session starts with the layout fixed
     g_nTheme = static_cast<int>(ReadPref("theme", 0));
     g_nScale = static_cast<int>(ReadPref("scale", 100));
     for (auto& w : g_widgets) {
@@ -154,7 +154,6 @@ bool Overlay_IsFrozen() { return g_bFrozen; }
 
 void Overlay_ToggleFreeze() {
     g_bFrozen = !g_bFrozen;
-    WritePref("frozen", g_bFrozen ? 1 : 0);
     for (auto& w : g_widgets) w.place = true;
 }
 

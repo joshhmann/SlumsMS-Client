@@ -32,6 +32,9 @@ using namespace UiLayout;
 
 constexpr uintptr_t kAddr_UserLocal = 0x00BEBF98;      // CUserLocal singleton: set only while in the field
 constexpr int kOff_QuickSlotLayer = 0xCC4;             // CUIStatusBar: the quick slot layer OnCreate makes (0x008D156E)
+// CUIStatusBar's layer (and window) is 1920x578: it reserves the room its chat log expands into. The bar a player
+// sees and grabs is the bottom strip: the chat input row plus the gauges and buttons.
+constexpr int kBarGripH = 66;
 constexpr const char* kStoreKey = "Software\\SlumsMS\\Layout";
 constexpr const char* kSuffix[kElemCount] = {"bar", "qs"};
 constexpr const char* kLabel[kElemCount] = {"Status bar", "Quick slots"};
@@ -86,6 +89,11 @@ bool ScreenRect(int e, Rect& r) {
         r.top = layer->y - org->y;
         r.w = layer->Getwidth();
         r.h = layer->Getheight();
+        if (e == kStatusBar) {
+            r.top += r.h - kBarGripH;
+            r.h = kBarGripH;
+            r.w = (std::min)(r.w, get_screen_width() - r.left);
+        }
         return r.w > 0 && r.h > 0;
     } catch (...) {
         return false;
@@ -186,7 +194,7 @@ void UiLayout_DrawGrips() {
 
         const ImVec2 a(static_cast<float>(r.left), static_cast<float>(r.top));
         const ImVec2 b(static_cast<float>(r.left + r.w), static_cast<float>(r.top + r.h));
-        fg->AddRectFilled(a, b, hot ? IM_COL32(90, 150, 255, 70) : IM_COL32(90, 150, 255, 35));
+        if (hot) fg->AddRectFilled(a, b, IM_COL32(90, 150, 255, 60));   // idle: outline only, the bar stays readable
         fg->AddRect(a, b, IM_COL32(120, 175, 255, 230), 0.0f, 0, 2.0f);
         fg->AddText(ImVec2(a.x + 6, a.y + 4), IM_COL32(255, 255, 255, 240), kLabel[e]);
     }
