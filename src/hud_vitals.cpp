@@ -131,3 +131,10 @@ void HudVitals_DrawEXP() {
         ModuleBar("EXP", MapleRoot_CurrentExp(), MapleRoot_NextLevelExp(), true, ImVec4(0.93f, 0.74f, 0.18f, 1.0f));
     }
 }
+
+// For the native (stock-art) gauge modules (hud_native.cpp): HP, max HP, MP, max MP; false outside the field.
+bool HudVitals_Read(long& hp, long& maxHp, long& mp, long& maxMp) {
+    const Vitals v = ClientMatches() ? SehReadVitals() : Vitals{};
+    hp = v.hp; maxHp = v.maxHp; mp = v.mp; maxMp = v.maxMp;
+    return v.ok;
+}

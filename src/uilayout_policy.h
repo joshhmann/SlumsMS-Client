@@ -15,8 +15,10 @@
 
 namespace UiLayout {
 
-enum Elem { kStatusBar = 0, kQuickSlot, kMainButtons, kIconRow, kChatInput, kElemCount };
-constexpr int kFirstGroup = kMainButtons;   // from here on: groups of the status bar's own child controls
+enum Elem { kStatusBar = 0, kQuickSlot, kMainButtons, kIconRow, kChatInput, kNativeHp, kNativeMp, kNativeExp, kElemCount };
+constexpr int kFirstGroup = kMainButtons;   // kFirstGroup..kLastGroup: groups of the status bar's own child controls
+constexpr int kLastGroup = kChatInput;
+constexpr int kFirstNative = kNativeHp;     // from here on: our own stock-art modules (hud_native.cpp)
 
 constexpr int kFrac = 10000;
 

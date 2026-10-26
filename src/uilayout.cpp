@@ -41,8 +41,9 @@ constexpr int kOff_QuickSlotLayer = 0xCC4;             // CUIStatusBar: the quic
 // sees and grabs is the bottom strip: the chat input row plus the gauges and buttons.
 constexpr int kBarGripH = 66;
 constexpr const char* kStoreKey = "Software\\SlumsMS\\Layout";
-constexpr const char* kSuffix[kElemCount] = {"bar", "qs", "btn", "icons", "chat"};
-constexpr const char* kLabel[kElemCount] = {"Status bar", "Quick slots", "Buttons", "Icon buttons", "Chat input"};
+constexpr const char* kSuffix[kElemCount] = {"bar", "qs", "btn", "icons", "chat", "hp", "mp", "exp"};
+constexpr const char* kLabel[kElemCount] = {"Status bar", "Quick slots", "Buttons", "Icon buttons", "Chat input", "HP",
+    "MP", "EXP"};
 
 // The status bar's own child controls (CWnd::m_lpChildren, CCtrlWnd per MapleRoot's API header: id +0x14, position
 // vector m_pLTCtrl +0x18, width +0x1C, height +0x20). Listed on TEST 2026-10-26: Shop 1000, Trade 1001, Menu 1002,
@@ -50,7 +51,7 @@ constexpr const char* kLabel[kElemCount] = {"Status bar", "Quick slots", "Button
 // control keeps its own click handling (CWnd::HitTest asks each child at its own position).
 // The chat input group: the edit box 1011 (85,520 440x12), the chat-type selector 1012 and the small buttons 1004
 // beside the box.
-constexpr int kGroupCount = kElemCount - kFirstGroup;
+constexpr int kGroupCount = kLastGroup - kFirstGroup + 1;
 constexpr unsigned kGroupIds[kGroupCount][8] = {
     {1000, 1001, 1002, 1007, 0, 0, 0, 0},
     {2000, 2001, 2002, 2003, 1005, 1006, 1009, 0},
@@ -211,7 +212,7 @@ void ApplyGroups() {
     try {
         CaptureStock(bar);
         int off[kElemCount][2] = {};
-        for (int e = kFirstGroup; e < kElemCount; ++e) GroupOffsetPx(e, off[e][0], off[e][1]);
+        for (int e = kFirstGroup; e <= kLastGroup; ++e) GroupOffsetPx(e, off[e][0], off[e][1]);
         bool moved = false;
         IWzCanvasPtr canvas;
         ForEachGrouped(bar, [&](char* c, const StockCtl& sc) {
@@ -269,6 +270,35 @@ int DrawnWidth(IWzGr2DLayer* layer, int fallback) {
     } catch (...) {
         return fallback;
     }
+}
+
+// A native module's stock place: its slice of the stock gauge strip (CUIStatusBar +0xCD4) where the unmoved bar has
+// it. Slices: HP 0-109, MP 109-219, EXP 219-340 (hud_native.cpp).
+bool NativeHome(int e, Rect& r) {
+    static const int kSliceL[3] = {0, 109, 219}, kSliceR[3] = {109, 219, 340};
+    if (e < kFirstNative || e >= kElemCount || !CUIStatusBar::IsInstantiated() || !CWndMan::IsInstantiated()) return false;
+    try {
+        char* b = reinterpret_cast<char*>(CUIStatusBar::GetInstance());
+        IWzGr2DLayer* strip = *reinterpret_cast<IWzGr2DLayer**>(b + 0xCD4);
+        IWzVector2DPtr org = CWndMan::GetInstance()->m_pOrgWindow;
+        IWzVector2DPtr lb = CWndMan::ms_pOrgWindowEx[CWnd::UIOrigin::Origin_LB];
+        if (!strip || !org || !lb) return false;
+        const int i = e - kFirstNative;
+        r = Rect{lb->x - org->x + strip->rx + kSliceL[i], lb->y - org->y + strip->ry, kSliceR[i] - kSliceL[i], 31};
+        return true;
+    } catch (...) {
+        return false;
+    }
+}
+
+void NativeOffsetPx(int e, const Rect& home, int& dx, int& dy) {
+    const int sw = get_screen_width(), sh = get_screen_height();
+    if (e == g_nDragging) {
+        dx = g_nDragDx;
+        dy = g_nDragDy;
+        return;
+    }
+    PixelOffset(g_off[e], home, sw, sh, dx, dy);
 }
 
 // Where the element sits at offset 0, in screen pixels: worked out from the fixed anchors (the bottom-left origin
@@ -445,10 +475,27 @@ void AttachUiLayoutMod() {
     if (!(ATTACH_HOOK(g_pBarHitTest, BarHitTest_hook))) DebugMessage("UI layout: could not hook CUIStatusBar::HitTest");
 }
 
+// For hud_native.cpp: where a native module draws now (screen pixels, its top-left).
+void UiLayout_NativeRect(int e, int /*w*/, int /*h*/, int& x, int& y) {
+    Rect home;
+    if (!NativeHome(e, home)) home = Rect{0, 0, 0, 0};
+    int dx = 0, dy = 0;
+    NativeOffsetPx(e, home, dx, dy);
+    x = home.left + dx;
+    y = home.top + dy;
+}
+
+#ifdef MAPLEROOT_INTEGRATION
+void HudNative_Tick();   // hud_native.cpp
+#endif
+
 // From CWvsApp::CallUpdate (bypass.cpp), every frame: keeps the button groups where the player put them, also
 // when the client rebuilds the status bar, and writes the QA state when it is switched on.
 void UiLayout_Tick() {
     if (*reinterpret_cast<void* const*>(kAddr_UserLocal)) ApplyGroups();
+#ifdef MAPLEROOT_INTEGRATION
+    HudNative_Tick();
+#endif
     if (UiStateEnabled()) WriteUiState();
 }
 
@@ -492,7 +539,10 @@ void UiLayout_DrawGrips() {
     for (int e = 0; e < kElemCount; ++e) {
         Grip& g = grips[e];
         g.bounds = Rect{0, 0, sw, sh};
-        if (e >= kFirstGroup) {
+        if (e >= kFirstNative) {
+            g.ok = NativeHome(e, g.home);
+            if (g.ok) NativeOffsetPx(e, g.home, g.dx, g.dy);
+        } else if (e >= kFirstGroup) {
             g.ok = GroupHome(e, g.home, g.bounds);
             if (g.ok) GroupOffsetPx(e, g.dx, g.dy);
         } else {
@@ -503,7 +553,8 @@ void UiLayout_DrawGrips() {
     }
     // The buttons and icon row sit inside the status bar's strip: decide who is under the cursor ourselves (smallest
     // first) and let only that grip take the mouse, instead of trusting ImGui's window order.
-    static const int kPriority[kElemCount] = {kMainButtons, kIconRow, kChatInput, kQuickSlot, kStatusBar};
+    static const int kPriority[kElemCount] = {kNativeHp, kNativeMp, kNativeExp, kMainButtons, kIconRow, kChatInput, kQuickSlot,
+        kStatusBar};
     int hot = g_nDragging;
     if (hot < 0) {
         const ImVec2 m = ImGui::GetIO().MousePos;
