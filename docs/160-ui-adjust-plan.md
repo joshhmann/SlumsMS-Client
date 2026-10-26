@@ -90,3 +90,17 @@ Known, not fixed in 1.6.0:
 - The ImGui modules draw over stock windows (inventory, stat window) when they overlap. The overlay draws after the game in EndScene, so drawing under the stock UI is not cheap. Hiding a module while a stock window covers it means walking `CWndMan::ms_lpWindow` for window rects. That is 1.7.0.
 - The stock-art look for modules (client gauge sprites as textures) is 1.7.0.
 - The QA driver (client-mcp) finds a moved status bar. Its chat_open check for a moved bar loads at the next Start-QA restart.
+
+## Dissolving the bar (owner, 2026-10-26: in 1.6.0)
+
+The stock bar is three kinds of parts:
+- **Painted on its canvas:** HP/MP gauges and numbers, EXP, level/job/name. These are replaced by modules, and the stock painting is hidden.
+- **Child controls:** 17, logged on TEST. Shop 1000, Trade 1001, Menu 1002, Shortcut 1007, the icon row 2000-2003/1005/1006/1009, the chat input 1011 and its type selector 1012.
+- **Own layers:** the quick slot and the chat log.
+
+Done:
+- The two button groups move and click, through the HitTest hook above. Reset restores them.
+- The QA state file replaces pixel guessing.
+
+Next: the chat input and selector as a module, a level/job/name module, then hiding the painted parts the modules replace. Known: the game menu still pops up at its stock place above the bar, not next to a moved Menu button.
+

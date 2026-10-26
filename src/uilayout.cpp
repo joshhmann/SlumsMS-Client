@@ -385,7 +385,44 @@ void WriteUiState() {
     MoveFileExA("slums-ui-state.json.tmp", "slums-ui-state.json", MOVEFILE_REPLACE_EXISTING);
 }
 
+// CUIStatusBar::HitTest (0x008DE7DA) runs CWnd::HitTest, which finds the control under the point, then throws the
+// hit away (result 0: the click goes to the map) everywhere above the bar's strip: the window is 1920x578 to make room
+// for the chat log, and only its bottom (local y >= 507, or >= 427 right of x 647 with the quick slot up) is the bar.
+// A button group moved up into that area must keep its clicks: if the point is on one of our moved controls, the
+// hit stands (result 2, ppCtrl = the control), as it would at the control's stock place.
+auto g_pBarHitTest = reinterpret_cast<int(__thiscall*)(void*, int, int, void**)>(0x008DE7DA);
+
+int __fastcall BarHitTest_hook(void* bar, void*, int x, int y, void** ppCtrl) {
+    const int r = g_pBarHitTest(bar, x, y, ppCtrl);
+    if (r != 0 || bar != g_pStockBar) return r;
+    for (int i = 0; i < g_nStock; ++i) {
+        const StockCtl& sc = g_stock[i];
+        if (!g_off[sc.group].fx && !g_off[sc.group].fy && sc.group != g_nDragging) continue;   // at its stock place
+        try {
+            IWzVector2D* lt = CtlLT(sc.ctl);
+            if (!lt) continue;
+            const int cx = lt->rx, cy = lt->ry;
+            if (x >= cx && x < cx + sc.w && y >= cy && y < cy + sc.h) {
+                if (ppCtrl) *ppCtrl = sc.ctl;
+                return 2;
+            }
+        } catch (...) {
+        }
+    }
+    return r;
+}
+
 }  // namespace
+
+void AttachUiLayoutMod() {
+    // push ebp / mov ebp,esp / mov eax,[CWndMan singleton]
+    const unsigned char stock[] = {0x55, 0x8B, 0xEC, 0xA1, 0x0C, 0xC2, 0xBE, 0x00};
+    if (std::memcmp(reinterpret_cast<const void*>(0x008DE7DA), stock, sizeof(stock)) != 0) {
+        DebugMessage("UI layout: CUIStatusBar::HitTest has unexpected bytes; moved buttons click only near the bar");
+        return;
+    }
+    if (!(ATTACH_HOOK(g_pBarHitTest, BarHitTest_hook))) DebugMessage("UI layout: could not hook CUIStatusBar::HitTest");
+}
 
 // From CWvsApp::CallUpdate (bypass.cpp), every frame: keeps the button groups where the player put them, also
 // when the client rebuilds the status bar, and writes the QA state when it is switched on.
