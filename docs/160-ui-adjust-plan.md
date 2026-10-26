@@ -127,3 +127,8 @@ base for an ElvUI-style skin later.
 
 Done in the split: buttons, icon row, chat input (moves, types, survives chat open/close).
 
+
+## Parked (owner, 2026-10-26)
+
+Parsec and the exit-time crash (C0000005 in slums.dll's exit cleanup, seen once while the owner was on Parsec) are
+parked: Parsec is "easily bypassable". No DXVK or dgVoodoo work.
