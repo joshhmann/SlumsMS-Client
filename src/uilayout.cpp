@@ -67,8 +67,11 @@ int g_nDragging = -1;
 int g_nDragDx = 0, g_nDragDy = 0;   // the dragged element's pixel offset
 
 // A grouped control and where the client put it (bar coordinates), seen before we ever move it.
+// Keyed by control id and occurrence (1004 appears three times), never by pointer: the client destroys and
+// recreates controls (the chat edit box on every chat open/close), so a kept pointer dangles.
 struct StockCtl {
-    char* ctl;
+    unsigned id;
+    int nth;
     int group;
     int x, y, w, h;
 };
@@ -127,21 +130,51 @@ IWzVector2D* CtlLT(char* c) {
     return *reinterpret_cast<IWzVector2D**>(c + kOff_CtrlLT);
 }
 
+// The stock entry for a live control, or null.
+const StockCtl* StockOf(unsigned id, int nth) {
+    for (int i = 0; i < g_nStock; ++i) {
+        if (g_stock[i].id == id && g_stock[i].nth == nth) return &g_stock[i];
+    }
+    return nullptr;
+}
+
+// Calls f(control, stock) for each live grouped control, every time from the live list.
+template <typename F>
+void ForEachGrouped(char* bar, F f) {
+    unsigned seenId[32];
+    int seenN = 0;
+    ForEachBarControl(bar, [&](char* c) {
+        const unsigned id = *reinterpret_cast<unsigned*>(c + kOff_CtrlId);
+        if (GroupOf(id) < 0 || seenN >= 32) return;
+        int nth = 0;
+        for (int i = 0; i < seenN; ++i) nth += seenId[i] == id;
+        seenId[seenN++] = id;
+        if (const StockCtl* sc = StockOf(id, nth)) f(c, *sc);
+    });
+}
+
 // Remembers each grouped control's stock place the first time it is seen (and again for a new status bar).
 void CaptureStock(char* bar) {
     if (bar != g_pStockBar) {
         g_pStockBar = bar;
         g_nStock = 0;
     }
-    ForEachBarControl(bar, [](char* c) {
-        const int g = GroupOf(*reinterpret_cast<unsigned*>(c + kOff_CtrlId));
-        if (g < 0 || g_nStock >= 32) return;
+    unsigned seenId[32];
+    int seenN = 0;
+    ForEachBarControl(bar, [&](char* c) {
+        const unsigned id = *reinterpret_cast<unsigned*>(c + kOff_CtrlId);
+        const int g = GroupOf(id);
+        if (g < 0 || seenN >= 32) return;
+        int nth = 0;
+        for (int i = 0; i < seenN; ++i) nth += seenId[i] == id;
+        seenId[seenN++] = id;
         for (int i = 0; i < g_nStock; ++i) {
-            if (g_stock[i].ctl == c) return;
+            if (g_stock[i].id == id && g_stock[i].nth == nth) return;   // known: its stock place is already kept
         }
+        if (g_nStock >= 32) return;
         IWzVector2D* lt = CtlLT(c);
         if (!lt) return;
-        g_stock[g_nStock++] = StockCtl{c, g, lt->rx, lt->ry, *reinterpret_cast<int*>(c + kOff_CtrlW),
+        g_stock[g_nStock++] = StockCtl{id, nth, g, lt->rx, lt->ry, *reinterpret_cast<int*>(c + kOff_CtrlW),
             *reinterpret_cast<int*>(c + kOff_CtrlH)};
     });
     LOG_ONCE_PER_ID(g_nStock, "UI layout: %d status bar buttons in movable groups", g_nStock);
@@ -197,10 +230,9 @@ void ApplyGroups() {
         for (int e = kFirstGroup; e < kElemCount; ++e) GroupOffsetPx(e, off[e][0], off[e][1]);
         bool moved = false;
         IWzCanvasPtr canvas;
-        for (int i = 0; i < g_nStock; ++i) {
-            const StockCtl& sc = g_stock[i];
-            IWzVector2D* lt = CtlLT(sc.ctl);
-            if (!lt) continue;
+        ForEachGrouped(bar, [&](char* c, const StockCtl& sc) {
+            IWzVector2D* lt = CtlLT(c);
+            if (!lt) return;
             const int x = sc.x + off[sc.group][0], y = sc.y + off[sc.group][1];
             const int ox = lt->rx, oy = lt->ry;
             if (ox != x || oy != y) {
@@ -212,7 +244,7 @@ void ApplyGroups() {
                 lt->RelMove(x, y, Ztl_variant_t(), Ztl_variant_t());
                 moved = true;
             }
-        }
+        });
         if (moved) reinterpret_cast<void(__thiscall*)(void*, const RECT*)>(kAddr_WndInvalidateRect)(bar, nullptr);
     } catch (...) {
         LOG_ONCE("UI layout: could not move the status bar's buttons");
@@ -399,21 +431,22 @@ auto g_pBarHitTest = reinterpret_cast<int(__thiscall*)(void*, int, int, void**)>
 int __fastcall BarHitTest_hook(void* bar, void*, int x, int y, void** ppCtrl) {
     const int r = g_pBarHitTest(bar, x, y, ppCtrl);
     if (r != 0 || bar != g_pStockBar) return r;
-    for (int i = 0; i < g_nStock; ++i) {
-        const StockCtl& sc = g_stock[i];
-        if (!g_off[sc.group].fx && !g_off[sc.group].fy && sc.group != g_nDragging) continue;   // at its stock place
-        try {
-            IWzVector2D* lt = CtlLT(sc.ctl);
-            if (!lt) continue;
+    int hit = 0;
+    try {
+        ForEachGrouped(static_cast<char*>(bar), [&](char* c, const StockCtl& sc) {
+            if (hit) return;
+            if (!g_off[sc.group].fx && !g_off[sc.group].fy && sc.group != g_nDragging) return;   // at its stock place
+            IWzVector2D* lt = CtlLT(c);
+            if (!lt) return;
             const int cx = lt->rx, cy = lt->ry;
             if (x >= cx && x < cx + sc.w && y >= cy && y < cy + sc.h) {
-                if (ppCtrl) *ppCtrl = sc.ctl;
-                return 2;
+                if (ppCtrl) *ppCtrl = c;
+                hit = 2;
             }
-        } catch (...) {
-        }
+        });
+    } catch (...) {
     }
-    return r;
+    return hit ? hit : r;
 }
 
 }  // namespace
