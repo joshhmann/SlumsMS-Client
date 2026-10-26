@@ -419,47 +419,68 @@ void UiLayout_DrawGrips() {
     if (!*reinterpret_cast<void* const*>(kAddr_UserLocal)) return;   // the field only
     const int sw = get_screen_width(), sh = get_screen_height();
     ImDrawList* fg = ImGui::GetForegroundDrawList();
-    for (int e = 0; e < kElemCount; ++e) {
-        Rect home, bounds{0, 0, sw, sh};
-        int dx = 0, dy = 0;
-        if (e >= kFirstGroup) {
-            if (!GroupHome(e, home, bounds)) {
-                LOG_ONCE_PER_ID(e, "UI layout DIAG: no rect for group %d (%d controls known)", e, g_nStock);
-                continue;
-            }
-            GroupOffsetPx(e, dx, dy);
-        } else {
-            if (!HomeRect(e, home)) continue;
-            UiLayout_Offset(e, dx, dy);
-        }
-        const Rect r{home.left + dx, home.top + dy, home.w, home.h};
 
+    // Every element's rect now, its stock rect and where it may go.
+    struct Grip { bool ok; Rect home, bounds, r; int dx, dy; };
+    Grip grips[kElemCount] = {};
+    for (int e = 0; e < kElemCount; ++e) {
+        Grip& g = grips[e];
+        g.bounds = Rect{0, 0, sw, sh};
+        if (e >= kFirstGroup) {
+            g.ok = GroupHome(e, g.home, g.bounds);
+            if (g.ok) GroupOffsetPx(e, g.dx, g.dy);
+        } else {
+            g.ok = HomeRect(e, g.home);
+            if (g.ok) UiLayout_Offset(e, g.dx, g.dy);
+        }
+        g.r = Rect{g.home.left + g.dx, g.home.top + g.dy, g.home.w, g.home.h};
+    }
+    // The buttons and icon row sit inside the status bar's strip: decide who is under the cursor ourselves (smallest
+    // first) and let only that grip take the mouse, instead of trusting ImGui's window order.
+    static const int kPriority[kElemCount] = {kMainButtons, kIconRow, kQuickSlot, kStatusBar};
+    int hot = g_nDragging;
+    if (hot < 0) {
+        const ImVec2 m = ImGui::GetIO().MousePos;
+        for (int e : kPriority) {
+            const Rect& r = grips[e].r;
+            if (grips[e].ok && m.x >= r.left && m.x < r.left + r.w && m.y >= r.top && m.y < r.top + r.h) {
+                hot = e;
+                break;
+            }
+        }
+    }
+
+    for (int e = 0; e < kElemCount; ++e) {
+        Grip& g = grips[e];
+        if (!g.ok) continue;
+        const Rect& r = g.r;
         char id[32];
         sprintf_s(id, "##uigrip%d", e);
         ImGui::SetNextWindowPos(ImVec2(static_cast<float>(r.left), static_cast<float>(r.top)), ImGuiCond_Always);
         ImGui::SetNextWindowSize(ImVec2(static_cast<float>(r.w), static_cast<float>(r.h)), ImGuiCond_Always);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
         ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-        ImGui::Begin(id, nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground |
+        ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground |
             ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoFocusOnAppearing |
-            ImGuiWindowFlags_NoBringToFrontOnFocus);
+            ImGuiWindowFlags_NoBringToFrontOnFocus;
+        if (e != hot) flags |= ImGuiWindowFlags_NoInputs;
+        ImGui::Begin(id, nullptr, flags);
         ImGui::InvisibleButton("grip", ImVec2(static_cast<float>(r.w), static_cast<float>(r.h)));
-        const bool hot = ImGui::IsItemHovered() || ImGui::IsItemActive();
-        if (ImGui::IsItemActivated()) {
+        if (e == hot && ImGui::IsItemActivated()) {
             g_nDragging = e;
-            g_nDragDx = dx;
-            g_nDragDy = dy;
+            g_nDragDx = g.dx;
+            g_nDragDy = g.dy;
         }
         if (ImGui::IsItemActive() && g_nDragging == e) {
             const ImVec2 d = ImGui::GetIO().MouseDelta;
             if (d.x != 0 || d.y != 0) {
                 g_nDragDx += static_cast<int>(d.x);
                 g_nDragDy += static_cast<int>(d.y);
-                ClampWithin(home, bounds, g_nDragDx, g_nDragDy);
+                ClampWithin(g.home, g.bounds, g_nDragDx, g_nDragDy);
                 Reapply();
             }
         }
-        if (ImGui::IsItemDeactivated() && g_nDragging == e) {
+        if (g_nDragging == e && !ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
             g_off[e] = Offset{ToFrac(g_nDragDx, sw), ToFrac(g_nDragDy, sh)};
             if (Overlay_SnapOn()) g_off[e] = Offset{OverlayPolicy::Snap(g_off[e].fx), OverlayPolicy::Snap(g_off[e].fy)};
             g_nDragging = -1;
@@ -472,7 +493,7 @@ void UiLayout_DrawGrips() {
         const ImVec2 a(static_cast<float>(r.left), static_cast<float>(r.top));
         const ImVec2 b(static_cast<float>(r.left + r.w), static_cast<float>(r.top + r.h));
         // Idle: a faint 1 px outline, so the bar stays readable. Under the cursor: fill, bold outline and the name.
-        if (hot) {
+        if (e == hot) {
             fg->AddRectFilled(a, b, IM_COL32(90, 150, 255, 60));
             fg->AddRect(a, b, IM_COL32(120, 175, 255, 230), 0.0f, 0, 2.0f);
             fg->AddText(ImVec2(a.x + 6, a.y + 4), IM_COL32(255, 255, 255, 240), kLabel[e]);

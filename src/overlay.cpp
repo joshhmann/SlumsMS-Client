@@ -198,6 +198,8 @@ void Overlay_DrawHud() {
             bg->AddLine(ImVec2(0, y), ImVec2(screen.x, y), IM_COL32(255, 255, 255, 28));
         }
     }
+    // The stock bar, quick slot and button grips first, so the modules' windows stay above them.
+    if (!g_bFrozen) UiLayout_DrawGrips();
     for (auto& w : g_widgets) {
         if (!w.on) continue;
         ImGuiWindowFlags flags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings |
@@ -246,7 +248,6 @@ void Overlay_DrawHud() {
         }
         ImGui::End();
     }
-    if (!g_bFrozen) UiLayout_DrawGrips();   // the stock bar and quick slot move in the same edit mode
 }
 
 // The HUD window's controls: they apply at once, no restart.
