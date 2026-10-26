@@ -41,16 +41,20 @@ constexpr int kOff_QuickSlotLayer = 0xCC4;             // CUIStatusBar: the quic
 // sees and grabs is the bottom strip: the chat input row plus the gauges and buttons.
 constexpr int kBarGripH = 66;
 constexpr const char* kStoreKey = "Software\\SlumsMS\\Layout";
-constexpr const char* kSuffix[kElemCount] = {"bar", "qs", "btn", "icons"};
-constexpr const char* kLabel[kElemCount] = {"Status bar", "Quick slots", "Buttons", "Icon buttons"};
+constexpr const char* kSuffix[kElemCount] = {"bar", "qs", "btn", "icons", "chat"};
+constexpr const char* kLabel[kElemCount] = {"Status bar", "Quick slots", "Buttons", "Icon buttons", "Chat input"};
 
 // The status bar's own child controls (CWnd::m_lpChildren, CCtrlWnd per MapleRoot's API header: id +0x14, position
 // vector m_pLTCtrl +0x18, width +0x1C, height +0x20). Listed on TEST 2026-10-26: Shop 1000, Trade 1001, Menu 1002,
 // Shortcut 1007 (54x34 at y 543); the icon row 2000-2003, 1005, 1006, 1009 (y 515). Each group moves as one; a
 // control keeps its own click handling (CWnd::HitTest asks each child at its own position).
-constexpr unsigned kGroupIds[2][8] = {
+// The chat input group: the edit box 1011 (85,520 440x12), the chat-type selector 1012 and the small buttons 1004
+// beside the box.
+constexpr int kGroupCount = kElemCount - kFirstGroup;
+constexpr unsigned kGroupIds[kGroupCount][8] = {
     {1000, 1001, 1002, 1007, 0, 0, 0, 0},
     {2000, 2001, 2002, 2003, 1005, 1006, 1009, 0},
+    {1011, 1012, 1004, 0, 0, 0, 0, 0},
 };
 constexpr int kOff_Children = 0x60;                    // CWnd::m_lpChildren head
 constexpr int kOff_CtrlId = 0x14, kOff_CtrlLT = 0x18, kOff_CtrlW = 0x1C, kOff_CtrlH = 0x20;
@@ -99,7 +103,7 @@ void Reapply() {
 }
 
 int GroupOf(unsigned id) {
-    for (int g = 0; g < 2; ++g) {
+    for (int g = 0; g < kGroupCount; ++g) {
         for (unsigned gid : kGroupIds[g]) {
             if (gid && gid == id) return kFirstGroup + g;
         }
@@ -482,7 +486,7 @@ void UiLayout_DrawGrips() {
     }
     // The buttons and icon row sit inside the status bar's strip: decide who is under the cursor ourselves (smallest
     // first) and let only that grip take the mouse, instead of trusting ImGui's window order.
-    static const int kPriority[kElemCount] = {kMainButtons, kIconRow, kQuickSlot, kStatusBar};
+    static const int kPriority[kElemCount] = {kMainButtons, kIconRow, kChatInput, kQuickSlot, kStatusBar};
     int hot = g_nDragging;
     if (hot < 0) {
         const ImVec2 m = ImGui::GetIO().MousePos;

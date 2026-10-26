@@ -15,7 +15,7 @@
 
 namespace UiLayout {
 
-enum Elem { kStatusBar = 0, kQuickSlot, kMainButtons, kIconRow, kElemCount };
+enum Elem { kStatusBar = 0, kQuickSlot, kMainButtons, kIconRow, kChatInput, kElemCount };
 constexpr int kFirstGroup = kMainButtons;   // from here on: groups of the status bar's own child controls
 
 constexpr int kFrac = 10000;
