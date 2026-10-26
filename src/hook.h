@@ -70,6 +70,7 @@ void AttachCreateBlockMod();    // createblock.cpp: no random "high population" 
 void AttachMobDamageMod();      // mobdamage.cpp: low defence never adds mob touch damage, [clienthax] lowdefensepenalty
 void AttachHpMpMod();           // hpmp.cpp: 4-byte HP/MP up to 99,999; refuses to start on unexpected bytes
 void HpMp_Verify();             // hpmp.cpp: after every other mod, checks none overwrote an HP/MP site
+void AttachUiLayoutMod();       // uilayout.cpp: clears a moved button group's place on the status bar
 void AttachTempStatMod();
 #ifdef MAPLEROOT_INV_RESIZE
 void AttachInvResizeMod();   // invresize.cpp: drag-to-resize item inventory, config.ini [clienthax] invresize
@@ -238,6 +239,8 @@ inline void AttachClientHooks() {
     VerifyKaentakeHooks("AttachInvResizeMod");
 #endif
 #endif
+    DebugMessage("Installing: AttachUiLayoutMod();");
+    AttachUiLayoutMod();
     DebugMessage("Installing: AttachMobDamageMod();");
     AttachMobDamageMod();
 #ifdef MAPLEROOT_INTEGRATION

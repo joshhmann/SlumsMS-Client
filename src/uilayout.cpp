@@ -13,10 +13,12 @@
 // ============================================================
 
 #include "pch.h"
+#include "hook.h"
 #include "debug.h"
 #include "constants.h"
 #include "uilayout_policy.h"
 #include <climits>
+#include <cstring>
 #include "wvs/wndman.h"
 #include "wvs/statusbar.h"
 
@@ -182,6 +184,40 @@ void GroupOffsetPx(int e, int& dx, int& dy) {
     PixelOffsetWithin(g_off[e], home, bounds, get_screen_width(), get_screen_height(), dx, dy);
 }
 
+// After the bar paints itself: a moved group leaves the bar's own art behind (a plate under the buttons), so its
+// stock area is cleared to transparent, which reads as the piece having left the bar. Controls paint after their
+// window, so the buttons themselves are untouched.
+void ClearMovedStockAreas(void* bar) {
+    if (bar != g_pStockBar || g_nStock == 0) return;
+    int off[kElemCount][2] = {};
+    bool any = false;
+    for (int e = kFirstGroup; e < kElemCount; ++e) {
+        GroupOffsetPx(e, off[e][0], off[e][1]);
+        any = any || off[e][0] || off[e][1];
+    }
+    if (!any) return;
+    IWzCanvasPtr canvas = CUIStatusBar::GetInstance()->m_pLayer->Getcanvas(Ztl_variant_t(0L));
+    if (!canvas) return;
+    for (int e = kFirstGroup; e < kElemCount; ++e) {
+        if (!off[e][0] && !off[e][1]) continue;
+        for (int i = 0; i < g_nStock; ++i) {
+            const StockCtl& sc = g_stock[i];
+            if (sc.group == e) canvas->DrawRectangle(sc.x, sc.y, sc.w, sc.h, 0x00FFFFFF);
+        }
+    }
+}
+
+auto g_pBarDraw = reinterpret_cast<void(__thiscall*)(void*, const RECT*)>(0x008D80A4);   // CUIStatusBar::Draw
+
+void __fastcall BarDraw_hook(void* bar, void* /*edx*/, const RECT* rc) {
+    g_pBarDraw(bar, rc);
+    try {
+        ClearMovedStockAreas(bar);
+    } catch (...) {
+        LOG_ONCE("UI layout: could not clear the moved buttons' place on the status bar");
+    }
+}
+
 // Puts every grouped control where its group's offset says; repaints the bar if anything moved.
 void ApplyGroups() {
     if (!CUIStatusBar::IsInstantiated()) return;
@@ -191,12 +227,19 @@ void ApplyGroups() {
         int off[kElemCount][2] = {};
         for (int e = kFirstGroup; e < kElemCount; ++e) GroupOffsetPx(e, off[e][0], off[e][1]);
         bool moved = false;
+        IWzCanvasPtr canvas;
         for (int i = 0; i < g_nStock; ++i) {
             const StockCtl& sc = g_stock[i];
             IWzVector2D* lt = CtlLT(sc.ctl);
             if (!lt) continue;
             const int x = sc.x + off[sc.group][0], y = sc.y + off[sc.group][1];
-            if (lt->rx != x || lt->ry != y) {
+            const int ox = lt->rx, oy = lt->ry;
+            if (ox != x || oy != y) {
+                // Controls paint into the bar's canvas, and nothing clears its empty (chat log) area: wipe where the
+                // control was, or every position it passed through stays drawn. The repaint below restores the
+                // bar's own art where there is some. 0x00FFFFFF is Canvas.dll's "zero these pixels" fill.
+                if (!canvas) canvas = CUIStatusBar::GetInstance()->m_pLayer->Getcanvas(Ztl_variant_t(0L));
+                if (canvas) canvas->DrawRectangle(ox, oy, sc.w, sc.h, 0x00FFFFFF);
                 lt->RelMove(x, y, Ztl_variant_t(), Ztl_variant_t());
                 moved = true;
             }
@@ -378,6 +421,15 @@ void WriteUiState() {
 }
 
 }  // namespace
+
+void AttachUiLayoutMod() {
+    const unsigned char stock[] = {0xB8, 0x64, 0x24, 0xAD, 0x00, 0xE8};   // mov eax, 0xAD2464 / call (SEH prolog)
+    if (std::memcmp(reinterpret_cast<const void*>(0x008D80A4), stock, sizeof(stock)) != 0) {
+        DebugMessage("UI layout: CUIStatusBar::Draw has unexpected bytes; moved buttons leave the bar's art behind");
+        return;
+    }
+    if (!(ATTACH_HOOK(g_pBarDraw, BarDraw_hook))) DebugMessage("UI layout: could not hook CUIStatusBar::Draw");
+}
 
 // From CWvsApp::CallUpdate (bypass.cpp), every frame: keeps the button groups where the player put them, also
 // when the client rebuilds the status bar, and writes the QA state when it is switched on.
