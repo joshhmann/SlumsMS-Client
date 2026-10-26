@@ -74,12 +74,13 @@ void Build(int sw, int sh) {
         canvas->DrawRectangle(0, 0, w, h, kColPlate);
         canvas->DrawTextA(4, 3, Ztl_bstr_t(text), fShadow, Ztl_variant_t(), Ztl_variant_t());
         canvas->DrawTextA(3, 2, Ztl_bstr_t(text), fText, Ztl_variant_t(), Ztl_variant_t());
-        // A new layer is placed from the screen centre; anchor it to the window manager's top-left origin, as the
-        // stock windows are (wvs/wndman.h ResetOrgWindow), so the position below is in screen pixels.
-        IWzGr2DLayerPtr made = get_gr()->CreateLayer(sw - w - kMargin, sh - h - kMargin, w, h, kLayerZ,
-            static_cast<IUnknown*>(canvas), Ztl_variant_t());
+        // As CWnd::CreateWnd (0x009DE4D2) does: an empty layer, then its origin (the window manager's top-left, so the
+        // position is in screen pixels, wvs/wndman.h ResetOrgWindow), its position and its canvas.
+        IWzGr2DLayerPtr made = get_gr()->CreateLayer(0, 0, w, h, kLayerZ, Ztl_variant_t(), Ztl_variant_t());
         if (!made) throw 0;
         made->origin = static_cast<IUnknown*>(CWndMan::GetInstance()->m_pOrgWindow);
+        made->RelMove(sw - w - kMargin, sh - h - kMargin, Ztl_variant_t(), Ztl_variant_t());
+        made->InsertCanvas(canvas, 1000, 255, 255);
         made->visible = 1;
         g_pLayer = made;
         g_pLayer->AddRef();
