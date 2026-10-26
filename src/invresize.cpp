@@ -620,6 +620,18 @@ void InvResize_OnLoadCharacter(int nWorldID, unsigned int dwCharacterId) {
     g_bLoaded = false;
 }
 
+// From the HUD window's "Reset UI layout": this character's inventory back to the stock 4x6.
+void InvResize_ResetSize() {
+    using namespace InvResize;
+    if (!g_bInstalled || !g_bCharacterLoaded) return;
+    char name[32];
+    StoreValueName(name);
+    RegDeleteKeyValueA(HKEY_CURRENT_USER, kStoreKey, name);
+    g_pendCols = kStockCols;
+    g_pendRows = kStockRows;
+    DebugMessage("Inventory resize: reset to %dx%d for %s", kStockCols, kStockRows, name);
+}
+
 void InvResize_Tick() {
     using namespace InvResize;
     if (!g_bInstalled) return;

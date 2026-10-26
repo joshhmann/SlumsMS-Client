@@ -3,8 +3,9 @@
 //
 // Widgets are always on (each can be hidden in the HUD window) and keep their place: positions and sizes are
 // stored as screen fractions (overlay_policy.h) in HKCU\Software\SlumsMS\Overlay, so they follow resolution
-// changes. One freeze toggle (Ctrl+F11 or the HUD window): unfrozen, widgets have a title bar and can be dragged
-// and resized; frozen, they are fixed and click-through, so the game gets every click. The theme is the client's
+// changes. One freeze toggle, "Edit UI" (Ctrl+F11 or the HUD window): unfrozen, widgets have a title bar and can be
+// dragged and resized, and the stock status bar and quick slot get grips that move them (uilayout.cpp); frozen,
+// everything is fixed and click-through, so the game gets every click. The theme is the client's
 // blue and cream (or plain ImGui); the font is one large Tahoma atlas scaled to the screen height.
 // ============================================================
 
@@ -210,6 +211,7 @@ void Overlay_DrawHud() {
         }
         ImGui::End();
     }
+    if (!g_bFrozen) UiLayout_DrawGrips();   // the stock bar and quick slot move in the same edit mode
 }
 
 // The HUD window's controls: they apply at once, no restart.
@@ -225,8 +227,10 @@ void Overlay_DrawSettings() {
             w.place = true;
         }
     }
-    bool frozen = g_bFrozen;
-    if (ImGui::Checkbox("Freeze HUD (Ctrl+F11): unfreeze to drag and resize", &frozen)) Overlay_ToggleFreeze();
+    bool editing = !g_bFrozen;
+    if (ImGui::Checkbox("Edit UI (Ctrl+F11): move and resize widgets, move the status bar and quick slots", &editing)) {
+        Overlay_ToggleFreeze();
+    }
     if (ImGui::SliderInt("HUD size", &g_nScale, 60, 160, "%d%%")) {
         WritePref("scale", static_cast<DWORD>(g_nScale));
         ApplyScale(ImGui::GetIO().DisplaySize.y);
@@ -236,11 +240,16 @@ void Overlay_DrawSettings() {
         WritePref("theme", static_cast<DWORD>(g_nTheme));
         ApplyTheme();
     }
-    if (ImGui::Button("Reset HUD layout")) {
+    if (ImGui::Button("Reset UI layout")) {
+        // Everything Edit UI can change: widget places and sizes, the status bar and quick slot, the inventory size.
         for (auto& w : g_widgets) {
             w.fx = w.defX; w.fy = w.defY; w.fw = w.defW; w.fh = w.defH;
             w.place = true;
             SaveLayout(w);
         }
+        UiLayout_Reset();
+#ifdef MAPLEROOT_INV_RESIZE
+        InvResize_ResetSize();
+#endif
     }
 }

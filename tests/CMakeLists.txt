@@ -62,6 +62,9 @@ add_test(NAME d3d9host_adapter_fallback COMMAND d3d9host_policy_test)
 add_executable(overlay_policy_test overlay_policy_test.cpp)
 add_test(NAME overlay_hud_layout COMMAND overlay_policy_test)
 
+add_executable(uilayout_policy_test uilayout_policy_test.cpp)
+add_test(NAME uilayout_move_stock_ui COMMAND uilayout_policy_test)
+
 set(MOVEMENTKEYS_TEST_CLIENT "${CMAKE_SOURCE_DIR}/../Addons/WeatherWork/TestClient" CACHE PATH "Client for loose UI and movement checks")
 if(MAPLEROOT_MOVEMENT_KEYS AND (EXISTS "${MOVEMENTKEYS_TEST_CLIENT}/Data/UI/UIWindow.img" OR EXISTS "${MOVEMENTKEYS_TEST_CLIENT}/UI.wz"))
     add_executable(movementkeys_wz_test movementkeys_wz_test.cpp ../src/movementkeys.cpp ../src/hook.cpp ../src/debug.cpp)

@@ -21,6 +21,7 @@
 #ifdef MAPLEROOT_INV_RESIZE
 void InvResize_OnLoadCharacter(int nWorldID, unsigned int dwCharacterId);   // invresize.cpp
 #endif
+void UiLayout_OnLoadCharacter(int nWorldID, unsigned int dwCharacterId);    // uilayout.cpp
 
 #define SCREEN_WIDTH_MAX     1920
 #define SCREEN_HEIGHT_MAX    1080
@@ -141,6 +142,7 @@ void CConfig::LoadCharacter_hook(int nWorldID, unsigned int dwCharacterId) {
 #ifdef MAPLEROOT_INV_RESIZE
     InvResize_OnLoadCharacter(nWorldID, dwCharacterId);   // load this character's inventory size
 #endif
+    UiLayout_OnLoadCharacter(nWorldID, dwCharacterId);    // and where they moved the status bar and quick slot
     for (size_t i = 0; i < 34; ++i) {
         int nDefaultX;
         int nDefaultY;

@@ -17,6 +17,7 @@ add_library(injector SHARED
     mobdamage.cpp
     hpmp.cpp
     buildshow.cpp
+    uilayout.cpp
     tempstat.cpp
     stringpool.cpp
     debug.cpp

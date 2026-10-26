@@ -6,6 +6,9 @@
 #include <windows.h>
 
 
+// uilayout.cpp: how far the player moved the status bar (0) or quick slot (1) from its stock place, in pixels.
+void UiLayout_Offset(int elem, int& dx, int& dy);
+
 class CWndMan : public CWnd, public TSingleton<CWndMan, 0x00BEC20C> {
 public:
     inline static ZList<CWnd*>& ms_lpWindow = *reinterpret_cast<ZList<CWnd*>*>(0x00BF1648);
@@ -54,12 +57,17 @@ public:
             ms_pOrgStatusBar->origin = static_cast<IUnknown*>(ms_pOrgWindowEx[Origin_LB]);
             ms_pOrgScreenMsg->origin = static_cast<IUnknown*>(ms_pOrgWindowEx[Origin_RB]);
             ms_pOrgQuickSlot->origin = static_cast<IUnknown*>(ms_pOrgWindowEx[Origin_LB]);
+            // Plus wherever the player moved them (uilayout.cpp; 0,0 = stock).
+            int nBarX = 0, nBarY = 0, nQsX = 0, nQsY = 0;
+            UiLayout_Offset(0, nBarX, nBarY);
+            UiLayout_Offset(1, nQsX, nQsY);
+            ms_pOrgStatusBar->RelMove(nBarX, nBarY);
             if (get_screen_width() > 800) {
                 ms_pOrgScreenMsg->RelMove(0, -10);
-                ms_pOrgQuickSlot->RelMove(152, 68);
+                ms_pOrgQuickSlot->RelMove(152 + nQsX, 68 + nQsY);
             } else {
                 ms_pOrgScreenMsg->RelMove(0, 0);
-                ms_pOrgQuickSlot->RelMove(0, 0);
+                ms_pOrgQuickSlot->RelMove(nQsX, nQsY);
             }
         }
     }

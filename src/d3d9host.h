@@ -20,3 +20,10 @@ void Overlay_ToggleFreeze();
 
 // hud_vitals.cpp: the HP / MP / EXP widget (the pilot).
 void HudVitals_Draw();
+
+// uilayout.cpp: grips over the stock status bar and quick slot while the HUD is unfrozen, and their reset.
+void UiLayout_DrawGrips();
+void UiLayout_Reset();
+#ifdef MAPLEROOT_INV_RESIZE
+void InvResize_ResetSize();   // invresize.cpp: back to the stock 4x6 for this character
+#endif
