@@ -20,6 +20,8 @@
 #include "wvs/statusbar.h"
 
 #ifdef MAPLEROOT_INTEGRATION
+#include "d3d9host.h"
+#include "overlay_policy.h"
 #include "imgui.h"
 #endif
 
@@ -188,6 +190,7 @@ void UiLayout_DrawGrips() {
         }
         if (ImGui::IsItemDeactivated() && g_nDragging == e) {
             g_off[e] = Offset{ToFrac(g_nDragDx, sw), ToFrac(g_nDragDy, sh)};
+            if (Overlay_SnapOn()) g_off[e] = Offset{OverlayPolicy::Snap(g_off[e].fx), OverlayPolicy::Snap(g_off[e].fy)};
             g_nDragging = -1;
             Save(e);
             Reapply();

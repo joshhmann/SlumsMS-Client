@@ -39,6 +39,15 @@ inline float FontPixels(float screenH, int scalePct) {
     return (std::min)((std::max)(base * s, 11.0f), 40.0f);
 }
 
+// Edit UI's snap grid: a stored fraction rounded to the nearest grid line (grid in fractions, e.g. 125 = 1.25%).
+constexpr int kGridFrac = 125;
+inline int Snap(int frac, int grid = kGridFrac) {
+    if (grid <= 0) return frac;
+    const int half = grid / 2;
+    const int snapped = frac >= 0 ? (frac + half) / grid * grid : -((-frac + half) / grid * grid);
+    return (std::min)((std::max)(snapped, -kFrac), kFrac);
+}
+
 // 0..1 for a bar; a zero or negative max shows an empty bar rather than dividing by zero.
 inline float Ratio(long long value, long long max) {
     if (max <= 0) return 0.0f;

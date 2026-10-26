@@ -41,16 +41,22 @@ struct Widget {
     int fx, fy, fw, fh;
     bool loaded;
     bool place;          // apply the stored layout this frame (first frame, freeze change, resolution change)
+    int textPct;         // the module's text size, percent of the HUD size
+    int alpha;           // background opacity, percent
 };
 
-// The HUD's widgets. The pilot is HP/MP/EXP (ticket 91); buff timers, the damage/EXP meter and the bot panel
-// join this list.
+// The modular HUD's modules (owner, 2026-10-26: FFXIV-style, each movable and sized on its own). HP, MP and EXP are
+// the 1.6.0 set (ticket 91); quick slots, buffs/cooldowns and chat follow in 1.7.0.
 Widget g_widgets[] = {
-    {"vitals", "HP / MP / EXP", &HudVitals_Draw, 3, 100, 1800, 3000, 1300, true, 0, 0, 0, 0, false, true},
+    {"hp", "HP", &HudVitals_DrawHP, 1, 125, 1750, 2500, 600, true, 0, 0, 0, 0, false, true, 100, 94},
+    {"mp", "MP", &HudVitals_DrawMP, 1, 125, 2375, 2500, 600, true, 0, 0, 0, 0, false, true, 100, 94},
+    {"exp", "EXP", &HudVitals_DrawEXP, 1, 125, 3000, 2500, 600, true, 0, 0, 0, 0, false, true, 100, 94},
 };
+constexpr int kTextMin = 60, kTextMax = 200, kAlphaMin = 0, kAlphaMax = 100;
 
 bool g_bLoaded = false;
 bool g_bFrozen = true;
+bool g_bSnap = true;   // Edit UI snaps modules (and the stock bar and quick slot) to a 1.25% grid
 int g_nTheme = 0;      // 0 SlumsMS, 1 plain ImGui
 int g_nScale = 100;    // percent
 float g_fLastW = 0, g_fLastH = 0;
@@ -61,6 +67,7 @@ void LoadPrefs() {
     g_bFrozen = true;   // Edit UI is a temporary mode: every session starts with the layout fixed
     g_nTheme = static_cast<int>(ReadPref("theme", 0));
     g_nScale = static_cast<int>(ReadPref("scale", 100));
+    g_bSnap = ReadPref("snap", 1) != 0;
     for (auto& w : g_widgets) {
         char name[64];
         sprintf_s(name, "%s_on", w.id);  w.on = ReadPref(name, 1) != 0;
@@ -68,8 +75,18 @@ void LoadPrefs() {
         sprintf_s(name, "%s_y", w.id);   w.fy = static_cast<int>(ReadPref(name, w.defY));
         sprintf_s(name, "%s_w", w.id);   w.fw = static_cast<int>(ReadPref(name, w.defW));
         sprintf_s(name, "%s_h", w.id);   w.fh = static_cast<int>(ReadPref(name, w.defH));
+        sprintf_s(name, "%s_text", w.id);
+        w.textPct = (std::min)((std::max)(static_cast<int>(ReadPref(name, 100)), kTextMin), kTextMax);
+        sprintf_s(name, "%s_alpha", w.id);
+        w.alpha = (std::min)((std::max)(static_cast<int>(ReadPref(name, 94)), kAlphaMin), kAlphaMax);
         w.loaded = true;
     }
+}
+
+void SaveLook(Widget& w) {
+    char name[64];
+    sprintf_s(name, "%s_text", w.id); WritePref(name, static_cast<DWORD>(w.textPct));
+    sprintf_s(name, "%s_alpha", w.id); WritePref(name, static_cast<DWORD>(w.alpha));
 }
 
 void SaveLayout(Widget& w) {
@@ -151,6 +168,7 @@ bool Overlay_HasHud() {
 }
 
 bool Overlay_IsFrozen() { return g_bFrozen; }
+bool Overlay_SnapOn() { return g_bSnap; }
 
 void Overlay_ToggleFreeze() {
     g_bFrozen = !g_bFrozen;
@@ -172,6 +190,14 @@ void Overlay_DrawHud() {
     const float minW = 120.0f * ImGui::GetIO().FontGlobalScale * kAtlasPx / 15.0f;
     const float minH = 40.0f * ImGui::GetIO().FontGlobalScale * kAtlasPx / 15.0f;
 
+    if (!g_bFrozen && g_bSnap) {   // the grid, faint, every 4th line (5%) drawn
+        ImDrawList* bg = ImGui::GetBackgroundDrawList();
+        for (int f = OverlayPolicy::kGridFrac * 4; f < OverlayPolicy::kFrac; f += OverlayPolicy::kGridFrac * 4) {
+            const float x = screen.x * f / OverlayPolicy::kFrac, y = screen.y * f / OverlayPolicy::kFrac;
+            bg->AddLine(ImVec2(x, 0), ImVec2(x, screen.y), IM_COL32(255, 255, 255, 28));
+            bg->AddLine(ImVec2(0, y), ImVec2(screen.x, y), IM_COL32(255, 255, 255, 28));
+        }
+    }
     for (auto& w : g_widgets) {
         if (!w.on) continue;
         ImGuiWindowFlags flags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings |
@@ -182,10 +208,11 @@ void Overlay_DrawHud() {
         }
         // Height follows the content and the font size; only the width is the player's.
         const ImGuiStyle& st = ImGui::GetStyle();
-        const float fontPx = ImGui::GetIO().FontGlobalScale * kAtlasPx;
+        const float titlePx = ImGui::GetIO().FontGlobalScale * kAtlasPx;
+        const float fontPx = titlePx * w.textPct / 100.0f;
         const float rowH = fontPx + st.FramePadding.y * 2;
         const float h = w.rows * rowH + (w.rows - 1) * st.ItemSpacing.y + st.WindowPadding.y * 2 +
-            (g_bFrozen ? 0.0f : fontPx + st.FramePadding.y * 2);
+            (g_bFrozen ? 0.0f : titlePx + st.FramePadding.y * 2);
         const OverlayPolicy::Rect r =
             OverlayPolicy::FromFractions(w.fx, w.fy, w.fw, OverlayPolicy::ToFraction(h, screen.y), screen.x, screen.y,
                 minW, (std::min)(minH, h));
@@ -197,11 +224,20 @@ void Overlay_DrawHud() {
         }
         char title[96];
         sprintf_s(title, "%s###%s", w.title, w.id);
-        if (ImGui::Begin(title, nullptr, flags)) w.draw();
+        ImGui::SetNextWindowBgAlpha(w.alpha / 100.0f);
+        if (ImGui::Begin(title, nullptr, flags)) {
+            ImGui::SetWindowFontScale(w.textPct / 100.0f);
+            w.draw();
+        }
         if (!g_bFrozen && !ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
             // A drag or resize has finished: store where the player left it.
             const ImVec2 p = ImGui::GetWindowPos(), s = ImGui::GetWindowSize();
-            const int fx = OverlayPolicy::ToFraction(p.x, screen.x), fy = OverlayPolicy::ToFraction(p.y, screen.y);
+            int fx = OverlayPolicy::ToFraction(p.x, screen.x), fy = OverlayPolicy::ToFraction(p.y, screen.y);
+            if (g_bSnap) {
+                fx = OverlayPolicy::Snap(fx);
+                fy = OverlayPolicy::Snap(fy);
+                if (fx != w.fx || fy != w.fy) w.place = true;   // move the window onto the grid line next frame
+            }
             const int fw = OverlayPolicy::ToFraction(s.x, screen.x), fh = OverlayPolicy::ToFraction(s.y, screen.y);
             if (fx != w.fx || fy != w.fy || fw != w.fw || fh != w.fh) {
                 w.fx = fx; w.fy = fy; w.fw = fw; w.fh = fh;
@@ -216,20 +252,41 @@ void Overlay_DrawHud() {
 // The HUD window's controls: they apply at once, no restart.
 void Overlay_DrawSettings() {
     LoadPrefs();
-    for (auto& w : g_widgets) {
-        char label[96];
-        sprintf_s(label, "Show %s", w.title);
-        if (ImGui::Checkbox(label, &w.on)) {
-            char name[64];
-            sprintf_s(name, "%s_on", w.id);
-            WritePref(name, w.on ? 1 : 0);
-            w.place = true;
+    // One row per module: shown, text size, opacity, reset.
+    if (ImGui::BeginTable("modules", 4, ImGuiTableFlags_SizingFixedFit)) {
+        for (auto& w : g_widgets) {
+            ImGui::PushID(w.id);
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            if (ImGui::Checkbox(w.title, &w.on)) {
+                char name[64];
+                sprintf_s(name, "%s_on", w.id);
+                WritePref(name, w.on ? 1 : 0);
+                w.place = true;
+            }
+            ImGui::TableNextColumn();
+            ImGui::SetNextItemWidth(ImGui::GetFontSize() * 7);
+            if (ImGui::SliderInt("Text", &w.textPct, kTextMin, kTextMax, "%d%%")) SaveLook(w);
+            ImGui::TableNextColumn();
+            ImGui::SetNextItemWidth(ImGui::GetFontSize() * 7);
+            if (ImGui::SliderInt("Opacity", &w.alpha, kAlphaMin, kAlphaMax, "%d%%")) SaveLook(w);
+            ImGui::TableNextColumn();
+            if (ImGui::SmallButton("Reset")) {
+                w.fx = w.defX; w.fy = w.defY; w.fw = w.defW; w.fh = w.defH;
+                w.textPct = 100; w.alpha = 94;
+                w.place = true;
+                SaveLayout(w);
+                SaveLook(w);
+            }
+            ImGui::PopID();
         }
+        ImGui::EndTable();
     }
     bool editing = !g_bFrozen;
     if (ImGui::Checkbox("Edit UI (Ctrl+F11): move and resize widgets, move the status bar and quick slots", &editing)) {
         Overlay_ToggleFreeze();
     }
+    if (ImGui::Checkbox("Snap to grid while editing", &g_bSnap)) WritePref("snap", g_bSnap ? 1 : 0);
     if (ImGui::SliderInt("HUD size", &g_nScale, 60, 160, "%d%%")) {
         WritePref("scale", static_cast<DWORD>(g_nScale));
         ApplyScale(ImGui::GetIO().DisplaySize.y);
@@ -243,8 +300,10 @@ void Overlay_DrawSettings() {
         // Everything Edit UI can change: widget places and sizes, the status bar and quick slot, the inventory size.
         for (auto& w : g_widgets) {
             w.fx = w.defX; w.fy = w.defY; w.fw = w.defW; w.fh = w.defH;
+            w.textPct = 100; w.alpha = 94;
             w.place = true;
             SaveLayout(w);
+            SaveLook(w);
         }
         UiLayout_Reset();
 #ifdef MAPLEROOT_INV_RESIZE
