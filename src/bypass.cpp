@@ -243,9 +243,11 @@ void CWvsApp::SetUp_hook() {
 }
 
 void BuildShow_Tick();   // buildshow.cpp: release and build in the login screen's corner
+void UiLayout_Tick();    // uilayout.cpp: keeps moved status bar buttons where the player put them
 
 void CWvsApp::CallUpdate_hook(int tCurTime) {
     BuildShow_Tick();
+    UiLayout_Tick();
 #ifdef MAPLEROOT_WEATHER
     Weather_Tick();
     if (Weather::IsFieldActive()) {

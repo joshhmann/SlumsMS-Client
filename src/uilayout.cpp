@@ -16,6 +16,7 @@
 #include "debug.h"
 #include "constants.h"
 #include "uilayout_policy.h"
+#include <climits>
 #include "wvs/wndman.h"
 #include "wvs/statusbar.h"
 
@@ -38,14 +39,36 @@ constexpr int kOff_QuickSlotLayer = 0xCC4;             // CUIStatusBar: the quic
 // sees and grabs is the bottom strip: the chat input row plus the gauges and buttons.
 constexpr int kBarGripH = 66;
 constexpr const char* kStoreKey = "Software\\SlumsMS\\Layout";
-constexpr const char* kSuffix[kElemCount] = {"bar", "qs"};
-constexpr const char* kLabel[kElemCount] = {"Status bar", "Quick slots"};
+constexpr const char* kSuffix[kElemCount] = {"bar", "qs", "btn", "icons"};
+constexpr const char* kLabel[kElemCount] = {"Status bar", "Quick slots", "Buttons", "Icon buttons"};
+
+// The status bar's own child controls (CWnd::m_lpChildren, CCtrlWnd per MapleRoot's API header: id +0x14, position
+// vector m_pLTCtrl +0x18, width +0x1C, height +0x20). Listed on TEST 2026-10-26: Shop 1000, Trade 1001, Menu 1002,
+// Shortcut 1007 (54x34 at y 543); the icon row 2000-2003, 1005, 1006, 1009 (y 515). Each group moves as one; a
+// control keeps its own click handling (CWnd::HitTest asks each child at its own position).
+constexpr unsigned kGroupIds[2][8] = {
+    {1000, 1001, 1002, 1007, 0, 0, 0, 0},
+    {2000, 2001, 2002, 2003, 1005, 1006, 1009, 0},
+};
+constexpr int kOff_Children = 0x60;                    // CWnd::m_lpChildren head
+constexpr int kOff_CtrlId = 0x14, kOff_CtrlLT = 0x18, kOff_CtrlW = 0x1C, kOff_CtrlH = 0x20;
+constexpr uintptr_t kAddr_WndInvalidateRect = 0x009E04C9;   // CWnd::InvalidateRect(const RECT*), null = all
 
 Offset g_off[kElemCount];
 int g_nWorld = -1;
 unsigned g_dwChar = 0;
 int g_nDragging = -1;
 int g_nDragDx = 0, g_nDragDy = 0;   // the dragged element's pixel offset
+
+// A grouped control and where the client put it (bar coordinates), seen before we ever move it.
+struct StockCtl {
+    char* ctl;
+    int group;
+    int x, y, w, h;
+};
+StockCtl g_stock[32];
+int g_nStock = 0;
+void* g_pStockBar = nullptr;   // the CUIStatusBar the stock positions belong to
 
 void ValueName(char (&name)[48], int e) {
     sprintf_s(name, "w%d_c%u_%s", g_nWorld, g_dwChar, kSuffix[e]);
@@ -66,8 +89,120 @@ void Save(int e) {
         g_nWorld, g_dwChar, st);
 }
 
+void ApplyGroups();
+
 void Reapply() {
     if (CWndMan::IsInstantiated()) CWndMan::GetInstance()->ResetOrgWindow();
+    ApplyGroups();
+}
+
+int GroupOf(unsigned id) {
+    for (int g = 0; g < 2; ++g) {
+        for (unsigned gid : kGroupIds[g]) {
+            if (gid && gid == id) return kFirstGroup + g;
+        }
+    }
+    return -1;
+}
+
+// Walks the bar's children the way CWnd::HitTest (0x009E01E7) does; f(control) for each.
+template <typename F>
+void ForEachBarControl(char* bar, F f) {
+    char* node = *reinterpret_cast<char**>(bar + kOff_Children);
+    for (int n = 0; node && n < 64; ++n) {
+        char* c = *reinterpret_cast<char**>(node + 4);   // ZRef<CCtrlWnd>::p
+        if (c) f(c);
+        char* next = *reinterpret_cast<char**>(node - 0x10 + 8);
+        node = next ? next + 0x10 : nullptr;
+    }
+}
+
+IWzVector2D* CtlLT(char* c) {
+    return *reinterpret_cast<IWzVector2D**>(c + kOff_CtrlLT);
+}
+
+// Remembers each grouped control's stock place the first time it is seen (and again for a new status bar).
+void CaptureStock(char* bar) {
+    if (bar != g_pStockBar) {
+        g_pStockBar = bar;
+        g_nStock = 0;
+    }
+    ForEachBarControl(bar, [](char* c) {
+        const int g = GroupOf(*reinterpret_cast<unsigned*>(c + kOff_CtrlId));
+        if (g < 0 || g_nStock >= 32) return;
+        for (int i = 0; i < g_nStock; ++i) {
+            if (g_stock[i].ctl == c) return;
+        }
+        IWzVector2D* lt = CtlLT(c);
+        if (!lt) return;
+        g_stock[g_nStock++] = StockCtl{c, g, lt->rx, lt->ry, *reinterpret_cast<int*>(c + kOff_CtrlW),
+            *reinterpret_cast<int*>(c + kOff_CtrlH)};
+    });
+}
+
+// The bar window on screen (its layer's top-left, the window's full size).
+bool BarWindow(Rect& r) {
+    if (!CUIStatusBar::IsInstantiated() || !CWndMan::IsInstantiated()) return false;
+    CUIStatusBar* bar = CUIStatusBar::GetInstance();
+    IWzGr2DLayer* layer = bar->m_pLayer.GetInterfacePtr();
+    IWzVector2DPtr org = CWndMan::GetInstance()->m_pOrgWindow;
+    if (!layer || !org) return false;
+    r = Rect{layer->x - org->x, layer->y - org->y, bar->m_width, bar->m_height};
+    return r.w > 0 && r.h > 0;
+}
+
+// A group's stock rect on screen (the bar where it is now) and where it may go.
+bool GroupHome(int e, Rect& home, Rect& bounds) {
+    Rect win;
+    if (!BarWindow(win)) return false;
+    int l = INT_MAX, t = INT_MAX, r = INT_MIN, b = INT_MIN;
+    for (int i = 0; i < g_nStock; ++i) {
+        const StockCtl& sc = g_stock[i];
+        if (sc.group != e) continue;
+        l = (std::min)(l, sc.x); t = (std::min)(t, sc.y);
+        r = (std::max)(r, sc.x + sc.w); b = (std::max)(b, sc.y + sc.h);
+    }
+    if (l == INT_MAX) return false;
+    home = Rect{win.left + l, win.top + t, r - l, b - t};
+    bounds = Intersect(win, Rect{0, 0, get_screen_width(), get_screen_height()});
+    return true;
+}
+
+void GroupOffsetPx(int e, int& dx, int& dy) {
+    dx = dy = 0;
+    if (e == g_nDragging) {
+        dx = g_nDragDx;
+        dy = g_nDragDy;
+        return;
+    }
+    Rect home, bounds;
+    if (!GroupHome(e, home, bounds)) return;
+    PixelOffsetWithin(g_off[e], home, bounds, get_screen_width(), get_screen_height(), dx, dy);
+}
+
+// Puts every grouped control where its group's offset says; repaints the bar if anything moved.
+void ApplyGroups() {
+    if (!CUIStatusBar::IsInstantiated()) return;
+    char* bar = reinterpret_cast<char*>(CUIStatusBar::GetInstance());
+    try {
+        CaptureStock(bar);
+        int off[kElemCount][2] = {};
+        for (int e = kFirstGroup; e < kElemCount; ++e) GroupOffsetPx(e, off[e][0], off[e][1]);
+        bool moved = false;
+        for (int i = 0; i < g_nStock; ++i) {
+            const StockCtl& sc = g_stock[i];
+            IWzVector2D* lt = CtlLT(sc.ctl);
+            if (!lt) continue;
+            const int x = sc.x + off[sc.group][0], y = sc.y + off[sc.group][1];
+            if (lt->rx != x || lt->ry != y) {
+                lt->RelMove(x, y, Ztl_variant_t(), Ztl_variant_t());
+                moved = true;
+            }
+        }
+        if (moved) reinterpret_cast<void(__thiscall*)(void*, const RECT*)>(kAddr_WndInvalidateRect)(bar, nullptr);
+    } catch (...) {
+        LOG_ONCE("UI layout: could not move the status bar's buttons");
+    }
 }
 
 // The element's layer, or null (no status bar outside the field).
@@ -111,6 +246,7 @@ int DrawnWidth(IWzGr2DLayer* layer, int fallback) {
 // never from where the element is now. Learning it from the live position fed the current offset back into the
 // clamp and walked the quick slot off screen.
 bool HomeRect(int e, Rect& r) {
+    if (e >= kFirstGroup) return false;   // groups: GroupHome
     try {
         IWzGr2DLayer* layer = LayerOf(e);
         if (!layer || !CWndMan::IsInstantiated()) return false;
@@ -156,6 +292,13 @@ void UiLayout_Offset(int e, int& dx, int& dy) {
     PixelOffset(g_off[e], home, sw, sh, dx, dy);
 }
 
+// From CWvsApp::CallUpdate (bypass.cpp), every frame: keeps the button groups where the player put them, also
+// when the client rebuilds the status bar.
+void UiLayout_Tick() {
+    if (!*reinterpret_cast<void* const*>(kAddr_UserLocal)) return;
+    ApplyGroups();
+}
+
 // From CConfig::LoadCharacter_hook (resolution.cpp).
 void UiLayout_OnLoadCharacter(int nWorldID, unsigned int dwCharacterId) {
     g_nWorld = nWorldID;
@@ -168,8 +311,9 @@ void UiLayout_OnLoadCharacter(int nWorldID, unsigned int dwCharacterId) {
         g_off[e] = RegGetValueA(HKEY_CURRENT_USER, kStoreKey, name, RRF_RT_REG_DWORD, nullptr, &v, &cb) == ERROR_SUCCESS
             ? Unpack(v) : Offset{};
     }
-    DebugMessage("UI layout: bar %d,%d quick slots %d,%d for w%d_c%u", g_off[kStatusBar].fx, g_off[kStatusBar].fy,
-        g_off[kQuickSlot].fx, g_off[kQuickSlot].fy, g_nWorld, g_dwChar);
+    DebugMessage("UI layout: bar %d,%d quick slots %d,%d buttons %d,%d icons %d,%d for w%d_c%u",
+        g_off[kStatusBar].fx, g_off[kStatusBar].fy, g_off[kQuickSlot].fx, g_off[kQuickSlot].fy,
+        g_off[kMainButtons].fx, g_off[kMainButtons].fy, g_off[kIconRow].fx, g_off[kIconRow].fy, g_nWorld, g_dwChar);
     Reapply();
 }
 
@@ -189,10 +333,15 @@ void UiLayout_DrawGrips() {
     const int sw = get_screen_width(), sh = get_screen_height();
     ImDrawList* fg = ImGui::GetForegroundDrawList();
     for (int e = 0; e < kElemCount; ++e) {
-        Rect home;
-        if (!HomeRect(e, home)) continue;
+        Rect home, bounds{0, 0, sw, sh};
         int dx = 0, dy = 0;
-        UiLayout_Offset(e, dx, dy);
+        if (e >= kFirstGroup) {
+            if (!GroupHome(e, home, bounds)) continue;
+            GroupOffsetPx(e, dx, dy);
+        } else {
+            if (!HomeRect(e, home)) continue;
+            UiLayout_Offset(e, dx, dy);
+        }
         const Rect r{home.left + dx, home.top + dy, home.w, home.h};
 
         char id[32];
@@ -216,7 +365,7 @@ void UiLayout_DrawGrips() {
             if (d.x != 0 || d.y != 0) {
                 g_nDragDx += static_cast<int>(d.x);
                 g_nDragDy += static_cast<int>(d.y);
-                Clamp(home, sw, sh, g_nDragDx, g_nDragDy);
+                ClampWithin(home, bounds, g_nDragDx, g_nDragDy);
                 Reapply();
             }
         }
