@@ -42,9 +42,6 @@ constexpr const char* kSuffix[kElemCount] = {"bar", "qs"};
 constexpr const char* kLabel[kElemCount] = {"Status bar", "Quick slots"};
 
 Offset g_off[kElemCount];
-// Where each element sits at offset 0, relative to the bottom-left 800x600 origin (Origin_LB), learned from its
-// layer while the grips are up; used to keep it on screen when ResetOrgWindow applies an offset. w == 0: unknown.
-Rect g_home[kElemCount];
 int g_nWorld = -1;
 unsigned g_dwChar = 0;
 int g_nDragging = -1;
@@ -81,22 +78,62 @@ IWzGr2DLayer* LayerOf(int e) {
     return reinterpret_cast<IWzGr2DLayerPtr*>(reinterpret_cast<char*>(bar) + kOff_QuickSlotLayer)->GetInterfacePtr();
 }
 
-// The element's rect on screen now, from its layer (positions are relative to the screen's top-left origin).
-bool ScreenRect(int e, Rect& r) {
+// The quick slot layer's canvas is wider than the slots drawn on it (1008 px for about 460 px of slots): the drawn
+// width is where its last non-transparent column is. Scanned once per canvas, three rows, every second column.
+int DrawnWidth(IWzGr2DLayer* layer, int fallback) {
+    static IWzCanvas* s_canvas = nullptr;
+    static int s_width = 0;
+    try {
+        IWzCanvasPtr c = layer->Getcanvas(Ztl_variant_t(0L));
+        if (!c) return fallback;
+        if (c.GetInterfacePtr() == s_canvas) return s_width;
+        const int w = c->width, h = c->height;
+        int drawn = 0;
+        for (int x = w - 1; x >= 0 && !drawn; x -= 2) {
+            for (int y : {h / 4, h / 2, h * 3 / 4}) {
+                if (static_cast<unsigned>(c->Getpixel(x, y)) >> 24) {
+                    drawn = x + 2;
+                    break;
+                }
+            }
+        }
+        s_canvas = c.GetInterfacePtr();
+        s_width = drawn > 0 ? (std::min)(drawn, w) : fallback;
+        DebugMessage("UI layout: quick slot canvas %dx%d, drawn width %d", w, h, s_width);
+        return s_width;
+    } catch (...) {
+        return fallback;
+    }
+}
+
+// Where the element sits at offset 0, in screen pixels: worked out from the fixed anchors (the bottom-left origin
+// ResetOrgWindow places, the quick slot's stock (152,68) from it, and each layer's own offset from its origin),
+// never from where the element is now. Learning it from the live position fed the current offset back into the
+// clamp and walked the quick slot off screen.
+bool HomeRect(int e, Rect& r) {
     try {
         IWzGr2DLayer* layer = LayerOf(e);
         if (!layer || !CWndMan::IsInstantiated()) return false;
         IWzVector2DPtr org = CWndMan::GetInstance()->m_pOrgWindow;
-        r.left = layer->x - org->x;
-        r.top = layer->y - org->y;
+        IWzVector2DPtr lb = CWndMan::ms_pOrgWindowEx[CWnd::UIOrigin::Origin_LB];
+        if (!org || !lb) return false;
+        const int sw = get_screen_width(), sh = get_screen_height();
+        const int lbX = lb->x - org->x, lbY = lb->y - org->y;
         r.w = layer->Getwidth();
         r.h = layer->Getheight();
         if (e == kStatusBar) {
-            r.top += r.h - kBarGripH;
+            r.left = lbX + layer->rx;
+            r.top = lbY + layer->ry + r.h - kBarGripH;
             r.h = kBarGripH;
-            r.w = (std::min)(r.w, get_screen_width() - r.left);
+            r.w = (std::min)(r.w, sw - r.left);
+        } else {
+            const bool wide = sw > 800;   // as ResetOrgWindow places the quick slot origin
+            r.left = lbX + (wide ? 152 : 0) + layer->rx;
+            r.top = lbY + (wide ? 68 : 0) + layer->ry;
+            r.w = DrawnWidth(layer, r.w);
         }
-        return r.w > 0 && r.h > 0;
+        // Never trust a rect that is not plausibly on screen: a bad read must not move anything.
+        return r.w > 0 && r.h > 0 && r.left > -sw && r.left < sw && r.top > -sh && r.top < sh;
     } catch (...) {
         return false;
     }
@@ -114,8 +151,8 @@ void UiLayout_Offset(int e, int& dx, int& dy) {
         dy = g_nDragDy;
         return;
     }
-    Rect home = g_home[e];
-    home.top += sh - 600;   // stored relative to Origin_LB, which sits at (0, sh - 600)
+    Rect home;
+    if (!HomeRect(e, home)) home = Rect{};   // no layer yet: only kept within one screen
     PixelOffset(g_off[e], home, sw, sh, dx, dy);
 }
 
@@ -152,14 +189,11 @@ void UiLayout_DrawGrips() {
     const int sw = get_screen_width(), sh = get_screen_height();
     ImDrawList* fg = ImGui::GetForegroundDrawList();
     for (int e = 0; e < kElemCount; ++e) {
-        Rect r;
-        const bool ok = ScreenRect(e, r);
-        LOG_ONCE_PER_ID(e * 100000000 + (ok ? 1 : 0) + r.left * 10 + r.top * 100000,
-            "UI layout DIAG: %d ok %d rect %d,%d %dx%d", e, ok ? 1 : 0, r.left, r.top, r.w, r.h);
-        if (!ok) continue;
+        Rect home;
+        if (!HomeRect(e, home)) continue;
         int dx = 0, dy = 0;
         UiLayout_Offset(e, dx, dy);
-        g_home[e] = Rect{r.left - dx, r.top - dy - (sh - 600), r.w, r.h};
+        const Rect r{home.left + dx, home.top + dy, home.w, home.h};
 
         char id[32];
         sprintf_s(id, "##uigrip%d", e);
@@ -180,8 +214,6 @@ void UiLayout_DrawGrips() {
         if (ImGui::IsItemActive() && g_nDragging == e) {
             const ImVec2 d = ImGui::GetIO().MouseDelta;
             if (d.x != 0 || d.y != 0) {
-                Rect home = g_home[e];
-                home.top += sh - 600;
                 g_nDragDx += static_cast<int>(d.x);
                 g_nDragDy += static_cast<int>(d.y);
                 Clamp(home, sw, sh, g_nDragDx, g_nDragDy);

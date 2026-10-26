@@ -265,10 +265,10 @@ void Overlay_DrawSettings() {
                 w.place = true;
             }
             ImGui::TableNextColumn();
-            ImGui::SetNextItemWidth(ImGui::GetFontSize() * 7);
+            ImGui::SetNextItemWidth(ImGui::GetFontSize() * 10);
             if (ImGui::SliderInt("Text", &w.textPct, kTextMin, kTextMax, "%d%%")) SaveLook(w);
             ImGui::TableNextColumn();
-            ImGui::SetNextItemWidth(ImGui::GetFontSize() * 7);
+            ImGui::SetNextItemWidth(ImGui::GetFontSize() * 10);
             if (ImGui::SliderInt("Opacity", &w.alpha, kAlphaMin, kAlphaMax, "%d%%")) SaveLook(w);
             ImGui::TableNextColumn();
             if (ImGui::SmallButton("Reset")) {
