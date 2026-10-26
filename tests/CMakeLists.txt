@@ -47,6 +47,15 @@ else()
     add_test(NAME mobdamage_low_defence COMMAND mobdamage_patch_test)
 endif()
 
+add_executable(meleerange_patch_test meleerange_patch_test.cpp)
+set(MELEERANGE_TEST_EXE "Z:/MSv83/SlumsMS-dev/client-1.5.0-fixes2/exe-copy/MapleStory.exe" CACHE FILEPATH
+    "MapleStory.exe whose bytes the remote melee range test checks (optional)")
+if(MELEERANGE_TEST_EXE AND EXISTS "${MELEERANGE_TEST_EXE}")
+    add_test(NAME meleerange_guard COMMAND meleerange_patch_test "${MELEERANGE_TEST_EXE}")
+else()
+    add_test(NAME meleerange_guard COMMAND meleerange_patch_test)
+endif()
+
 add_executable(hpmp_patch_test hpmp_patch_test.cpp)
 set(HPMP_TEST_EXE "Z:/MSv83/SlumsMS-dev/client-1.5.0-fixes2/exe-copy/MapleStory.exe" CACHE FILEPATH
     "MapleStory.exe whose bytes the 4-byte HP/MP test checks (optional)")

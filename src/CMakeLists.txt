@@ -15,6 +15,7 @@ add_library(injector SHARED
     proposalgender.cpp
     createblock.cpp
     mobdamage.cpp
+    meleerange.cpp
     hpmp.cpp
     buildshow.cpp
     uilayout.cpp

@@ -68,6 +68,7 @@ void AttachPetEquipFlagMod();   // petequipflag.cpp: newer pets overflow the 128
 void AttachProposalGenderMod(); // proposalgender.cpp: any gender may use an engagement ring box
 void AttachCreateBlockMod();    // createblock.cpp: no random "high population" block on character creation
 void AttachMobDamageMod();      // mobdamage.cpp: low defence never adds mob touch damage, [clienthax] lowdefensepenalty
+void AttachMeleeRangeMod();     // meleerange.cpp: a remote attack in a pose without a range no longer closes the client
 void AttachHpMpMod();           // hpmp.cpp: 4-byte HP/MP up to 99,999; refuses to start on unexpected bytes
 void HpMp_Verify();             // hpmp.cpp: after every other mod, checks none overwrote an HP/MP site
 void AttachUiLayoutMod();       // uilayout.cpp: moved status bar buttons keep their clicks (CUIStatusBar::HitTest)
@@ -245,6 +246,11 @@ inline void AttachClientHooks() {
     AttachMobDamageMod();
 #ifdef MAPLEROOT_INTEGRATION
     VerifyKaentakeHooks("AttachMobDamageMod");
+#endif
+    DebugMessage("Installing: AttachMeleeRangeMod();");
+    AttachMeleeRangeMod();
+#ifdef MAPLEROOT_INTEGRATION
+    VerifyKaentakeHooks("AttachMeleeRangeMod");
 #endif
 #ifndef MAPLEROOT_INTEGRATION
     DebugMessage("Installing: AttachTempStatMod();");
