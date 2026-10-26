@@ -27,6 +27,7 @@ constexpr int kMargin = 6;
 constexpr int kLayerZ = 0x7FFFFF00;                    // above the login UI
 constexpr DWORD kColText = 0xFFFFFFFF;
 constexpr DWORD kColShadow = 0xC0101010;
+constexpr DWORD kColPlate = 0x90000000;                // translucent dark plate behind the text
 constexpr DWORD kClear = 0x00FFFFFF;                   // Canvas.dll's "zero the pixels" fill (see weathercanvas.cpp)
 
 IWzGr2DLayer* g_pLayer = nullptr;
@@ -63,15 +64,16 @@ void Build(int sw, int sh) {
         IWzFontPtr fText = MakeFont(kColText);
         IWzFontPtr fShadow = MakeFont(kColShadow);
         if (!fText || !fShadow) throw 0;
-        const int w = static_cast<int>(fText->CalcTextWidth(Ztl_bstr_t(text), Ztl_variant_t())) + 2;
-        const int h = 16;
+        const int w = static_cast<int>(fText->CalcTextWidth(Ztl_bstr_t(text), Ztl_variant_t())) + 8;
+        const int h = 18;
         IWzCanvasPtr canvas;
         PcCreateObject<IWzCanvasPtr>(L"Canvas", canvas, nullptr);
         if (!canvas) throw 0;
         canvas->Create(w, h, 0, CANVAS_PIXFORMAT::CP_A8R8G8B8);
         canvas->DrawRectangle(0, 0, w, h, kClear);
-        canvas->DrawTextA(1, 1, Ztl_bstr_t(text), fShadow, Ztl_variant_t(), Ztl_variant_t());
-        canvas->DrawTextA(0, 0, Ztl_bstr_t(text), fText, Ztl_variant_t(), Ztl_variant_t());
+        canvas->DrawRectangle(0, 0, w, h, kColPlate);
+        canvas->DrawTextA(4, 3, Ztl_bstr_t(text), fShadow, Ztl_variant_t(), Ztl_variant_t());
+        canvas->DrawTextA(3, 2, Ztl_bstr_t(text), fText, Ztl_variant_t(), Ztl_variant_t());
         // A new layer is placed from the screen centre; anchor it to the window manager's top-left origin, as the
         // stock windows are (wvs/wndman.h ResetOrgWindow), so the position below is in screen pixels.
         IWzGr2DLayerPtr made = get_gr()->CreateLayer(sw - w - kMargin, sh - h - kMargin, w, h, kLayerZ,
