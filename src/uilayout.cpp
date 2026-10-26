@@ -137,6 +137,8 @@ void CaptureStock(char* bar) {
         if (!lt) return;
         g_stock[g_nStock++] = StockCtl{c, g, lt->rx, lt->ry, *reinterpret_cast<int*>(c + kOff_CtrlW),
             *reinterpret_cast<int*>(c + kOff_CtrlH)};
+        DebugMessage("UI layout: control %u (group %d) stock %d,%d", *reinterpret_cast<unsigned*>(c + kOff_CtrlId), g,
+            g_stock[g_nStock - 1].x, g_stock[g_nStock - 1].y);
     });
 }
 
@@ -292,11 +294,96 @@ void UiLayout_Offset(int e, int& dx, int& dy) {
     PixelOffset(g_off[e], home, sw, sh, dx, dy);
 }
 
+namespace {
+
+// QA state for the client-mcp driver ([debug] uistate=1 in config.ini; never on for players): the stage, whether the
+// chat input has focus, and where the moved UI is, in game pixels. The driver trusts this instead of guessing from a
+// downscaled screenshot. Written twice a second to slums-ui-state.json next to the exe (temp file + rename).
+constexpr uintptr_t kAddr_CurrentStage = 0x00BEDED4;
+constexpr uintptr_t kVft_CLogin = 0x00AF6B24;
+constexpr uintptr_t kAddr_CtrlIsFocused = 0x004E0101;   // CCtrlWnd::IsFocused: CWndMan+0x88 == the control
+constexpr unsigned kId_ChatInput = 1011;
+
+bool UiStateEnabled() {
+    static int s_on = -1;
+    if (s_on < 0) s_on = GetPrivateProfileIntA("debug", "uistate", 0, ".\\" CONSTANTS_CONFIG_NAME) ? 1 : 0;
+    return s_on == 1;
+}
+
+void AppendRect(char* out, size_t n, const char* name, const Rect& r, bool ok) {
+    char item[96];
+    if (ok) sprintf_s(item, ",\"%s\":[%d,%d,%d,%d]", name, r.left, r.top, r.w, r.h);
+    else sprintf_s(item, ",\"%s\":null", name);
+    strcat_s(out, n, item);
+}
+
+void WriteUiState() {
+    static ULONGLONG s_next = 0;
+    const ULONGLONG now = GetTickCount64();
+    if (now < s_next) return;
+    s_next = now + 500;
+    const char* stage = "other";
+    void* st = *reinterpret_cast<void**>(kAddr_CurrentStage);
+    if (*reinterpret_cast<void* const*>(kAddr_UserLocal)) stage = "field";
+    else if (st && *reinterpret_cast<uintptr_t*>(st) == kVft_CLogin) stage = "login";
+    bool chatOpen = false;
+    Rect chat{}, bar{}, qs{}, groups[2]{};
+    bool chatOk = false, barOk = false, qsOk = false, groupOk[2] = {};
+    try {
+        if (CUIStatusBar::IsInstantiated() && CWndMan::IsInstantiated()) {
+            char* b = reinterpret_cast<char*>(CUIStatusBar::GetInstance());
+            Rect win{};
+            const bool winOk = BarWindow(win);
+            ForEachBarControl(b, [&](char* c) {
+                if (*reinterpret_cast<unsigned*>(c + kOff_CtrlId) != kId_ChatInput) return;
+                chatOpen = reinterpret_cast<int(__thiscall*)(char*)>(kAddr_CtrlIsFocused)(c) != 0;
+                IWzVector2D* lt = CtlLT(c);
+                if (winOk && lt) {
+                    chat = Rect{win.left + lt->rx, win.top + lt->ry, *reinterpret_cast<int*>(c + kOff_CtrlW),
+                        *reinterpret_cast<int*>(c + kOff_CtrlH)};
+                    chatOk = true;
+                }
+            });
+            int dx = 0, dy = 0;
+            if (HomeRect(kStatusBar, bar)) { UiLayout_Offset(kStatusBar, dx, dy); bar.left += dx; bar.top += dy; barOk = true; }
+            if (HomeRect(kQuickSlot, qs)) { UiLayout_Offset(kQuickSlot, dx, dy); qs.left += dx; qs.top += dy; qsOk = true; }
+            for (int g = 0; g < 2; ++g) {
+                Rect bounds;
+                if (GroupHome(kFirstGroup + g, groups[g], bounds)) {
+                    GroupOffsetPx(kFirstGroup + g, dx, dy);
+                    groups[g].left += dx;
+                    groups[g].top += dy;
+                    groupOk[g] = true;
+                }
+            }
+        }
+    } catch (...) {
+    }
+    char json[768];
+    sprintf_s(json, "{\"pid\":%lu,\"t_ms\":%llu,\"stage\":\"%s\",\"screen\":[%d,%d],\"chat_open\":%s",
+        GetCurrentProcessId(), now, stage, get_screen_width(), get_screen_height(), chatOpen ? "true" : "false");
+    AppendRect(json, sizeof(json), "status_bar", bar, barOk);
+    AppendRect(json, sizeof(json), "chat_input", chat, chatOk);
+    AppendRect(json, sizeof(json), "quick_slot", qs, qsOk);
+    AppendRect(json, sizeof(json), "buttons", groups[0], groupOk[0]);
+    AppendRect(json, sizeof(json), "icon_buttons", groups[1], groupOk[1]);
+    strcat_s(json, "}\n");
+    HANDLE h = CreateFileA("slums-ui-state.json.tmp", GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL,
+        nullptr);
+    if (h == INVALID_HANDLE_VALUE) return;
+    DWORD written = 0;
+    WriteFile(h, json, static_cast<DWORD>(strlen(json)), &written, nullptr);
+    CloseHandle(h);
+    MoveFileExA("slums-ui-state.json.tmp", "slums-ui-state.json", MOVEFILE_REPLACE_EXISTING);
+}
+
+}  // namespace
+
 // From CWvsApp::CallUpdate (bypass.cpp), every frame: keeps the button groups where the player put them, also
-// when the client rebuilds the status bar.
+// when the client rebuilds the status bar, and writes the QA state when it is switched on.
 void UiLayout_Tick() {
-    if (!*reinterpret_cast<void* const*>(kAddr_UserLocal)) return;
-    ApplyGroups();
+    if (*reinterpret_cast<void* const*>(kAddr_UserLocal)) ApplyGroups();
+    if (UiStateEnabled()) WriteUiState();
 }
 
 // From CConfig::LoadCharacter_hook (resolution.cpp).
@@ -336,7 +423,10 @@ void UiLayout_DrawGrips() {
         Rect home, bounds{0, 0, sw, sh};
         int dx = 0, dy = 0;
         if (e >= kFirstGroup) {
-            if (!GroupHome(e, home, bounds)) continue;
+            if (!GroupHome(e, home, bounds)) {
+                LOG_ONCE_PER_ID(e, "UI layout DIAG: no rect for group %d (%d controls known)", e, g_nStock);
+                continue;
+            }
             GroupOffsetPx(e, dx, dy);
         } else {
             if (!HomeRect(e, home)) continue;
@@ -381,9 +471,14 @@ void UiLayout_DrawGrips() {
 
         const ImVec2 a(static_cast<float>(r.left), static_cast<float>(r.top));
         const ImVec2 b(static_cast<float>(r.left + r.w), static_cast<float>(r.top + r.h));
-        if (hot) fg->AddRectFilled(a, b, IM_COL32(90, 150, 255, 60));   // idle: outline only, the bar stays readable
-        fg->AddRect(a, b, IM_COL32(120, 175, 255, 230), 0.0f, 0, 2.0f);
-        fg->AddText(ImVec2(a.x + 6, a.y + 4), IM_COL32(255, 255, 255, 240), kLabel[e]);
+        // Idle: a faint 1 px outline, so the bar stays readable. Under the cursor: fill, bold outline and the name.
+        if (hot) {
+            fg->AddRectFilled(a, b, IM_COL32(90, 150, 255, 60));
+            fg->AddRect(a, b, IM_COL32(120, 175, 255, 230), 0.0f, 0, 2.0f);
+            fg->AddText(ImVec2(a.x + 6, a.y + 4), IM_COL32(255, 255, 255, 240), kLabel[e]);
+        } else {
+            fg->AddRect(a, b, IM_COL32(120, 175, 255, 110), 0.0f, 0, 1.0f);
+        }
     }
 }
 #endif  // MAPLEROOT_INTEGRATION
