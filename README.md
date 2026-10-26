@@ -92,6 +92,10 @@ The client draws through d3d8to9 (`d3d8.dll` imports `d3d9!Direct3DCreate9`). `s
 | `[graphics] adapterfallback` | `false`: log only, no CreateDevice retries | `true` |
 | `[clienthax] settingswindow` | `false`: no HUD and Ctrl+F10/F11 do nothing | `true` |
 
+## Movable status bar and quick slot (1.6.0)
+
+**Edit UI** (Ctrl+F11, or the checkbox in the Ctrl+F10 HUD window) is one switch for the whole layout. While it is on, in the field, the HUD widgets can be dragged and resized, and the stock status bar and quick slot each get an outlined grip that drags them live. Turn it off and everything is fixed again, and every click goes to the game. `src/uilayout.cpp` moves an element through its origin vector: `CWndMan::ms_pOrgStatusBar` / `ms_pOrgQuickSlot`, placed by `ResetOrgWindow` in `src/wvs/wndman.h`. Quick slot clicks already work from both origins (`GetShortCutIndexByPos_hook`). Offsets are kept per character in `HKCU\Software\SlumsMS\Layout` (`w<world>_c<id>_bar` / `_qs`) as screen fractions, so they follow resolution changes, and are clamped so the element stays on screen (`src/uilayout_policy.h`). HP, MP and EXP are separate HUD modules (the first of the modular HUD): each can be shown or hidden, moved, resized, and given its own text size and opacity in the HUD window. In Edit UI, modules and the stock elements snap to a 1.25% grid (faint lines every 5%; "Snap to grid while editing" turns it off). "Reset UI layout" in the HUD window puts the widgets, the bar, the quick slot and the inventory size back to stock. The grips need the D3D9 host (`[graphics] d3d9host`); saved positions apply without it.
+
 ## Bounces: double-tap jump and blocked maps
 
 The server gives every character MapleRoot's Ninja Bounce (1050 / 10001050 / 20001050, "Jump Around!") and Vertical Bounce (1054 / 10001054 / 20001054, "Jump Upwards!"). MapleRoot makes them work by routing those ids through `CUserLocal::DoActiveSkill` (its detour) into the thieves' bound jump, `CUserLocal::DoActiveSkill_BoundJump` (`0x0096BE38`, cave at `0x0096BF0B`). `src/bounce.cpp` and `src/bounce_rules.h` add:

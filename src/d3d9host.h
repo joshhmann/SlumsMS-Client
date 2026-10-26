@@ -16,7 +16,17 @@ bool Overlay_HasHud();           // any widget switched on
 void Overlay_DrawHud();
 void Overlay_DrawSettings();     // the HUD section of the settings window
 bool Overlay_IsFrozen();
+bool Overlay_SnapOn();         // Edit UI snaps to OverlayPolicy::kGridFrac
 void Overlay_ToggleFreeze();
 
-// hud_vitals.cpp: the HP / MP / EXP widget (the pilot).
-void HudVitals_Draw();
+// hud_vitals.cpp: the HP, MP and EXP modules (one bar each).
+void HudVitals_DrawHP();
+void HudVitals_DrawMP();
+void HudVitals_DrawEXP();
+
+// uilayout.cpp: grips over the stock status bar and quick slot while the HUD is unfrozen, and their reset.
+void UiLayout_DrawGrips();
+void UiLayout_Reset();
+#ifdef MAPLEROOT_INV_RESIZE
+void InvResize_ResetSize();   // invresize.cpp: back to the stock 4x6 for this character
+#endif

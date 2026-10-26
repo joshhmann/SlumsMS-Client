@@ -158,7 +158,8 @@ void InitImGui(IDirect3DDevice9* dev) {
 }
 
 void DrawOverlay(IDirect3DDevice9* dev) {
-    if (!g_bVisible && !(g_bSettingsWindow && Overlay_HasHud())) return;
+    // Drawn while the HUD window is open, a widget is on, or Edit UI is on (grips over the stock bar).
+    if (!g_bVisible && !(g_bSettingsWindow && (Overlay_HasHud() || !Overlay_IsFrozen()))) return;
     try {
         if (!g_bImGuiReady) InitImGui(dev);
         ImGuiIO& io = ImGui::GetIO();

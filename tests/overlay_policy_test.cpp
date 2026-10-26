@@ -30,6 +30,8 @@ int main() {
         Check(c.x + c.w <= 800.01f && c.y + c.h <= 600.01f && c.x >= 0 && c.y >= 0, "kept on screen");
         const Rect d = FromFractions(0, 0, 50, 50, 800, 600, 120, 40);
         Check(Near(d.w, 120) && Near(d.h, 40), "minimum size");
+        Check(Snap(0) == 0 && Snap(62) == 0 && Snap(63) == 125 && Snap(190) == 250, "snaps to the 1.25% grid");
+        Check(Snap(-63) == -125 && Snap(9990) == 10000 && Snap(10000) == 10000, "negative and edge values");
         Check(ToFraction(900, 800) == kFrac && ToFraction(-5, 800) == 0, "fractions clamp");
 
         Check(Near(FontPixels(600, 100), 15) && Near(FontPixels(1080, 100), 27), "font follows the screen");

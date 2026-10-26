@@ -1,5 +1,5 @@
 // ============================================================
-// hud_vitals.cpp: the HP / MP / EXP widget, the HUD pilot (1.6.0, ticket 91).
+// hud_vitals.cpp: the HP, MP and EXP modules of the modular HUD (1.6.0, ticket 91).
 //
 // Reads exactly what the stock status bar shows. CUIStatusBar::Draw (0x008D80A4) passes these to SetNumberValue
 // (0x008D850B), which MapleRoot already detours, so this reads them the way Draw does instead of stacking a hook:
@@ -86,25 +86,48 @@ Vitals SehReadVitals() {
     return v;
 }
 
-void Bar(const char* label, long long value, long long max, bool twoDecimals, const ImVec4& color) {
-    char text[96];
-    OverlayPolicy::BarLabel(text, sizeof(text), value, max, twoDecimals);
-    ImGui::TextUnformatted(label);
-    ImGui::SameLine(ImGui::CalcTextSize("EXP").x + ImGui::GetStyle().ItemSpacing.x * 2);
+// One module's bar: the whole width, the label inside ("HP 25000 / 50073 (49%)").
+void ModuleBar(const char* label, long long value, long long max, bool twoDecimals, const ImVec4& color) {
+    char numbers[96], text[112];
+    OverlayPolicy::BarLabel(numbers, sizeof(numbers), value, max, twoDecimals);
+    sprintf_s(text, "%s %s", label, numbers);
     ImGui::PushStyleColor(ImGuiCol_PlotHistogram, color);
     ImGui::ProgressBar(OverlayPolicy::Ratio(value, max), ImVec2(-1.0f, 0.0f), text);
     ImGui::PopStyleColor();
 }
 
+// Read once per frame for all three modules.
+const Vitals& FrameVitals() {
+    static Vitals s_v = {};
+    static int s_frame = -1;
+    if (s_frame != ImGui::GetFrameCount()) {
+        s_frame = ImGui::GetFrameCount();
+        s_v = ClientMatches() ? SehReadVitals() : Vitals{};
+    }
+    return s_v;
+}
+
+bool Waiting(const Vitals& v) {
+    if (v.ok) return false;
+    ImGui::TextDisabled("Waiting for a character...");
+    return true;
+}
+
 }  // namespace
 
-void HudVitals_Draw() {
-    const Vitals v = ClientMatches() ? SehReadVitals() : Vitals{};
-    if (!v.ok) {
-        ImGui::TextDisabled("Waiting for a character...");
-        return;
+void HudVitals_DrawHP() {
+    const Vitals& v = FrameVitals();
+    if (!Waiting(v)) ModuleBar("HP", v.hp, v.maxHp, false, ImVec4(0.86f, 0.22f, 0.22f, 1.0f));
+}
+
+void HudVitals_DrawMP() {
+    const Vitals& v = FrameVitals();
+    if (!Waiting(v)) ModuleBar("MP", v.mp, v.maxMp, false, ImVec4(0.22f, 0.45f, 0.90f, 1.0f));
+}
+
+void HudVitals_DrawEXP() {
+    const Vitals& v = FrameVitals();
+    if (!Waiting(v)) {
+        ModuleBar("EXP", MapleRoot_CurrentExp(), MapleRoot_NextLevelExp(), true, ImVec4(0.93f, 0.74f, 0.18f, 1.0f));
     }
-    Bar("HP", v.hp, v.maxHp, false, ImVec4(0.86f, 0.22f, 0.22f, 1.0f));
-    Bar("MP", v.mp, v.maxMp, false, ImVec4(0.22f, 0.45f, 0.90f, 1.0f));
-    Bar("EXP", MapleRoot_CurrentExp(), MapleRoot_NextLevelExp(), true, ImVec4(0.93f, 0.74f, 0.18f, 1.0f));
 }
