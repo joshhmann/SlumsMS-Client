@@ -86,8 +86,12 @@ void Build(int sw, int sh) {
         g_pLayer->AddRef();
         g_nBuiltW = sw;
         g_nBuiltH = sh;
-        DebugMessage("Build label: shown at %d,%d (%dx%d) on a %dx%d screen", sw - w - kMargin, sh - h - kMargin, w, h,
-            sw, sh);
+        IWzVector2DPtr org = CWndMan::GetInstance()->m_pOrgWindow;
+        DebugMessage("Build label: shown at %d,%d (%dx%d) on a %dx%d screen; layer x %d y %d z %d %dx%d color %08X "
+            "visible %d; window origin %d,%d", sw - w - kMargin, sh - h - kMargin, w, h, sw, sh,
+            static_cast<int>(g_pLayer->x), static_cast<int>(g_pLayer->y), g_pLayer->Getz(), g_pLayer->Getwidth(),
+            g_pLayer->Getheight(), static_cast<unsigned>(g_pLayer->Getcolor()), g_pLayer->Getvisible(),
+            static_cast<int>(org->x), static_cast<int>(org->y));
     } catch (...) {
         Release();
         g_bFailed = true;   // not worth retrying every frame; the title still shows the build
