@@ -11,6 +11,7 @@
 #include "buildshow_text.h"
 #include "buildstamp_proto.h"
 #include "wvs/util.h"
+#include "wvs/wndman.h"
 #include "ztl/ztl.h"
 
 int get_screen_width();
@@ -70,9 +71,12 @@ void Build(int sw, int sh) {
         canvas->DrawRectangle(0, 0, w, h, kClear);
         canvas->DrawTextA(1, 1, Ztl_bstr_t(text), fShadow, Ztl_variant_t(), Ztl_variant_t());
         canvas->DrawTextA(0, 0, Ztl_bstr_t(text), fText, Ztl_variant_t(), Ztl_variant_t());
+        // A new layer is placed from the screen centre; anchor it to the window manager's top-left origin, as the
+        // stock windows are (wvs/wndman.h ResetOrgWindow), so the position below is in screen pixels.
         IWzGr2DLayerPtr made = get_gr()->CreateLayer(sw - w - kMargin, sh - h - kMargin, w, h, kLayerZ,
             static_cast<IUnknown*>(canvas), Ztl_variant_t());
         if (!made) throw 0;
+        made->origin = static_cast<IUnknown*>(CWndMan::GetInstance()->m_pOrgWindow);
         made->visible = 1;
         g_pLayer = made;
         g_pLayer->AddRef();
@@ -92,7 +96,7 @@ void BuildShow_Tick() {
         Release();
         return;
     }
-    if (g_bFailed) return;
+    if (g_bFailed || !CWndMan::IsInstantiated()) return;
     const int sw = get_screen_width(), sh = get_screen_height();
     if (g_pLayer && (sw != g_nBuiltW || sh != g_nBuiltH)) Release();
     if (!g_pLayer) Build(sw, sh);
