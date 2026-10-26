@@ -83,6 +83,8 @@ void Build(int sw, int sh) {
         g_pLayer->AddRef();
         g_nBuiltW = sw;
         g_nBuiltH = sh;
+        DebugMessage("Build label: shown at %d,%d (%dx%d) on a %dx%d screen", sw - w - kMargin, sh - h - kMargin, w, h,
+            sw, sh);
     } catch (...) {
         Release();
         g_bFailed = true;   // not worth retrying every frame; the title still shows the build
@@ -93,6 +95,10 @@ void Build(int sw, int sh) {
 }  // namespace
 
 void BuildShow_Tick() {
+    void* stage = *reinterpret_cast<void**>(kAddr_CurrentStage);
+    LOG_ONCE_PER_ID(static_cast<int>(stage ? *reinterpret_cast<uintptr_t*>(stage) : 0) + (CWndMan::IsInstantiated() ? 1 : 0),
+        "Build label: stage vftable 0x%08X, window manager %d",
+        static_cast<unsigned>(stage ? *reinterpret_cast<uintptr_t*>(stage) : 0), CWndMan::IsInstantiated() ? 1 : 0);
     if (!OnLoginStage()) {
         Release();
         return;
