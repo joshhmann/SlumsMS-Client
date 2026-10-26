@@ -90,3 +90,45 @@ Known, not fixed in 1.6.0:
 - The ImGui modules draw over stock windows (inventory, stat window) when they overlap. The overlay draws after the game in EndScene, so drawing under the stock UI is not cheap. Hiding a module while a stock window covers it means walking `CWndMan::ms_lpWindow` for window rects. That is 1.7.0.
 - The stock-art look for modules (client gauge sprites as textures) is 1.7.0.
 - The QA driver (client-mcp) finds a moved status bar. Its chat_open check for a moved bar loads at the next Start-QA restart.
+
+## Dissolving the bar (owner, 2026-10-26: in 1.6.0)
+
+The stock bar is three kinds of parts:
+- **Painted on its canvas:** HP/MP gauges and numbers, EXP, level/job/name. These are replaced by modules, and the stock painting is hidden.
+- **Child controls:** 17, logged on TEST. Shop 1000, Trade 1001, Menu 1002, Shortcut 1007, the icon row 2000-2003/1005/1006/1009, the chat input 1011 and its type selector 1012.
+- **Own layers:** the quick slot and the chat log.
+
+Done:
+- The two button groups move and click, through the HitTest hook above. Reset restores them.
+- The QA state file replaces pixel guessing.
+
+Next: the chat input and selector as a module, a level/job/name module, then hiding the painted parts the modules replace. Known: the game menu still pops up at its stock place above the bar, not next to a moved Menu button.
+
+## The owner's split (2026-10-26, docs/160-ui-split-reference.png)
+
+Separate pieces: chat log, chat input row, level/job/name, HP, MP, EXP, the main buttons, the icon row, and the quick
+slots. What the stock bar is made of (status bar layers, logged on TEST):
+
+| Layer (CUIStatusBar +) | Size | What |
+| --- | --- | --- |
+| 0x18 (window layer) | 1920x578 | level number, job, name, HP/MP/EXP numbers (drawn text) |
+| 0xCD0 | 800x578 | bar art: the level plate, the gauge plate, the chat row |
+| 0xCCC | 800x578 | the light background strip |
+| 0xCD4 | 340x31 | the three gauge bars with their HP/MP/EXP labels |
+| 0xBB8 / 0xBBC / 0xBC0 (+0xBC4) | 1x16 stretched | HP / MP / EXP gauge covers (width follows the value) |
+| 0xCB8 | 434x14 | the chat input line |
+| 0xCC4 (+0xCC8, 0xD80) | 1008x80 | the quick slot |
+
+Moving layers works for whole pieces (the quick slot, the gauge bars as one strip), but HP, MP, EXP and level/name
+each span several shared canvases. They become **native modules**: our own game layers, built from the stock
+UI.wz art (gauge, plate and number sprites) and the game font, placed and sized freely. Then the stock pieces they
+replace are hidden (their layers, and their areas of the shared canvases). Same look as stock, fully split, and the
+base for an ElvUI-style skin later.
+
+Done in the split: buttons, icon row, chat input (moves, types, survives chat open/close).
+
+
+## Parked (owner, 2026-10-26)
+
+Parsec and the exit-time crash (C0000005 in slums.dll's exit cleanup, seen once while the owner was on Parsec) are
+parked: Parsec is "easily bypassable". No DXVK or dgVoodoo work.

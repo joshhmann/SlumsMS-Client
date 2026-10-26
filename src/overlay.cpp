@@ -15,11 +15,18 @@
 #include "overlay_policy.h"
 
 #include "imgui.h"
+#include "misc/freetype/imgui_freetype.h"
+
+#include <cmath>
 
 namespace {
 
 constexpr const char* kKey = "Software\\SlumsMS\\Overlay";
-constexpr float kAtlasPx = 32.0f;   // fonts are baked once at this size and scaled down
+// The font is baked (FreeType, light hinting) at the size it is drawn at: the HUD size times the largest module text
+// size, rebuilt when either changes (Overlay_BeforeFrame), so text is never a scaled-up bitmap.
+float g_fAtlasPx = 0.0f;
+float g_fWantAtlasPx = 32.0f;
+char g_szFontPath[MAX_PATH] = {};
 constexpr uintptr_t kAddr_UserLocal = 0x00BEBF98;   // CUserLocal*: set only while a character is in the field
 
 DWORD ReadPref(const char* name, DWORD fallback) {
@@ -45,14 +52,24 @@ struct Widget {
     int alpha;           // background opacity, percent
 };
 
+constexpr int kTextDefault = 125;   // module text starts a size up (readability, owner 2026-10-26)
+
 // The modular HUD's modules (owner, 2026-10-26: FFXIV-style, each movable and sized on its own). HP, MP and EXP are
 // the 1.6.0 set (ticket 91); quick slots, buffs/cooldowns and chat follow in 1.7.0.
 Widget g_widgets[] = {
-    {"hp", "HP", &HudVitals_DrawHP, 1, 125, 1750, 2500, 600, true, 0, 0, 0, 0, false, true, 100, 94},
-    {"mp", "MP", &HudVitals_DrawMP, 1, 125, 2375, 2500, 600, true, 0, 0, 0, 0, false, true, 100, 94},
-    {"exp", "EXP", &HudVitals_DrawEXP, 1, 125, 3000, 2500, 600, true, 0, 0, 0, 0, false, true, 100, 94},
+    {"hp", "HP", &HudVitals_DrawHP, 1, 125, 1750, 2500, 600, true, 0, 0, 0, 0, false, true, kTextDefault, 94},
+    {"mp", "MP", &HudVitals_DrawMP, 1, 125, 2375, 2500, 600, true, 0, 0, 0, 0, false, true, kTextDefault, 94},
+    {"exp", "EXP", &HudVitals_DrawEXP, 1, 125, 3000, 2500, 600, true, 0, 0, 0, 0, false, true, kTextDefault, 94},
 };
 constexpr int kTextMin = 60, kTextMax = 200, kAlphaMin = 0, kAlphaMax = 100;
+
+int MaxTextPct() {
+    int m = 100;
+    for (const auto& w : g_widgets) {
+        if (w.on) m = (std::max)(m, w.textPct);
+    }
+    return m;
+}
 
 bool g_bLoaded = false;
 bool g_bFrozen = true;
@@ -76,7 +93,7 @@ void LoadPrefs() {
         sprintf_s(name, "%s_w", w.id);   w.fw = static_cast<int>(ReadPref(name, w.defW));
         sprintf_s(name, "%s_h", w.id);   w.fh = static_cast<int>(ReadPref(name, w.defH));
         sprintf_s(name, "%s_text", w.id);
-        w.textPct = (std::min)((std::max)(static_cast<int>(ReadPref(name, 100)), kTextMin), kTextMax);
+        w.textPct = (std::min)((std::max)(static_cast<int>(ReadPref(name, kTextDefault)), kTextMin), kTextMax);
         sprintf_s(name, "%s_alpha", w.id);
         w.alpha = (std::min)((std::max)(static_cast<int>(ReadPref(name, 94)), kAlphaMin), kAlphaMax);
         w.loaded = true;
@@ -136,8 +153,28 @@ void ApplyTheme() {
     c[ImGuiCol_ResizeGripActive] = blueDark;
 }
 
+int MaxTextPct();
+
+// The base text size for this screen; the atlas is baked at base x the largest module text size and modules scale
+// down from it (SetWindowFontScale), which stays sharp.
 void ApplyScale(float screenH) {
-    ImGui::GetIO().FontGlobalScale = OverlayPolicy::FontPixels(screenH, g_nScale) / kAtlasPx;
+    const float base = OverlayPolicy::FontPixels(screenH, g_nScale);
+    g_fWantAtlasPx = (std::min)((std::max)(base * MaxTextPct() / 100.0f, 11.0f), 96.0f);
+    if (g_fAtlasPx > 0) ImGui::GetIO().FontGlobalScale = base / g_fAtlasPx;
+}
+
+void BuildFont(float px) {
+    ImGuiIO& io = ImGui::GetIO();
+    io.Fonts->Clear();
+    ImFontConfig cfg;
+    cfg.SizePixels = px;
+    cfg.FontBuilderFlags = ImGuiFreeTypeBuilderFlags_LightHinting;
+    if (g_szFontPath[0]) {
+        io.Fonts->AddFontFromFileTTF(g_szFontPath, px, &cfg);
+    } else {
+        io.Fonts->AddFontDefault(&cfg);
+    }
+    g_fAtlasPx = px;
 }
 
 }  // namespace
@@ -145,17 +182,16 @@ void ApplyScale(float screenH) {
 void Overlay_Setup() {
     LoadPrefs();
     ImGuiIO& io = ImGui::GetIO();
+    (void)io;
     char path[MAX_PATH];
     const UINT n = GetWindowsDirectoryA(path, MAX_PATH);
     if (n && n < MAX_PATH - 24) strcat_s(path, "\\Fonts\\tahoma.ttf");
     if (n && GetFileAttributesA(path) != INVALID_FILE_ATTRIBUTES) {
-        io.Fonts->AddFontFromFileTTF(path, kAtlasPx);
+        strcpy_s(g_szFontPath, path);
     } else {
-        ImFontConfig cfg;
-        cfg.SizePixels = kAtlasPx;
-        io.Fonts->AddFontDefault(&cfg);
         DebugMessage("Overlay: tahoma.ttf not found, using ImGui's default font");
     }
+    BuildFont(g_fWantAtlasPx);
     ApplyTheme();
 }
 
@@ -168,6 +204,15 @@ bool Overlay_HasHud() {
 }
 
 bool Overlay_IsFrozen() { return g_bFrozen; }
+
+// Before ImGui's frame (d3d9host.cpp): rebake the font when the size it is drawn at changed by a pixel or more.
+// The DX9 backend re-uploads the font texture on its next NewFrame once its device objects are invalidated.
+bool Overlay_BeforeFrame() {
+    if (g_fAtlasPx > 0 && std::fabs(g_fWantAtlasPx - g_fAtlasPx) < 1.0f) return false;
+    BuildFont(std::round(g_fWantAtlasPx));
+    ApplyScale(ImGui::GetIO().DisplaySize.y > 0 ? ImGui::GetIO().DisplaySize.y : 600.0f);
+    return true;
+}
 bool Overlay_SnapOn() { return g_bSnap; }
 
 void Overlay_ToggleFreeze() {
@@ -187,8 +232,8 @@ void Overlay_DrawHud() {
         ApplyScale(screen.y);
         for (auto& w : g_widgets) w.place = true;
     }
-    const float minW = 120.0f * ImGui::GetIO().FontGlobalScale * kAtlasPx / 15.0f;
-    const float minH = 40.0f * ImGui::GetIO().FontGlobalScale * kAtlasPx / 15.0f;
+    const float minW = 120.0f * ImGui::GetIO().FontGlobalScale * g_fAtlasPx / 15.0f;
+    const float minH = 40.0f * ImGui::GetIO().FontGlobalScale * g_fAtlasPx / 15.0f;
 
     if (!g_bFrozen && g_bSnap) {   // the grid, faint, every 4th line (5%) drawn
         ImDrawList* bg = ImGui::GetBackgroundDrawList();
@@ -198,6 +243,8 @@ void Overlay_DrawHud() {
             bg->AddLine(ImVec2(0, y), ImVec2(screen.x, y), IM_COL32(255, 255, 255, 28));
         }
     }
+    // The stock bar, quick slot and button grips first, so the modules' windows stay above them.
+    if (!g_bFrozen) UiLayout_DrawGrips();
     for (auto& w : g_widgets) {
         if (!w.on) continue;
         ImGuiWindowFlags flags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings |
@@ -208,7 +255,7 @@ void Overlay_DrawHud() {
         }
         // Height follows the content and the font size; only the width is the player's.
         const ImGuiStyle& st = ImGui::GetStyle();
-        const float titlePx = ImGui::GetIO().FontGlobalScale * kAtlasPx;
+        const float titlePx = ImGui::GetIO().FontGlobalScale * g_fAtlasPx;
         const float fontPx = titlePx * w.textPct / 100.0f;
         const float rowH = fontPx + st.FramePadding.y * 2;
         const float h = w.rows * rowH + (w.rows - 1) * st.ItemSpacing.y + st.WindowPadding.y * 2 +
@@ -246,7 +293,6 @@ void Overlay_DrawHud() {
         }
         ImGui::End();
     }
-    if (!g_bFrozen) UiLayout_DrawGrips();   // the stock bar and quick slot move in the same edit mode
 }
 
 // The HUD window's controls: they apply at once, no restart.
@@ -266,14 +312,17 @@ void Overlay_DrawSettings() {
             }
             ImGui::TableNextColumn();
             ImGui::SetNextItemWidth(ImGui::GetFontSize() * 10);
-            if (ImGui::SliderInt("Text", &w.textPct, kTextMin, kTextMax, "%d%%")) SaveLook(w);
+            if (ImGui::SliderInt("Text", &w.textPct, kTextMin, kTextMax, "%d%%")) {
+                SaveLook(w);
+                ApplyScale(ImGui::GetIO().DisplaySize.y);   // the font is rebaked for the new largest size
+            }
             ImGui::TableNextColumn();
             ImGui::SetNextItemWidth(ImGui::GetFontSize() * 10);
             if (ImGui::SliderInt("Opacity", &w.alpha, kAlphaMin, kAlphaMax, "%d%%")) SaveLook(w);
             ImGui::TableNextColumn();
             if (ImGui::SmallButton("Reset")) {
                 w.fx = w.defX; w.fy = w.defY; w.fw = w.defW; w.fh = w.defH;
-                w.textPct = 100; w.alpha = 94;
+                w.textPct = kTextDefault; w.alpha = 94;
                 w.place = true;
                 SaveLayout(w);
                 SaveLook(w);
@@ -300,7 +349,7 @@ void Overlay_DrawSettings() {
         // Everything Edit UI can change: widget places and sizes, the status bar and quick slot, the inventory size.
         for (auto& w : g_widgets) {
             w.fx = w.defX; w.fy = w.defY; w.fw = w.defW; w.fh = w.defH;
-            w.textPct = 100; w.alpha = 94;
+            w.textPct = kTextDefault; w.alpha = 94;
             w.place = true;
             SaveLayout(w);
             SaveLook(w);

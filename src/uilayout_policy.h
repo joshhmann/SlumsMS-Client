@@ -15,7 +15,11 @@
 
 namespace UiLayout {
 
-enum Elem { kStatusBar = 0, kQuickSlot, kElemCount };
+enum Elem { kStatusBar = 0, kQuickSlot, kMainButtons, kIconRow, kChatInput, kNativeHp, kNativeMp, kNativeExp,
+    kNativeLevel, kElemCount };
+constexpr int kFirstGroup = kMainButtons;   // kFirstGroup..kLastGroup: groups of the status bar's own child controls
+constexpr int kLastGroup = kChatInput;
+constexpr int kFirstNative = kNativeHp;     // from here on: our own stock-art modules (hud_native.cpp)
 
 constexpr int kFrac = 10000;
 
@@ -50,25 +54,42 @@ inline int ToFrac(int px, int extent) {
     return (std::max)(-kFrac, (std::min)(f, kFrac));
 }
 
-// Pixel offset that keeps `home` (the element at offset 0) fully on a sw x sh screen. Without a known size the
-// offset is only kept within one screen.
-inline void Clamp(const Rect& home, int sw, int sh, int& dx, int& dy) {
+// Pixel offset that keeps `home` (the element at offset 0) fully inside `bounds`. Without a known size the offset
+// is only kept within one bounds' size.
+inline void ClampWithin(const Rect& home, const Rect& bounds, int& dx, int& dy) {
     if (home.w > 0 && home.h > 0) {
-        const int minDx = -home.left, maxDx = sw - home.w - home.left;
-        const int minDy = -home.top, maxDy = sh - home.h - home.top;
+        const int minDx = bounds.left - home.left, maxDx = bounds.left + bounds.w - home.w - home.left;
+        const int minDy = bounds.top - home.top, maxDy = bounds.top + bounds.h - home.h - home.top;
         dx = minDx <= maxDx ? (std::max)(minDx, (std::min)(dx, maxDx)) : minDx;
         dy = minDy <= maxDy ? (std::max)(minDy, (std::min)(dy, maxDy)) : minDy;
     } else {
-        dx = (std::max)(-sw, (std::min)(dx, sw));
-        dy = (std::max)(-sh, (std::min)(dy, sh));
+        dx = (std::max)(-bounds.w, (std::min)(dx, bounds.w));
+        dy = (std::max)(-bounds.h, (std::min)(dy, bounds.h));
     }
 }
 
-// The pixel offset for a stored fraction on this screen, clamped.
-inline void PixelOffset(Offset o, const Rect& home, int sw, int sh, int& dx, int& dy) {
+// The same, on a sw x sh screen.
+inline void Clamp(const Rect& home, int sw, int sh, int& dx, int& dy) {
+    ClampWithin(home, Rect{0, 0, sw, sh}, dx, dy);
+}
+
+// Where a control group may go: on screen and inside its parent window (a control outside its window draws but
+// gets no clicks).
+inline Rect Intersect(const Rect& a, const Rect& b) {
+    const int l = (std::max)(a.left, b.left), t = (std::max)(a.top, b.top);
+    const int r = (std::min)(a.left + a.w, b.left + b.w), btm = (std::min)(a.top + a.h, b.top + b.h);
+    return Rect{l, t, (std::max)(r - l, 0), (std::max)(btm - t, 0)};
+}
+
+// The pixel offset for a stored fraction on this screen, clamped to `bounds`.
+inline void PixelOffsetWithin(Offset o, const Rect& home, const Rect& bounds, int sw, int sh, int& dx, int& dy) {
     dx = ToPx(o.fx, sw);
     dy = ToPx(o.fy, sh);
-    Clamp(home, sw, sh, dx, dy);
+    ClampWithin(home, bounds, dx, dy);
+}
+
+inline void PixelOffset(Offset o, const Rect& home, int sw, int sh, int& dx, int& dy) {
+    PixelOffsetWithin(o, home, Rect{0, 0, sw, sh}, sw, sh, dx, dy);
 }
 
 }  // namespace UiLayout

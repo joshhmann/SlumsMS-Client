@@ -56,6 +56,20 @@ int main() {
         Clamp(Rect{10, 0, 900, 50}, 800, 600, dx, dy);
         Check(dx == -10, "too wide pins left");
 
+        // A control group stays inside its window: buttons at 573,543 (bar coords) in a 1920x578 window on screen
+        // at 0,322 of a 1600x900 screen may go up to the window's top, not above it.
+        const Rect window{0, 322, 1920, 578};
+        const Rect bounds = Intersect(window, Rect{0, 0, 1600, 900});
+        Check(bounds.left == 0 && bounds.top == 322 && bounds.w == 1600 && bounds.h == 578, "window clipped to screen");
+        const Rect btn{573, 322 + 543, 222, 34};
+        dx = -100; dy = -900;
+        ClampWithin(btn, bounds, dx, dy);
+        Check(dx == -100 && dy == -543, "stops at the window top");
+        dx = 2000; dy = 0;
+        ClampWithin(btn, bounds, dx, dy);
+        Check(dx == 1600 - 222 - 573, "and at the screen edge");
+        Check(Intersect(Rect{0, 0, 10, 10}, Rect{20, 20, 5, 5}).w == 0, "disjoint rects intersect empty");
+
         std::cout << "uilayout: packing, scaling and clamping OK\n";
         return 0;
     } catch (const std::exception& e) {
