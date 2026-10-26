@@ -132,3 +132,9 @@ Done in the split: buttons, icon row, chat input (moves, types, survives chat op
 
 Parsec and the exit-time crash (C0000005 in slums.dll's exit cleanup, seen once while the owner was on Parsec) are
 parked: Parsec is "easily bypassable". No DXVK or dgVoodoo work.
+
+## UI work stopped for 1.6.0 (owner, 2026-10-26)
+
+1.6.0 ships what is above. The ImGui side for 1.6.0 is the HP, MP and EXP modules, themed in the stock windows'
+colours. Moved to 1.7.0: game zoom, the chat log, the RmlUi skin (the owner's mockup, main HUD pieces only; every
+other window stays stock), magnet linking, and widget mode as an option that hides the stock bar.
