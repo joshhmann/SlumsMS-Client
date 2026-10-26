@@ -3,6 +3,9 @@ target_include_directories(buildstamp_proto_test PRIVATE ../src)
 target_compile_definitions(buildstamp_proto_test PRIVATE SLUMS_BUILD_NUMBER=${SLUMS_BUILD_NUMBER} "SLUMS_RELEASE=\"${SLUMS_RELEASE}\"")
 add_test(NAME buildstamp_wire_format COMMAND buildstamp_proto_test)
 
+add_executable(buildshow_test buildshow_test.cpp)
+add_test(NAME buildshow_text COMMAND buildshow_test)
+
 add_executable(checked_hook_test checked_hook_test.cpp)
 add_test(NAME checked_hook_transactions COMMAND checked_hook_test)
 
@@ -43,6 +46,21 @@ if(MOBDAMAGE_TEST_EXE AND EXISTS "${MOBDAMAGE_TEST_EXE}")
 else()
     add_test(NAME mobdamage_low_defence COMMAND mobdamage_patch_test)
 endif()
+
+add_executable(hpmp_patch_test hpmp_patch_test.cpp)
+set(HPMP_TEST_EXE "Z:/MSv83/SlumsMS-dev/client-1.5.0-fixes2/exe-copy/MapleStory.exe" CACHE FILEPATH
+    "MapleStory.exe whose bytes the 4-byte HP/MP test checks (optional)")
+if(HPMP_TEST_EXE AND EXISTS "${HPMP_TEST_EXE}")
+    add_test(NAME hpmp_sites COMMAND hpmp_patch_test "${HPMP_TEST_EXE}")
+else()
+    add_test(NAME hpmp_sites COMMAND hpmp_patch_test)
+endif()
+
+add_executable(d3d9host_policy_test d3d9host_policy_test.cpp)
+add_test(NAME d3d9host_adapter_fallback COMMAND d3d9host_policy_test)
+
+add_executable(overlay_policy_test overlay_policy_test.cpp)
+add_test(NAME overlay_hud_layout COMMAND overlay_policy_test)
 
 set(MOVEMENTKEYS_TEST_CLIENT "${CMAKE_SOURCE_DIR}/../Addons/WeatherWork/TestClient" CACHE PATH "Client for loose UI and movement checks")
 if(MAPLEROOT_MOVEMENT_KEYS AND (EXISTS "${MOVEMENTKEYS_TEST_CLIENT}/Data/UI/UIWindow.img" OR EXISTS "${MOVEMENTKEYS_TEST_CLIENT}/UI.wz"))

@@ -1,6 +1,10 @@
 #include "pch.h"
 #include "hook.h"
 #include "constants.h"
+#include "buildshow_text.h"
+#ifdef MAPLEROOT_INTEGRATION
+#include "d3d9host.h"
+#endif
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -44,6 +48,9 @@ static CreateWindowExA_t CreateWindowExA_orig = reinterpret_cast<CreateWindowExA
 static WNDPROC g_WndProc;
 
 LRESULT WndProc_hook(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+#ifdef MAPLEROOT_INTEGRATION
+    if (D3D9Host_HandleMessage(hWnd, msg, wParam, lParam)) return 0;   // the ImGui overlay (Ctrl+F10)
+#endif
     static POINT ptOffset;
     static bool bMoving;
     switch (msg) {
@@ -109,7 +116,12 @@ HWND WINAPI CreateWindowExA_hook(DWORD dwExStyle, LPCSTR lpClassName, LPCSTR lpW
     if (!lpClassName || strcmp(lpClassName, "MapleStoryClass") != 0) {
         return CreateWindowExA_orig(dwExStyle, lpClassName, lpWindowName, dwStyle, X, Y, nWidth, nHeight, hWndParent, hMenu, hInstance, lpParam);
     }
-    HWND hWnd = CreateWindowExA_orig(dwExStyle, lpClassName, lpWindowName, 0xCA0000, CW_USEDEFAULT, CW_USEDEFAULT, nWidth, nHeight, hWndParent, hMenu, hInstance, lpParam);
+    // "SlumsMS 1.6.0 (10600)": the same release and build as the login stamp. Set again after creation in case
+    // another CreateWindowExA hook (MapleRoot's has its own name) sits inside this one.
+    char sTitle[96];
+    BuildShow::WindowTitle(sTitle, sizeof(sTitle), SLUMS_RELEASE, SLUMS_BUILD_NUMBER);
+    HWND hWnd = CreateWindowExA_orig(dwExStyle, lpClassName, sTitle, 0xCA0000, CW_USEDEFAULT, CW_USEDEFAULT, nWidth, nHeight, hWndParent, hMenu, hInstance, lpParam);
+    if (hWnd) SetWindowTextA(hWnd, sTitle);
     g_WndProc = reinterpret_cast<WNDPROC>(SetWindowLongPtrA(hWnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(&WndProc_hook)));
     return hWnd;
 }
@@ -221,4 +233,7 @@ void AttachSystemHooks() {
     ATTACH_HOOK(CreateWindowExA_orig, CreateWindowExA_hook);
     ATTACH_HOOK(RegCreateKeyExA_orig, RegCreateKeyExA_hook);
     ATTACH_HOOK(WSPStartup_orig, WSPStartup_hook);
+#ifdef MAPLEROOT_INTEGRATION
+    AttachD3D9Host();   // before the game creates its Direct3D objects
+#endif
 }

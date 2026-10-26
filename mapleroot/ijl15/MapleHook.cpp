@@ -360,3 +360,14 @@ BOOL HaxMaple() {
 	init();
 	return TRUE;
 }
+
+// SlumsMS bridge (src/mapleroot.h): MapleRoot's 64-bit EXP for slums.dll's ImGui HUD. CharacterDataEx is defined in
+// a header this file includes, so the values are reached from here.
+long long MapleRoot_CurrentExp() {
+	return CharacterDataEx::GetInstance()->m_liExp;
+}
+
+long long MapleRoot_NextLevelExp() {
+	if (!*reinterpret_cast<void**>(0x00BEBF98)) return 0;   // no CUserLocal before the field: its level is unknown
+	return get_next_level_exp();
+}

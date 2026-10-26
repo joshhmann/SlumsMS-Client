@@ -68,6 +68,8 @@ void AttachPetEquipFlagMod();   // petequipflag.cpp: newer pets overflow the 128
 void AttachProposalGenderMod(); // proposalgender.cpp: any gender may use an engagement ring box
 void AttachCreateBlockMod();    // createblock.cpp: no random "high population" block on character creation
 void AttachMobDamageMod();      // mobdamage.cpp: low defence never adds mob touch damage, [clienthax] lowdefensepenalty
+void AttachHpMpMod();           // hpmp.cpp: 4-byte HP/MP up to 99,999; refuses to start on unexpected bytes
+void HpMp_Verify();             // hpmp.cpp: after every other mod, checks none overwrote an HP/MP site
 void AttachTempStatMod();
 #ifdef MAPLEROOT_INV_RESIZE
 void AttachInvResizeMod();   // invresize.cpp: drag-to-resize item inventory, config.ini [clienthax] invresize
@@ -126,6 +128,9 @@ inline void AttachClientHooks() {
 #ifdef MAPLEROOT_INTEGRATION
     VerifyKaentakeHooks("AttachClientBypass");
 #endif
+    // Before MapleRoot and the other mods, so every HP/MP site is checked against the stock client.
+    DebugMessage("Installing: AttachHpMpMod();");
+    AttachHpMpMod();
 #ifdef MAPLEROOT_INTEGRATION
     InitializeMapleRoot();
 #endif
@@ -257,6 +262,7 @@ inline void AttachClientHooks() {
     VerifyKaentakeHooks("AttachAttackDiagMod");
 #endif
 #endif
+    HpMp_Verify();
 }
 
 

@@ -33,6 +33,9 @@ without the stamp (1.4.1 and older) count as build 0.
   the server release sets `MIN_CLIENT_BUILD` to that build (SlumsMS `tools/release/set-min-client-build`).
 - One-off builds may pass `-DSLUMS_RELEASE_OVERRIDE=` / `-DSLUMS_BUILD_NUMBER_OVERRIDE=` (remove with `-U`).
 - `buildstamp_wire_format` (ctest) checks the bytes against the server's golden packet.
+- Players see the same numbers: the window title is `SlumsMS <release> (<build>)`, the login screen's bottom-right
+  corner shows `SlumsMS <release> · build <build>` (`src/buildshow.cpp`), and slums.dll carries a version resource
+  (FileVersion `1.6.0.10600`, ProductVersion the release, custom `SlumsBuild` = the build; `src/slums.rc.in`).
 
 ## Server address
 
@@ -74,6 +77,20 @@ The client computes the damage a mob's touch does to you (`CalcDamage` mob physi
 | Key | What | Default |
 | --- | --- | --- |
 | `[clienthax] lowdefensepenalty` | `true`: keep the stock rule (low defence adds damage) | `false` |
+
+## 4-byte HP and MP (1.6.0)
+
+The 1.6.0 server sends HP, MaxHP, MP and MaxMP as 4 bytes, so they can go past 32,767 (cap 99,999). `src/hpmp.cpp` is always on and needs a 1.6.0 server; the build stamp (10600 and up) is what the server checks. The client reads the 9 widened packet fields with `Decode4`, stores the four stats raw (checksum 0) instead of as encrypted shorts, and detours `_ZtlSecureFuse<short>` to return them whole. It also widens the 57 places that cut a read-back value to 16 bits and raises the four 30,000 caps. `src/hpmp_patch.h` has the site table and how it was derived. Every site's bytes are checked first. If any differ, or another patch later overwrites one, the client shows an error and exits rather than misreading the server's stats.
+
+## Direct3D 9 host and in-game settings (1.6.0)
+
+The client draws through d3d8to9 (`d3d8.dll` imports `d3d9!Direct3DCreate9`). `src/d3d9host.cpp` detours `Direct3DCreate9` and, on the first `IDirect3D9`, logs every adapter (name, display, mode, primary, HAL caps) and every failing adapter query to `integration.log` (`D3D9:` lines), to pin down the start-up error `-2147467259` with Parsec or another virtual display as the main display. If `CreateDevice` fails it is retried on the other adapters, then with software vertex processing (`src/d3d9host_policy.h`). On the created device `EndScene` and `Reset` are detoured to host Dear ImGui (1.91.4, already built into the MapleRoot companion): **Ctrl+F10** opens the SlumsMS HUD window (`src/settings_overlay.cpp`); Esc or Ctrl+F10 closes it. Game options stay in the launcher, which owns those `config.ini` switches and changes them only while the game is closed. The same overlay draws the HUD (`src/overlay.cpp`): always-on widgets in the client's blue and cream (or plain ImGui), scaled to the resolution, positions saved as screen fractions in `HKCU\Software\SlumsMS\Overlay`. **Ctrl+F11** (or the settings window) freezes/unfreezes it: unfrozen widgets can be dragged and resized, frozen ones are fixed and click-through. The pilot widget is HP / MP / EXP (`src/hud_vitals.cpp`, ticket 91): the same values the stock bar shows, with MapleRoot's 64-bit EXP; the stock bar stays on. Widgets are switched on/off, resized and re-themed in the HUD window, live.
+
+| Key | What | Default |
+| --- | --- | --- |
+| `[graphics] d3d9host` | `false`: no logging, no fallback, no overlay | `true` |
+| `[graphics] adapterfallback` | `false`: log only, no CreateDevice retries | `true` |
+| `[clienthax] settingswindow` | `false`: no HUD and Ctrl+F10/F11 do nothing | `true` |
 
 ## Bounces: double-tap jump and blocked maps
 

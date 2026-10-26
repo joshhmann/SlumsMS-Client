@@ -242,7 +242,10 @@ void CWvsApp::SetUp_hook() {
     reinterpret_cast<void(__cdecl*)(CStage*, void*)>(0x00777347)(pStage, nullptr);
 }
 
+void BuildShow_Tick();   // buildshow.cpp: release and build in the login screen's corner
+
 void CWvsApp::CallUpdate_hook(int tCurTime) {
+    BuildShow_Tick();
 #ifdef MAPLEROOT_WEATHER
     Weather_Tick();
     if (Weather::IsFieldActive()) {
