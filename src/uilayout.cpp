@@ -67,11 +67,11 @@ int g_nDragging = -1;
 int g_nDragDx = 0, g_nDragDy = 0;   // the dragged element's pixel offset
 
 // A grouped control and where the client put it (bar coordinates), seen before we ever move it.
-// Keyed by control id and occurrence (1004 appears three times), never by pointer: the client destroys and
-// recreates controls (the chat edit box on every chat open/close), so a kept pointer dangles.
+// Keyed by control id, never by pointer: the client destroys and recreates controls (the chat edit box on every
+// chat open/close), so a kept pointer dangles. Every instance of an id sits at the same stock place (the three 1004s
+// are all at 536,519), so one entry per id covers them.
 struct StockCtl {
     unsigned id;
-    int nth;
     int group;
     int x, y, w, h;
 };
@@ -131,9 +131,9 @@ IWzVector2D* CtlLT(char* c) {
 }
 
 // The stock entry for a live control, or null.
-const StockCtl* StockOf(unsigned id, int nth) {
+const StockCtl* StockOf(unsigned id) {
     for (int i = 0; i < g_nStock; ++i) {
-        if (g_stock[i].id == id && g_stock[i].nth == nth) return &g_stock[i];
+        if (g_stock[i].id == id) return &g_stock[i];
     }
     return nullptr;
 }
@@ -141,15 +141,8 @@ const StockCtl* StockOf(unsigned id, int nth) {
 // Calls f(control, stock) for each live grouped control, every time from the live list.
 template <typename F>
 void ForEachGrouped(char* bar, F f) {
-    unsigned seenId[32];
-    int seenN = 0;
     ForEachBarControl(bar, [&](char* c) {
-        const unsigned id = *reinterpret_cast<unsigned*>(c + kOff_CtrlId);
-        if (GroupOf(id) < 0 || seenN >= 32) return;
-        int nth = 0;
-        for (int i = 0; i < seenN; ++i) nth += seenId[i] == id;
-        seenId[seenN++] = id;
-        if (const StockCtl* sc = StockOf(id, nth)) f(c, *sc);
+        if (const StockCtl* sc = StockOf(*reinterpret_cast<unsigned*>(c + kOff_CtrlId))) f(c, *sc);
     });
 }
 
@@ -159,22 +152,13 @@ void CaptureStock(char* bar) {
         g_pStockBar = bar;
         g_nStock = 0;
     }
-    unsigned seenId[32];
-    int seenN = 0;
-    ForEachBarControl(bar, [&](char* c) {
+    ForEachBarControl(bar, [](char* c) {
         const unsigned id = *reinterpret_cast<unsigned*>(c + kOff_CtrlId);
         const int g = GroupOf(id);
-        if (g < 0 || seenN >= 32) return;
-        int nth = 0;
-        for (int i = 0; i < seenN; ++i) nth += seenId[i] == id;
-        seenId[seenN++] = id;
-        for (int i = 0; i < g_nStock; ++i) {
-            if (g_stock[i].id == id && g_stock[i].nth == nth) return;   // known: its stock place is already kept
-        }
-        if (g_nStock >= 32) return;
+        if (g < 0 || StockOf(id) || g_nStock >= 32) return;   // not grouped, or its stock place is already kept
         IWzVector2D* lt = CtlLT(c);
         if (!lt) return;
-        g_stock[g_nStock++] = StockCtl{id, nth, g, lt->rx, lt->ry, *reinterpret_cast<int*>(c + kOff_CtrlW),
+        g_stock[g_nStock++] = StockCtl{id, g, lt->rx, lt->ry, *reinterpret_cast<int*>(c + kOff_CtrlW),
             *reinterpret_cast<int*>(c + kOff_CtrlH)};
     });
     LOG_ONCE_PER_ID(g_nStock, "UI layout: %d status bar buttons in movable groups", g_nStock);
