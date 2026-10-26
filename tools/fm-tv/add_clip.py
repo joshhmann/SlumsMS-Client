@@ -10,6 +10,7 @@ Frames: ffmpeg samples the mp4 at --fps and fits it in the screen's 240x180 (--f
 RGB565 (format 513, 2 bytes a pixel, zlib) with origin (0, 180) and the delay, like the stock clips. Runs on Linux.
 
     python3 tools/fm-tv/add_clip.py <UI/MapleTV.img> clip.mp4 [--fps 12] [--fit pad|crop] [--replace K]
+    python3 tools/fm-tv/add_clip.py <UI/MapleTV.img> still.webp [--still 3]
     python3 tools/fm-tv/add_clip.py <UI/MapleTV.img> --drop K
 
 Without --replace the clip is appended (TVmedia/<count>); --replace K overwrites clip K; --drop K removes clip K and
@@ -30,6 +31,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'wz'))
 from native_wz import Node, parse_img, write_img  # noqa: E402
 
 W, H = 240, 180   # the MapleTV screen; the stock clips are this size with origin (0, 180)
+STILLS = {'.png', '.jpg', '.jpeg', '.webp', '.bmp'}
+STILL_FRAMES = 3  # a still is shown as a few identical frames, so the TV's animation timing works
 
 
 def frames(mp4, fps, work, fit):
@@ -38,7 +41,10 @@ def frames(mp4, fps, work, fit):
     else:               # the whole picture, black bars where the shape differs (the stock clip is on black too)
         vf = (f'fps={fps},scale={W}:{H}:force_original_aspect_ratio=decrease:flags=lanczos,'
               f'pad={W}:{H}:(ow-iw)/2:(oh-ih)/2:black')
-    subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', str(mp4), '-vf', vf, str(work / 'f%04d.png')], check=True)
+    if mp4.suffix.lower() in STILLS:
+        vf = vf.split(',', 1)[1]   # a still: one frame, no resampling
+    subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', str(mp4), '-frames:v', '1' if mp4.suffix.lower() in STILLS
+        else '100000', '-vf', vf, str(work / 'f%04d.png')], check=True)
     return [Image.open(p).convert('RGB') for p in sorted(work.glob('f*.png'))]
 
 
@@ -56,6 +62,7 @@ def main():
     ap.add_argument('clip', type=Path, nargs='?')
     ap.add_argument('--fps', type=int, default=12)
     ap.add_argument('--replace', type=int, default=None, help='overwrite TVmedia/K instead of appending')
+    ap.add_argument('--still', type=float, default=3.0, help='seconds a still image (png/jpg/webp) stays up')
     ap.add_argument('--fit', choices=('pad', 'crop'), default='pad', help='pad: whole picture (default); crop: fill')
     ap.add_argument('--drop', type=int, default=None, help='remove TVmedia/K and renumber the clips after it')
     a = ap.parse_args()
@@ -83,6 +90,9 @@ def main():
     if not imgs:
         sys.exit('no frames')
     delay = round(1000 / a.fps)
+    if a.clip.suffix.lower() in STILLS:
+        imgs = imgs[:1] * STILL_FRAMES
+        delay = round(a.still * 1000 / STILL_FRAMES)
     k = len(media.children) if a.replace is None else a.replace
     clip = Node(str(k), 'property', children=[canvas565(str(i), im, delay) for i, im in enumerate(imgs)])
     old = media.child(str(k))
