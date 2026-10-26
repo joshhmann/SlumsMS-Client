@@ -151,7 +151,10 @@ void UiLayout_DrawGrips() {
     ImDrawList* fg = ImGui::GetForegroundDrawList();
     for (int e = 0; e < kElemCount; ++e) {
         Rect r;
-        if (!ScreenRect(e, r)) continue;
+        const bool ok = ScreenRect(e, r);
+        LOG_ONCE_PER_ID(e * 100000000 + (ok ? 1 : 0) + r.left * 10 + r.top * 100000,
+            "UI layout DIAG: %d ok %d rect %d,%d %dx%d", e, ok ? 1 : 0, r.left, r.top, r.w, r.h);
+        if (!ok) continue;
         int dx = 0, dy = 0;
         UiLayout_Offset(e, dx, dy);
         g_home[e] = Rect{r.left - dx, r.top - dy - (sh - 600), r.w, r.h};

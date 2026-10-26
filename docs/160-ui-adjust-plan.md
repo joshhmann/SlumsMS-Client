@@ -54,3 +54,25 @@ Moving an element is an extra `RelMove(dx, dy)` on its origin, applied right aft
 - Stock code that hit-tests the status bar or quick slot in absolute coordinates, instead of through the origin, would mis-click after a move. Steps 3 and 4 exist to find these, one element at a time.
 - An element moved to the top could overlap stock windows (minimap, chat log). The overlap is allowed; Reset is the escape hatch.
 - Edit mode depends on the D3D9 host. If a player turns the host off, they keep their layout but cannot change it.
+
+## Direction update: a modular HUD (owner, 2026-10-26)
+
+The owner wants an FFXIV-style modular HUD: the HUD is a set of elements, each movable and adjustable (scale, text
+size), edited in one layout mode. Decisions:
+
+- **Two kinds of module.** Stock pieces the client already keeps on their own layer or window move with the stock art:
+  quick slot, buff icons (`CTemporaryStatView`), minimap, quest helper, chat log. Pieces baked into the status bar's
+  single canvas (HP/MP gauges, EXP, level/name) are rebuilt as our own modules from live client data, each with its
+  own position, scale and text size.
+- **Look: both, per module, player's choice.** Stock MapleStory art (the client's gauge sprites and fonts) or the
+  themed ImGui style of the current HP/MP/EXP widget.
+- **The stock bar stays and hides what is replaced.** Each part a module covers is hidden from the stock bar; what is
+  not replaced yet (menu buttons, chat input) stays. The bar shrinks as modules land.
+- **Module priority: all four groups.** The HP/MP/EXP split (EXP as its own long bar), quick slots / hotbars
+  (movable, scalable, row layouts), buffs and cooldowns, then chat (log and input, text size).
+- **Editor.** Ctrl+F11 Edit UI with a snap grid, a per-element panel (scale, text size, opacity, look, reset), and
+  layout presets, kept per character.
+- **Scope.** 1.6.0 (about Wed Oct 28) ships the bar and quick slot mover, the editor basics (grid, reset) and one
+  module: HP/MP/EXP split into separate modules. The rest of the modular HUD (scaling of stock pieces, presets,
+  more modules, hiding replaced stock parts) leads 1.7.0.
+
