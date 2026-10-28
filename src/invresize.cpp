@@ -96,7 +96,7 @@ int SehTabSlotCount(void* pThis) {
         }
         if (!cd) return 0;
         const int nTab = *reinterpret_cast<int*>(reinterpret_cast<char*>(pThis) + kOff_TabIndex);
-        if (nTab < 0 || nTab > 4) return 0;
+        if (!ValidTab(nTab)) return 0;
         void* pArr = *reinterpret_cast<void**>(reinterpret_cast<char*>(cd) + kOff_TabArray + 4 * nTab);
         if (!pArr) return 0;
         const int n = *(reinterpret_cast<int*>(pArr) - 1);
@@ -311,7 +311,7 @@ void ApplySize(int cols, int rows) {
     // Per-tab scroll positions are ROW indices for the old column count; reset rather than rescale.
     __try {
         int* pScroll = At<int*>(kAddr_ScrollPosArray);
-        for (int i = 0; i < 5; ++i) pScroll[i] = 0;
+        for (int i = kFirstTab; i <= kLastTab; ++i) pScroll[i] = 0;
     } __except (EXCEPTION_EXECUTE_HANDLER) {}
     SehWriteInt(pThis, kOff_FirstSlot, 1);
     SehWriteInt(pThis, kOff_CloseX, WndW(cols) - 20);
