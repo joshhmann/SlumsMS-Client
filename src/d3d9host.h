@@ -20,6 +20,12 @@ bool Overlay_BeforeFrame();    // rebakes the font when its drawn size changed; 
 bool Overlay_SnapOn();         // Edit UI snaps to OverlayPolicy::kGridFrac
 void Overlay_ToggleFreeze();
 
+#ifdef MAPLEROOT_HUD_METERS
+// hud_meters.cpp: EXP per hour and DPS (ticket 118).
+void HudMeters_DrawExpRate();
+void HudMeters_DrawDps();
+#endif
+
 // hud_vitals.cpp: the HP, MP and EXP modules (one bar each).
 void HudVitals_DrawHP();
 void HudVitals_DrawMP();

@@ -73,6 +73,9 @@ void AttachHpMpMod();           // hpmp.cpp: 4-byte HP/MP up to 99,999; refuses 
 void HpMp_Verify();             // hpmp.cpp: after every other mod, checks none overwrote an HP/MP site
 void AttachUiLayoutMod();       // uilayout.cpp: moved status bar buttons keep their clicks (CUIStatusBar::HitTest)
 void AttachTempStatMod();
+#ifdef MAPLEROOT_HUD_METERS
+void AttachHudMetersMod();  // hud_meters.cpp: the DPS module's CMob::OnHit feed (ticket 118)
+#endif
 #ifdef MAPLEROOT_INV_RESIZE
 void AttachInvResizeMod();   // invresize.cpp: drag-to-resize item inventory, config.ini [clienthax] invresize
 #endif
@@ -232,6 +235,10 @@ inline void AttachClientHooks() {
     AttachCreateBlockMod();
 #ifdef MAPLEROOT_INTEGRATION
     VerifyKaentakeHooks("AttachCreateBlockMod");
+#endif
+#ifdef MAPLEROOT_HUD_METERS
+    DebugMessage("Installing: AttachHudMetersMod();");
+    AttachHudMetersMod();
 #endif
 #ifdef MAPLEROOT_INV_RESIZE
     DebugMessage("Installing: AttachInvResizeMod();");
