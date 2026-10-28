@@ -5,6 +5,9 @@
 #ifdef MAPLEROOT_INTEGRATION
 #include "d3d9host.h"
 #include "window_policy.h"
+#ifdef MAPLEROOT_CRASH_REPORT
+#include "crash_report.h"
+#endif
 #endif
 
 #define WIN32_LEAN_AND_MEAN
@@ -25,6 +28,10 @@ LPTOP_LEVEL_EXCEPTION_FILTER WINAPI SetUnhandledExceptionFilter_hook(LPTOP_LEVEL
     if (reinterpret_cast<uintptr_t>(_ReturnAddress()) == 0x00796FDD) {
         AttachClientHooks();
     }
+#ifdef MAPLEROOT_CRASH_REPORT
+    // A real crash reaches our filter first (crash_reports\LATEST_CRASH.txt), which then hands it to the game's.
+    if (lpTopLevelExceptionFilter) lpTopLevelExceptionFilter = CrashReport_Wrap(lpTopLevelExceptionFilter);
+#endif
     return SetUnhandledExceptionFilter_orig(lpTopLevelExceptionFilter);
 }
 
