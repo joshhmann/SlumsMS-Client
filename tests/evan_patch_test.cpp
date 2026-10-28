@@ -31,6 +31,10 @@ int main(int argc, char** argv) {
     try {
         Check(sizeof(EvanPatch::kGate1) == 4 && sizeof(EvanPatch::kGate2) == 21, "patch sizes as in the guide");
         Check(EvanPatch::kGate2[11] == 0xD1 && EvanPatch::kGate2[12] == 0x07, "job 2001 check");
+        for (const auto& r : EvanPatch::kActionRenames) {
+            Check(r.index >= 5490 && r.index <= 5507 && std::strlen(r.evan) < 23, std::string("rename in range: ") + r.evan);
+            for (const auto& q : EvanPatch::kActionRenames) Check(&r == &q || (r.index != q.index && std::strcmp(r.evan, q.evan)), "unique");
+        }
         if (argc > 1) {
             std::ifstream f(argv[1], std::ios::binary);
             std::vector<unsigned char> pe((std::istreambuf_iterator<char>(f)), {});

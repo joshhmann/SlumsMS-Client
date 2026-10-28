@@ -33,4 +33,27 @@ inline constexpr Site kSites[] = {
     {0x00761714, kGate2, sizeof(kGate2), "skill gate 2: Evan job / 2001 checks"},
 };
 
+// The exe's Evan action names (StringPool 5490-5507, around "magicmissile") are an older list than the Evan skill
+// data (v84, reworked for v83), so some actions in the data have no code and can't play. Nine slots hold names no
+// Evan skill uses; renaming them gives those codes the data's names (the body frames are merged in from the same
+// data). The two *_prepare slots, and the names the data does use, stay. Still without a slot: Awakening,
+// OnixBlessing, darkFog, ghostLettering, mapleHero, slow, soulStone.
+struct ActionRename {
+    int index;
+    const char* stock;
+    const char* evan;
+};
+
+inline constexpr ActionRename kActionRenames[] = {
+    {5491, "dragonSpark", "lightingBolt"},
+    {5496, "infinityExplosion", "Earthquake"},
+    {5497, "superMagicmissile", "fireCircle"},
+    {5501, "dragonShield", "magicShield"},
+    {5502, "dragonFury", "dragonThrust"},
+    {5503, "dragonFly", "killingWing"},
+    {5505, "elementalRegistance", "magicRegistance"},
+    {5506, "dragonAura", "recoveryAura"},
+    {5507, "dragonSkin", "flameWheel"},
+};
+
 }  // namespace EvanPatch
