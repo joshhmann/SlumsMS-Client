@@ -374,4 +374,7 @@ void Overlay_DrawSettings() {
     }
     ImGui::SameLine();
     if (ImGui::Button("Show the UI tour again")) UiTour_Replay();
+#ifdef MAPLEROOT_DISPLAY_TOGGLES
+    Display_DrawSettings();
+#endif
 }

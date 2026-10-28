@@ -75,6 +75,8 @@ void AttachUiLayoutMod();       // uilayout.cpp: moved status bar buttons keep t
 void AttachTempStatMod();
 #ifdef MAPLEROOT_HUD_METERS
 void AttachHudMetersMod();  // hud_meters.cpp: the DPS module's CMob::OnHit feed (ticket 118)
+#ifdef MAPLEROOT_DISPLAY_TOGGLES
+void AttachDisplayMod();    // display.cpp: display toggles in the HUD window (ticket 120)
 #endif
 #ifdef MAPLEROOT_INV_RESIZE
 void AttachInvResizeMod();   // invresize.cpp: drag-to-resize item inventory, config.ini [clienthax] invresize
@@ -239,6 +241,9 @@ inline void AttachClientHooks() {
 #ifdef MAPLEROOT_HUD_METERS
     DebugMessage("Installing: AttachHudMetersMod();");
     AttachHudMetersMod();
+#ifdef MAPLEROOT_DISPLAY_TOGGLES
+    DebugMessage("Installing: AttachDisplayMod();");
+    AttachDisplayMod();
 #endif
 #ifdef MAPLEROOT_INV_RESIZE
     DebugMessage("Installing: AttachInvResizeMod();");
