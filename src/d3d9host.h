@@ -28,6 +28,9 @@ void HudMeters_DrawDps();
 #ifdef MAPLEROOT_DISPLAY_TOGGLES
 void Display_DrawSettings();     // display.cpp: the "Display" rows of the HUD window (ticket 120)
 #endif
+#ifdef MAPLEROOT_DAMAGE_FORMAT
+void DamageFmt_DrawSettings();   // damagefmt.cpp: the "Short damage numbers" switch (ticket 119)
+#endif
 
 // hud_vitals.cpp: the HP, MP and EXP modules (one bar each).
 void HudVitals_DrawHP();

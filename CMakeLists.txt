@@ -13,6 +13,7 @@ option(MAPLEROOT_ATTACK_DIAG "Build the bot attack diagnostic: logs other charac
 option(MAPLEROOT_INV_RESIZE "Build the drag-to-resize item inventory (config.ini [clienthax] invresize)" OFF)
 option(MAPLEROOT_HUD_METERS "EXP tracker and DPS meter HUD modules (ticket 118)" OFF)
 option(MAPLEROOT_DISPLAY_TOGGLES "Display and performance toggles in the HUD window (ticket 120)" OFF)
+option(MAPLEROOT_DAMAGE_FORMAT "Short damage numbers (K/M/B) and a size slider (ticket 119)" OFF)
 option(MAPLEROOT_CASHSHOP_WINDOW "Build the in-field cash shop addon (requires matching server support)" OFF)
 if(MAPLEROOT_SHUTDOWN_SMOKE_TEST AND NOT MAPLEROOT_INTEGRATION)
     message(FATAL_ERROR "Shutdown smoke tests require MAPLEROOT_INTEGRATION")

@@ -80,6 +80,9 @@ void AttachHudMetersMod();  // hud_meters.cpp: the DPS module's CMob::OnHit feed
 void AttachDisplayMod();    // display.cpp: display toggles in the HUD window (ticket 120)
 #endif
 void AttachMidAirMod();     // midair.cpp: [clienthax] jumpkeydown, keydown attacks in the air (TEST only, ticket 126)
+#ifdef MAPLEROOT_DAMAGE_FORMAT
+void AttachDamageFormatMod();  // damagefmt.cpp: short damage numbers (ticket 119)
+#endif
 #ifdef MAPLEROOT_INV_RESIZE
 void AttachInvResizeMod();   // invresize.cpp: drag-to-resize item inventory, config.ini [clienthax] invresize
 #endif
@@ -250,6 +253,10 @@ inline void AttachClientHooks() {
 #endif
     DebugMessage("Installing: AttachMidAirMod();");
     AttachMidAirMod();
+#ifdef MAPLEROOT_DAMAGE_FORMAT
+    DebugMessage("Installing: AttachDamageFormatMod();");
+    AttachDamageFormatMod();
+#endif
 #ifdef MAPLEROOT_INV_RESIZE
     DebugMessage("Installing: AttachInvResizeMod();");
     AttachInvResizeMod();

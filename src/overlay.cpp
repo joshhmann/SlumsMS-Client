@@ -377,4 +377,7 @@ void Overlay_DrawSettings() {
 #ifdef MAPLEROOT_DISPLAY_TOGGLES
     Display_DrawSettings();
 #endif
+#ifdef MAPLEROOT_DAMAGE_FORMAT
+    DamageFmt_DrawSettings();
+#endif
 }
