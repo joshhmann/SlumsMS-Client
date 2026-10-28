@@ -23,6 +23,9 @@
 #include "attackstop_patch.h"
 #include "d3d9host.h"
 #include "d3d9host_policy.h"
+#ifdef MAPLEROOT_RMLUI
+#include "rmlui_host.h"
+#endif
 
 #include <d3d9.h>
 #include "imgui.h"
@@ -160,7 +163,13 @@ void InitImGui(IDirect3DDevice9* dev) {
 void DrawOverlay(IDirect3DDevice9* dev) {
     // Drawn while the HUD window is open, a widget is on, Edit UI is on (grips over the stock bar), or the first-run
     // tour needs it.
-    if (!g_bVisible && !(g_bSettingsWindow && (Overlay_HasHud() || !Overlay_IsFrozen() || UiTour_Wants()))) return;
+    const bool bImGui = g_bVisible || (g_bSettingsWindow && (Overlay_HasHud() || !Overlay_IsFrozen() || UiTour_Wants()));
+#ifdef MAPLEROOT_RMLUI
+    // The RmlUi HUD skin first, under ImGui, so the tools (HUD window, Edit UI grips) stay on top. It catches its
+    // own failures and turns itself off.
+    if (RmlHost_Wants()) RmlHost_Render(dev, g_hWnd);
+#endif
+    if (!bImGui) return;
     try {
         if (!g_bImGuiReady) InitImGui(dev);
         ImGuiIO& io = ImGui::GetIO();
@@ -267,18 +276,26 @@ IDirect3D9* WINAPI Direct3DCreate9_hook(UINT sdk) {
 }  // namespace
 
 bool D3D9Host_HandleMessage(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
-    if (!g_bDeviceHooked || !g_bSettingsWindow) return false;
+    if (!g_bDeviceHooked) return false;
     const bool bKeyDown = msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN;   // F10 arrives as WM_SYSKEYDOWN
     const bool bCtrlFresh = (GetKeyState(VK_CONTROL) & 0x8000) && !(lParam & (1 << 30));
-    if (bKeyDown && wParam == VK_F10 && bCtrlFresh) {
+    if (g_bSettingsWindow && bKeyDown && wParam == VK_F10 && bCtrlFresh) {
         g_bVisible = !g_bVisible;
         return true;
     }
-    if (bKeyDown && wParam == VK_F11 && bCtrlFresh) {
+    if (g_bSettingsWindow && bKeyDown && wParam == VK_F11 && bCtrlFresh) {
         Overlay_ToggleFreeze();
         return true;
     }
-    if (!g_bImGuiReady) return false;
+#ifdef MAPLEROOT_RMLUI
+    // RmlUi before ImGui, unless an ImGui window (drawn above the skin) has the mouse or keyboard.
+    {
+        const bool bImGuiOnTop = g_bImGuiReady &&
+            (ImGui::GetIO().WantCaptureMouse || ImGui::GetIO().WantCaptureKeyboard);
+        if (RmlHost_HandleMessage(hWnd, msg, wParam, lParam, bImGuiOnTop)) return true;
+    }
+#endif
+    if (!g_bSettingsWindow || !g_bImGuiReady) return false;
     if (g_bVisible && bKeyDown && wParam == VK_ESCAPE) {
         g_bVisible = false;
         return true;
@@ -300,6 +317,9 @@ void AttachD3D9Host() {
     }
     g_bFallback = ReadIniBool("graphics", "adapterfallback", true);
     g_bSettingsWindow = ReadIniBool("clienthax", "settingswindow", true);
+#ifdef MAPLEROOT_RMLUI
+    RmlHost_Setup();
+#endif
     UiTour_Setup(g_bSettingsWindow && ReadIniBool("clienthax", "uitour", true));
     HMODULE hD3D9 = g_pForceD3D9Import ? GetModuleHandleA("d3d9.dll") : nullptr;   // loaded as our import
     g_Direct3DCreate9 = hD3D9 ? reinterpret_cast<Direct3DCreate9_t>(GetProcAddress(hD3D9, "Direct3DCreate9")) : nullptr;
