@@ -48,6 +48,33 @@ typedef decltype(&CreateWindowExA) CreateWindowExA_t;
 static CreateWindowExA_t CreateWindowExA_orig = reinterpret_cast<CreateWindowExA_t>(GetAddress("USER32", "CreateWindowExA"));
 static WNDPROC g_WndProc;
 
+// [graphics] borderless / dpiaware (window_policy.h). Read once, before the game creates its window.
+static bool g_bBorderless = false;
+
+static bool ReadGraphicsSwitch(const char* key) {
+    char value[16] = {};
+    GetPrivateProfileStringA("graphics", key, "", value, sizeof(value), ".\\" CONSTANTS_CONFIG_NAME);
+    return WindowPolicy::IniTrue(value);
+}
+
+// Centre the borderless window on its monitor at its current client size (the game's resolution).
+static void PlaceBorderless(HWND hWnd) {
+    static bool s_placing = false;
+    if (!g_bBorderless || s_placing) return;
+    RECT rc;
+    MONITORINFO mi = {sizeof(mi)};
+    if (!GetClientRect(hWnd, &rc) || !GetMonitorInfoA(MonitorFromWindow(hWnd, MONITOR_DEFAULTTOPRIMARY), &mi)) return;
+    int x, y;
+    const WindowPolicy::Rect m{mi.rcMonitor.left, mi.rcMonitor.top, mi.rcMonitor.right, mi.rcMonitor.bottom};
+    WindowPolicy::Place(m, rc.right, rc.bottom, x, y);
+    RECT wr;
+    GetWindowRect(hWnd, &wr);
+    if (wr.left == x && wr.top == y) return;
+    s_placing = true;
+    SetWindowPos(hWnd, NULL, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+    s_placing = false;
+}
+
 LRESULT WndProc_hook(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 #ifdef MAPLEROOT_INTEGRATION
     if (D3D9Host_HandleMessage(hWnd, msg, wParam, lParam)) return 0;   // the ImGui overlay (Ctrl+F10)
@@ -118,33 +145,6 @@ LRESULT WndProc_hook(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         return 0;
     }
     return CallWindowProcA(g_WndProc, hWnd, msg, wParam, lParam);
-}
-
-// [graphics] borderless / dpiaware (window_policy.h). Read once, before the game creates its window.
-static bool g_bBorderless = false;
-
-static bool ReadGraphicsSwitch(const char* key) {
-    char value[16] = {};
-    GetPrivateProfileStringA("graphics", key, "", value, sizeof(value), ".\\" CONSTANTS_CONFIG_NAME);
-    return WindowPolicy::IniTrue(value);
-}
-
-// Centre the borderless window on its monitor at its current client size (the game's resolution).
-static void PlaceBorderless(HWND hWnd) {
-    static bool s_placing = false;
-    if (!g_bBorderless || s_placing) return;
-    RECT rc;
-    MONITORINFO mi = {sizeof(mi)};
-    if (!GetClientRect(hWnd, &rc) || !GetMonitorInfoA(MonitorFromWindow(hWnd, MONITOR_DEFAULTTOPRIMARY), &mi)) return;
-    int x, y;
-    const WindowPolicy::Rect m{mi.rcMonitor.left, mi.rcMonitor.top, mi.rcMonitor.right, mi.rcMonitor.bottom};
-    WindowPolicy::Place(m, rc.right, rc.bottom, x, y);
-    RECT wr;
-    GetWindowRect(hWnd, &wr);
-    if (wr.left == x && wr.top == y) return;
-    s_placing = true;
-    SetWindowPos(hWnd, NULL, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
-    s_placing = false;
 }
 
 HWND WINAPI CreateWindowExA_hook(DWORD dwExStyle, LPCSTR lpClassName, LPCSTR lpWindowName, DWORD dwStyle, int X, int Y, int nWidth, int nHeight, HWND hWndParent, HMENU hMenu, HINSTANCE hInstance, LPVOID lpParam) {
