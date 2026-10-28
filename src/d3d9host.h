@@ -24,6 +24,7 @@ void Overlay_ToggleFreeze();
 // hud_meters.cpp: EXP per hour and DPS (ticket 118).
 void HudMeters_DrawExpRate();
 void HudMeters_DrawDps();
+#endif
 #ifdef MAPLEROOT_DISPLAY_TOGGLES
 void Display_DrawSettings();     // display.cpp: the "Display" rows of the HUD window (ticket 120)
 #endif
