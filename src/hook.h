@@ -73,6 +73,9 @@ void AttachHpMpMod();           // hpmp.cpp: 4-byte HP/MP up to 99,999; refuses 
 void HpMp_Verify();             // hpmp.cpp: after every other mod, checks none overwrote an HP/MP site
 void AttachUiLayoutMod();       // uilayout.cpp: moved status bar buttons keep their clicks (CUIStatusBar::HitTest)
 void AttachTempStatMod();
+#ifdef MAPLEROOT_DAMAGE_FORMAT
+void AttachDamageFormatMod();  // damagefmt.cpp: short damage numbers (ticket 119)
+#endif
 #ifdef MAPLEROOT_INV_RESIZE
 void AttachInvResizeMod();   // invresize.cpp: drag-to-resize item inventory, config.ini [clienthax] invresize
 #endif
@@ -232,6 +235,10 @@ inline void AttachClientHooks() {
     AttachCreateBlockMod();
 #ifdef MAPLEROOT_INTEGRATION
     VerifyKaentakeHooks("AttachCreateBlockMod");
+#endif
+#ifdef MAPLEROOT_DAMAGE_FORMAT
+    DebugMessage("Installing: AttachDamageFormatMod();");
+    AttachDamageFormatMod();
 #endif
 #ifdef MAPLEROOT_INV_RESIZE
     DebugMessage("Installing: AttachInvResizeMod();");

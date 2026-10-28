@@ -11,7 +11,7 @@ option(MAPLEROOT_MONSTER_BOOK "Build the Monster Book addon: open book, live dro
 option(MAPLEROOT_COLOR_PRISM "Build the Coloring Prism addon: equip/effect/hair/face tint window and renderer (requires matching server support)" OFF)
 option(MAPLEROOT_ATTACK_DIAG "Build the bot attack diagnostic: logs other characters' attacks the client drops, only when config.ini [debug] attackdiag is set" OFF)
 option(MAPLEROOT_INV_RESIZE "Build the drag-to-resize item inventory (config.ini [clienthax] invresize)" OFF)
-option(MAPLEROOT_DAMAGE_FORMAT "Short damage numbers (K/M/B) and a size slider (ticket 119, scaffold)" OFF)
+option(MAPLEROOT_DAMAGE_FORMAT "Short damage numbers (K/M/B) and a size slider (ticket 119)" OFF)
 option(MAPLEROOT_CASHSHOP_WINDOW "Build the in-field cash shop addon (requires matching server support)" OFF)
 if(MAPLEROOT_SHUTDOWN_SMOKE_TEST AND NOT MAPLEROOT_INTEGRATION)
     message(FATAL_ERROR "Shutdown smoke tests require MAPLEROOT_INTEGRATION")

@@ -366,4 +366,7 @@ void Overlay_DrawSettings() {
         InvResize_ResetSize();
 #endif
     }
+#ifdef MAPLEROOT_DAMAGE_FORMAT
+    DamageFmt_DrawSettings();
+#endif
 }

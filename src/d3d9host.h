@@ -20,6 +20,10 @@ bool Overlay_BeforeFrame();    // rebakes the font when its drawn size changed; 
 bool Overlay_SnapOn();         // Edit UI snaps to OverlayPolicy::kGridFrac
 void Overlay_ToggleFreeze();
 
+#ifdef MAPLEROOT_DAMAGE_FORMAT
+void DamageFmt_DrawSettings();   // damagefmt.cpp: the "Short damage numbers" switch (ticket 119)
+#endif
+
 // hud_vitals.cpp: the HP, MP and EXP modules (one bar each).
 void HudVitals_DrawHP();
 void HudVitals_DrawMP();
