@@ -11,7 +11,9 @@
 #include <algorithm>
 #include <cstdint>
 #include <deque>
+#include <cstring>
 #include <map>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -106,6 +108,57 @@ private:
     std::deque<std::pair<uint32_t, int64_t>> m_hits;
     std::map<int, int64_t> m_bySkill;
 };
+
+// Party damage ranks from the server (LP 0x3739, BOSS_DAMAGE_RANK on the server's 161-dmgrank branch). After the
+// opcode: int mobId; byte n; n x {int charId; short len + ASCII name; long damage}, biggest first, at most 6 rows.
+// Sent about once a second per boss (or mob with 5M+ HP) to party members on the map who hit it; solo players get none.
+inline constexpr unsigned short kDamageRankOpcode = 0x3739;
+inline constexpr size_t kDamageRankMaxRows = 6;
+inline constexpr size_t kDamageRankMaxName = 32;   // character names are 12; anything longer is a bad packet
+
+struct RankRow {
+    int charId = 0;
+    std::string name;
+    int64_t damage = 0;
+};
+
+struct DamageRank {
+    int mobId = 0;
+    std::vector<RankRow> rows;
+};
+
+// Reads the body after the opcode. False (and `out` untouched) when it is short, too long or out of bounds.
+inline bool ParseDamageRank(const uint8_t* p, size_t len, DamageRank& out) {
+    size_t at = 0;
+    auto take = [&](void* dst, size_t n) {
+        if (n > len - at) return false;
+        memcpy(dst, p + at, n);
+        at += n;
+        return true;
+    };
+    DamageRank r;
+    uint8_t n = 0;
+    if (!p || !take(&r.mobId, 4) || !take(&n, 1) || n > kDamageRankMaxRows) return false;
+    for (uint8_t i = 0; i < n; ++i) {
+        RankRow row;
+        uint16_t nameLen = 0;
+        if (!take(&row.charId, 4) || !take(&nameLen, 2) || nameLen > kDamageRankMaxName) return false;
+        row.name.resize(nameLen);
+        if (nameLen && !take(&row.name[0], nameLen)) return false;
+        if (!take(&row.damage, 8) || row.damage < 0) return false;
+        r.rows.push_back(std::move(row));
+    }
+    out = std::move(r);
+    return true;
+}
+
+// A row's share of the damage the rank lists, in whole percent (0 when the list sums to nothing).
+inline int SharePct(const DamageRank& r, size_t row) {
+    int64_t sum = 0;
+    for (const auto& x : r.rows) sum += x.damage;
+    if (sum <= 0 || row >= r.rows.size()) return 0;
+    return static_cast<int>((r.rows[row].damage * 100 + sum / 2) / sum);
+}
 
 // The OnHit detour's entry bytes (mov eax, SEH handler; call __EH_prolog), checked before hooking.
 inline constexpr uint32_t kAddr_CMob_OnHit = 0x00668B83;

@@ -6,7 +6,8 @@
 // DPS: CMob::OnHit (0x00668B83, thiscall, 13 stack args, ret 0x34) runs once per damage number the client draws; a1
 // is the attacker's character id (compared with CUserLocal+0x11A8 at 0x00668BF5), a2 the skill id, a5 the damage.
 // Only hits whose attacker is this character count. The maths is hud_meters_policy.h (tested natively).
-// Party ranks come later from the server (proposed LP 0x3739); until then the module shows this character only.
+// Party ranks: the server sends LP 0x3739 about once a second to party members hitting a boss (or a mob with 5M+ HP);
+// the module lists them under this character's own DPS for 15 s after the last one. Solo, it shows this character only.
 // ============================================================
 
 #include "pch.h"
@@ -15,10 +16,12 @@
 #include "mapleroot.h"
 #include "d3d9host.h"
 #include "hud_meters_policy.h"
+#include "wvs/packet.h"
 
 #include "imgui.h"
 
 #include <cstring>
+#include <mutex>
 
 namespace {
 
@@ -30,6 +33,10 @@ HudMeters::DpsMeter g_dps;
 uint32_t g_lastHitMs = 0;
 int g_levelCounter = 0;                // stands in for the level: +1 when the EXP table moves on and the EXP drops
 long long g_lastExp = -1, g_lastNext = -1;
+std::mutex g_rankLock;
+HudMeters::DamageRank g_rank;          // the latest party rank (LP 0x3739)
+uint32_t g_rankMs = 0;                 // when it came; 0 = none yet
+constexpr uint32_t kRankShowMs = 15000;
 
 int MyCharacterId() {
     __try {
@@ -99,6 +106,39 @@ void HudMeters_DrawDps() {
     Short(total, sizeof(total), g_dps.Total());
     if (!g_dps.Total()) ImGui::TextDisabled("DPS: hit something");
     else ImGui::Text("DPS %s   fight total %s", dps, total);
+
+    HudMeters::DamageRank rank;
+    {
+        std::lock_guard<std::mutex> lock(g_rankLock);
+        if (!g_rankMs || now - g_rankMs > kRankShowMs) return;
+        rank = g_rank;
+    }
+    const int me = MyCharacterId();
+    for (size_t i = 0; i < rank.rows.size(); ++i) {
+        const auto& row = rank.rows[i];
+        char dmg[32];
+        Short(dmg, sizeof(dmg), row.damage);
+        const int pct = HudMeters::SharePct(rank, i);
+        if (row.charId == me) ImGui::TextColored(ImVec4(1.0f, 0.78f, 0.3f, 1.0f), "%zu. %s  %s  %d%%", i + 1, row.name.c_str(), dmg, pct);
+        else ImGui::Text("%zu. %s  %s  %d%%", i + 1, row.name.c_str(), dmg, pct);
+    }
+}
+
+// LP 0x3739 (packetdispatcher.cpp). The dispatcher only peeked the opcode, so the body starts 2 bytes in.
+void HudMeters_HandleDamageRank(CInPacket* pPacket) {
+    const unsigned char* p = pPacket ? pPacket->CurrentPublic() : nullptr;
+    if (!p) return;
+    const size_t left = pPacket->LengthPublic() - pPacket->GetOffset();
+    if (left < 2) return;
+    HudMeters::DamageRank r;
+    if (!HudMeters::ParseDamageRank(p + 2, left - 2, r)) {
+        DebugMessage("HUD meters: damage rank packet did not parse (%zu bytes)", left);
+        return;
+    }
+    std::lock_guard<std::mutex> lock(g_rankLock);
+    g_rank = std::move(r);
+    g_rankMs = GetTickCount();
+    if (!g_rankMs) g_rankMs = 1;
 }
 
 void AttachHudMetersMod() {

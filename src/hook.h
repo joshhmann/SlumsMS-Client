@@ -75,6 +75,8 @@ void AttachUiLayoutMod();       // uilayout.cpp: moved status bar buttons keep t
 void AttachTempStatMod();
 #ifdef MAPLEROOT_HUD_METERS
 void AttachHudMetersMod();  // hud_meters.cpp: the DPS module's CMob::OnHit feed (ticket 118)
+class CInPacket;
+void HudMeters_HandleDamageRank(CInPacket* pPacket);  // hud_meters.cpp: party damage ranks (LP 0x3739)
 #endif
 #ifdef MAPLEROOT_DISPLAY_TOGGLES
 void AttachDisplayMod();    // display.cpp: display toggles in the HUD window (ticket 120)

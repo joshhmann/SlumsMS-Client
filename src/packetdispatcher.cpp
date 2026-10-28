@@ -61,6 +61,14 @@ void __fastcall ProcessPacketHook(void* socket, void*, CInPacket* packet) {
             return;
         }
 #endif
+#ifdef MAPLEROOT_HUD_METERS
+        if (opcode == 0x3739) {
+            // Party damage ranks (hud_meters_policy.h kDamageRankOpcode): client-addon only, swallowed here.
+            std::lock_guard<std::mutex> lock(dispatchGate);
+            if (!shuttingDown) HudMeters_HandleDamageRank(packet);
+            return;
+        }
+#endif
 #ifdef MAPLEROOT_COLOR_PRISM
         if (opcode == kWeaponTintSyncOpcode) {
             // WeaponTint_HandleSync skips the opcode itself from the CURRENT offset, which the peek left in place.
