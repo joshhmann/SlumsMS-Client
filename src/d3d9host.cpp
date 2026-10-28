@@ -158,8 +158,9 @@ void InitImGui(IDirect3DDevice9* dev) {
 }
 
 void DrawOverlay(IDirect3DDevice9* dev) {
-    // Drawn while the HUD window is open, a widget is on, or Edit UI is on (grips over the stock bar).
-    if (!g_bVisible && !(g_bSettingsWindow && (Overlay_HasHud() || !Overlay_IsFrozen()))) return;
+    // Drawn while the HUD window is open, a widget is on, Edit UI is on (grips over the stock bar), or the first-run
+    // tour needs it.
+    if (!g_bVisible && !(g_bSettingsWindow && (Overlay_HasHud() || !Overlay_IsFrozen() || UiTour_Wants()))) return;
     try {
         if (!g_bImGuiReady) InitImGui(dev);
         ImGuiIO& io = ImGui::GetIO();
@@ -282,6 +283,7 @@ bool D3D9Host_HandleMessage(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         g_bVisible = false;
         return true;
     }
+    if (bKeyDown && wParam == VK_ESCAPE && UiTour_HandleEscape()) return true;
     // ImGui sees every message (hover, drags); the game loses only what an overlay window wants. A frozen HUD
     // takes no input, so then nothing is held back.
     ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam);
@@ -298,6 +300,7 @@ void AttachD3D9Host() {
     }
     g_bFallback = ReadIniBool("graphics", "adapterfallback", true);
     g_bSettingsWindow = ReadIniBool("clienthax", "settingswindow", true);
+    UiTour_Setup(g_bSettingsWindow && ReadIniBool("clienthax", "uitour", true));
     HMODULE hD3D9 = g_pForceD3D9Import ? GetModuleHandleA("d3d9.dll") : nullptr;   // loaded as our import
     g_Direct3DCreate9 = hD3D9 ? reinterpret_cast<Direct3DCreate9_t>(GetProcAddress(hD3D9, "Direct3DCreate9")) : nullptr;
     if (!g_Direct3DCreate9) {

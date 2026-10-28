@@ -544,6 +544,7 @@ void UiLayout_DrawGrips() {
     if (!*reinterpret_cast<void* const*>(kAddr_UserLocal)) return;   // the field only
     const int sw = get_screen_width(), sh = get_screen_height();
     ImDrawList* fg = ImGui::GetForegroundDrawList();
+    const float pulse = UiTour_Pulse();
 
     // Every element's rect now, its stock rect and where it may go.
     struct Grip { bool ok; Rect home, bounds, r; int dx, dy; };
@@ -622,10 +623,15 @@ void UiLayout_DrawGrips() {
         const ImVec2 a(static_cast<float>(r.left), static_cast<float>(r.top));
         const ImVec2 b(static_cast<float>(r.left + r.w), static_cast<float>(r.top + r.h));
         // Idle: a faint 1 px outline, so the bar stays readable. Under the cursor: fill, bold outline and the name.
+        // The first-run tour's "Show me" pulses every outline and name for a few seconds (uitour.cpp).
         if (e == hot) {
             fg->AddRectFilled(a, b, IM_COL32(90, 150, 255, 60));
             fg->AddRect(a, b, IM_COL32(120, 175, 255, 230), 0.0f, 0, 2.0f);
             fg->AddText(ImVec2(a.x + 6, a.y + 4), IM_COL32(255, 255, 255, 240), kLabel[e]);
+        } else if (pulse > 0.0f) {
+            fg->AddRectFilled(a, b, IM_COL32(255, 170, 60, static_cast<int>(60 * pulse)));
+            fg->AddRect(a, b, IM_COL32(255, 170, 60, static_cast<int>(255 * pulse)), 0.0f, 0, 2.5f);
+            fg->AddText(ImVec2(a.x + 6, a.y + 4), IM_COL32(255, 255, 255, static_cast<int>(255 * pulse)), kLabel[e]);
         } else {
             fg->AddRect(a, b, IM_COL32(120, 175, 255, 110), 0.0f, 0, 1.0f);
         }
