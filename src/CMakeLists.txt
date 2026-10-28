@@ -19,6 +19,7 @@ add_library(injector SHARED
     hpmp.cpp
     buildshow.cpp
     uilayout.cpp
+    midair.cpp
     tempstat.cpp
     stringpool.cpp
     debug.cpp
