@@ -38,7 +38,7 @@ That JSON is made by the server repo's `tools/monsterbook/build_book.py` from th
 | node | why |
 |---|---|
 | `String/MonsterBookEx.img` | The whole book: per mob `map/<i>`, `reward/<i>` (the server's drops, best first) and `episode` (stats). It is a new image because Custom.wz cannot add or remove sub-folders of the stock `MonsterBook.img`. `monsterbook.cpp` points `CMonsterBookMan::LoadBook` at it through StringPool 0x8BF, and only when it resolves. |
-| `Mob/<id>.img/info/defaultHP`, `defaultMP` | The book prints a string `defaultHP` verbatim, and turns a string or oversized `maxHP` into garbage. |
+| ~~`Mob/<id>.img/info/defaultHP`, `defaultMP`~~ | Removed in 1.6.1-rc7. In the player install the client took this one-value `info` instead of the stock one (maxHP, speed and the rest read empty for Lucid 8880150, Will 8880302 and Verus Hilla 8880415, measured 2026-10-28), so the tool no longer writes it. Those three book pages print HP the stock way. |
 | `UI/UIWindowEx.img/MonsterBook/search/{item,mob}Box{0,1}` | The 122x17 search-field boxes, from `assets/monsterbook/*.png`. |
 
 When the server's `drop_data` changes, re-run both tools and ship a new `Custom.wz`. This changes which icons are
