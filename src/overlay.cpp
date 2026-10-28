@@ -60,6 +60,11 @@ Widget g_widgets[] = {
     {"hp", "HP", &HudVitals_DrawHP, 1, 125, 1750, 2500, 600, true, 0, 0, 0, 0, false, true, kTextDefault, 94},
     {"mp", "MP", &HudVitals_DrawMP, 1, 125, 2375, 2500, 600, true, 0, 0, 0, 0, false, true, kTextDefault, 94},
     {"exp", "EXP", &HudVitals_DrawEXP, 1, 125, 3000, 2500, 600, true, 0, 0, 0, 0, false, true, kTextDefault, 94},
+#ifdef MAPLEROOT_HUD_METERS
+    // Ticket 118: off until switched on in the HUD window.
+    {"exprate", "EXP rate", &HudMeters_DrawExpRate, 1, 125, 3625, 3200, 600, false, 0, 0, 0, 0, false, true, 100, 94},
+    {"dps", "DPS", &HudMeters_DrawDps, 1, 125, 4250, 3200, 600, false, 0, 0, 0, 0, false, true, 100, 94},
+#endif
 };
 constexpr int kTextMin = 60, kTextMax = 200, kAlphaMin = 0, kAlphaMax = 100;
 
@@ -87,7 +92,7 @@ void LoadPrefs() {
     g_bSnap = ReadPref("snap", 1) != 0;
     for (auto& w : g_widgets) {
         char name[64];
-        sprintf_s(name, "%s_on", w.id);  w.on = ReadPref(name, 1) != 0;
+        sprintf_s(name, "%s_on", w.id);  w.on = ReadPref(name, w.on ? 1 : 0) != 0;   // each module's own default
         sprintf_s(name, "%s_x", w.id);   w.fx = static_cast<int>(ReadPref(name, w.defX));
         sprintf_s(name, "%s_y", w.id);   w.fy = static_cast<int>(ReadPref(name, w.defY));
         sprintf_s(name, "%s_w", w.id);   w.fw = static_cast<int>(ReadPref(name, w.defW));
