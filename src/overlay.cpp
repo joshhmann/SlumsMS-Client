@@ -68,6 +68,9 @@ int MaxTextPct() {
     for (const auto& w : g_widgets) {
         if (w.on) m = (std::max)(m, w.textPct);
     }
+#ifdef MAPLEROOT_CHAT_TABS
+    if (ChatModule_On()) m = (std::max)(m, ChatModule_TextPct());
+#endif
     return m;
 }
 
@@ -207,6 +210,9 @@ bool Overlay_HasHud() {
     for (const auto& w : g_widgets) {
         if (w.on) return true;
     }
+#ifdef MAPLEROOT_CHAT_TABS
+    if (ChatModule_On()) return true;
+#endif
     return false;
 }
 
@@ -300,6 +306,9 @@ void Overlay_DrawHud() {
         }
         ImGui::End();
     }
+#ifdef MAPLEROOT_CHAT_TABS
+    ChatModule_Draw(g_bFrozen, g_bSnap);
+#endif
     UiTour_Draw();   // last, so the card and the Edit UI strip sit above the modules
 }
 
@@ -363,10 +372,16 @@ void Overlay_DrawSettings() {
             SaveLook(w);
         }
         UiLayout_Reset();
+#ifdef MAPLEROOT_CHAT_TABS
+        ChatModule_ResetLayout();
+#endif
 #ifdef MAPLEROOT_INV_RESIZE
         InvResize_ResetSize();
 #endif
     }
     ImGui::SameLine();
     if (ImGui::Button("Show the UI tour again")) UiTour_Replay();
+#ifdef MAPLEROOT_CHAT_TABS
+    ChatModule_DrawSettings();
+#endif
 }

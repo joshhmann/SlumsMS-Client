@@ -36,6 +36,14 @@ bool UiTour_HandleEscape();        // true when Esc closed the card
 // uilayout.cpp: grips over the stock status bar and quick slot while the HUD is unfrozen, and their reset.
 void UiLayout_DrawGrips();
 void UiLayout_Reset();
+#ifdef MAPLEROOT_CHAT_TABS
+// chatlog.cpp: the chat module (ticket 123) and its section of the HUD window.
+bool ChatModule_On();            // switched on and ChatLogAdd is hooked
+int ChatModule_TextPct();        // its text size, so the font atlas is baked large enough
+void ChatModule_Draw(bool frozen, bool snap);
+void ChatModule_DrawSettings();
+void ChatModule_ResetLayout();
+#endif
 #ifdef MAPLEROOT_INV_RESIZE
 void InvResize_ResetSize();   // invresize.cpp: back to the stock 4x6 for this character
 #endif
