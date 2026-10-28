@@ -36,6 +36,13 @@ inline constexpr std::array<std::uint8_t, 5> JmpTo(std::uint32_t site, std::uint
 
 enum class AirCast { Allow, Stock };
 
+// v1 for TEST (owner 2026-10-28): the "not on a foothold -> refuse" exit of the keydown start, `je 0x0096AEAE` at
+// 0x0096A954 (after `call 0x007046AC; test eax,eax`), NOPed when [clienthax] jumpkeydown=true. The rope/ladder
+// test that follows (0x0096A968) still refuses. It covers every keydown skill; the per-skill list below is the plan
+// for after TEST.
+inline constexpr std::uint32_t kKeydownAirExit = 0x0096A954;
+inline constexpr std::array<std::uint8_t, 6> kKeydownAirExitStock = {0x0F, 0x84, 0x54, 0x05, 0x00, 0x00};
+
 // Keydown attacks that may start in the air once jumpkeydown is on: Hurricane, Piercing Arrow, Wind Archer's
 // Hurricane, the three Big Bangs.
 inline constexpr std::array<int, 6> kAirKeydown = {3121004, 3221001, 13111002, 2121001, 2221001, 2321001};

@@ -73,6 +73,7 @@ void AttachHpMpMod();           // hpmp.cpp: 4-byte HP/MP up to 99,999; refuses 
 void HpMp_Verify();             // hpmp.cpp: after every other mod, checks none overwrote an HP/MP site
 void AttachUiLayoutMod();       // uilayout.cpp: moved status bar buttons keep their clicks (CUIStatusBar::HitTest)
 void AttachTempStatMod();
+void AttachMidAirMod();     // midair.cpp: [clienthax] jumpkeydown, keydown attacks in the air (TEST only, ticket 126)
 #ifdef MAPLEROOT_INV_RESIZE
 void AttachInvResizeMod();   // invresize.cpp: drag-to-resize item inventory, config.ini [clienthax] invresize
 #endif
@@ -233,6 +234,8 @@ inline void AttachClientHooks() {
 #ifdef MAPLEROOT_INTEGRATION
     VerifyKaentakeHooks("AttachCreateBlockMod");
 #endif
+    DebugMessage("Installing: AttachMidAirMod();");
+    AttachMidAirMod();
 #ifdef MAPLEROOT_INV_RESIZE
     DebugMessage("Installing: AttachInvResizeMod();");
     AttachInvResizeMod();

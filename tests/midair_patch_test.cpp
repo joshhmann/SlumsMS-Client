@@ -19,6 +19,7 @@ int main() {
         Check(JmpTo(kMagic.addr, kMagic.allowTarget) == std::array<std::uint8_t, 5>{0xE9, 0x36, 0x00, 0x00, 0x00}, "jumpmagic write");
         Check(kKeydown.allowTarget > kKeydown.addr && kKeydown.allowTarget - kKeydown.addr == 0x26, "keydown continues at the rope test");
 
+        Check(kKeydownAirExitStock[0] == 0x0F && kKeydownAirExitStock[1] == 0x84 && kKeydownAirExit == 0x0096A954, "keydown exit je");
         Check(KeydownPolicy(3121004, 312, true) == AirCast::Allow, "Bowmaster Hurricane");
         Check(KeydownPolicy(13111002, 1311, true) == AirCast::Allow, "Wind Archer Hurricane");
         Check(KeydownPolicy(2121001, 212, true) == AirCast::Allow, "F/P Big Bang");
