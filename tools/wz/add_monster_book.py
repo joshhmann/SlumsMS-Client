@@ -8,8 +8,11 @@ existing image only gets leaf values added or replaced):
                              stock image cannot gain or lose sub-folders through Custom.wz; monsterbook.cpp points
                              the book loader at it (StringPool 0x8BF) only when it exists, so a Custom.wz without
                              it leaves the stock book in charge.
-  Mob/<id>.img/info/defaultHP, defaultMP
-                             leaf overrides for mobs whose maxHP/maxMP the book cannot print as an int.
+  (no Mob/<id>.img)          1.6.0-1.6.1-rc6 also wrote Mob/<id>.img/info/defaultHP for mobs whose maxHP the book
+                             cannot print as an int (Lucid 8880150, Will 8880302, Verus Hilla 8880415). In the
+                             player install the client then took that one-value info INSTEAD of the stock info
+                             (maxHP, speed, ... empty; measured 2026-10-28), so these are no longer written and
+                             any left in Custom.wz are removed. Their book page may show HP as stock prints it.
   UI/UIWindowEx.img/MonsterBook/search/{itemBox0,itemBox1,mobBox0,mobBox1}
                              the two search-field boxes (122x17, BGRA8888), from assets/monsterbook/*.png.
 
@@ -170,7 +173,6 @@ def main():
     if missing:
         sys.exit(f'{len(missing)} card mobs would have no book entry (the book would print "HP : (null)"): '
                  f'{missing[:20]}')
-    hp = hp_overrides(book, {int(e.name) for e in book_root.children})
     art = search_art()
 
     with Archive(CUSTOM, 83, 'gms') as wz:
@@ -182,22 +184,15 @@ def main():
             ui.children.append(mb)
         mb.put('search', art, replace=True) if mb.child('search') else mb.children.append(art)
         targets = {BOOK_IMG: book_root, UI_IMG: ui}
-        for mob, values in sorted(hp.items()):
-            info = Node('info', 'property', children=[])
-            if 'hp' in values:
-                info.children.append(Node('defaultHP', 'string', values['hp']))
-            if 'mp' in values:
-                info.children.append(Node('defaultMP', 'string', values['mp']))
-            targets['Mob/%07d.img' % mob] = Node('Mob/%07d.img' % mob, 'property', children=[info])
+        drop = sorted(p for p in before if p.startswith('Mob/'))   # partial stock images: see the docstring
 
         wanted = {p: semantic_hash(n) for p, n in targets.items()}
         stale = {p for p, h in wanted.items() if before.get(p) != h}
-        if not stale:
-            print(f'{CUSTOM.relative_to(ROOT)} is up to date ({report["entries"]} book entries, '
-                  f'{len(hp)} HP overrides)')
+        if not stale and not drop:
+            print(f'{CUSTOM.relative_to(ROOT)} is up to date ({report["entries"]} book entries)')
             return 0
         if args.check:
-            print(f'{CUSTOM.relative_to(ROOT)} is stale: {sorted(stale)[:10]}')
+            print(f'{CUSTOM.relative_to(ROOT)} is stale: {sorted(stale)[:10]} drop {drop}')
             return 1
         for path in sorted(stale):
             blob = write_img(targets[path], 'gms')
@@ -205,6 +200,8 @@ def main():
             if semantic_hash(reparsed) != wanted[path]:
                 sys.exit(f'{path} does not round-trip')
             wz.put_image(path, blob, replace=path in before)
+        for path in drop:
+            wz.remove_image(path)
         fd, tmp = tempfile.mkstemp(suffix='.wz', dir=CUSTOM.parent)
         os.close(fd)
         wz.save(tmp)
@@ -214,6 +211,11 @@ def main():
         ui_old = None
         for path, h in before.items():
             if path in targets:
+                continue
+            if path in drop:
+                if path in after:
+                    os.unlink(tmp)
+                    sys.exit(f'{path} was not removed')
                 continue
             if after.get(path) != h:
                 os.unlink(tmp)
@@ -236,7 +238,7 @@ def main():
     print(f'  {BOOK_IMG}: {report["entries"]} entries ({report["from_server"]} from the server, '
           f'{report["stock_only"]} kept stock, {report["reward_changed"]} with a changed Dropping list, '
           f'{report["maps_from_stock"]} with stock Found In maps), {book["drop_rows"]} drop rows')
-    print(f'  Mob/*/info/defaultHP: {len(hp)} mobs; {UI_IMG}/MonsterBook/search: {len(SEARCH_ART)} canvases')
+    print(f'  removed {drop or "no"} partial Mob images; {UI_IMG}/MonsterBook/search: {len(SEARCH_ART)} canvases')
     return 0
 
 

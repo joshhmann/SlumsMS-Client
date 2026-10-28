@@ -508,6 +508,18 @@ class Archive:
         if old.checksum >= 0x80000000:
             old.checksum -= 0x100000000
 
+    def remove_image(self, path):
+        """Drops an image (and its directory if that leaves it empty)."""
+        parts = path.split('/')
+        parent = self.entry('/'.join(parts[:-1]))
+        old = next((e for e in parent.children if e.name == parts[-1] and e.kind == 4), None)
+        if old is None:
+            raise KeyError(path)
+        parent.children.remove(old)
+        if not parent.children and len(parts) > 1:
+            grand = self.entry('/'.join(parts[:-2]))
+            grand.children.remove(parent)
+
     def save(self, output):
         output = Path(output)
         if output.resolve() == self.path.resolve():
