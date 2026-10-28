@@ -629,8 +629,8 @@ void UiLayout_DrawGrips() {
             fg->AddRect(a, b, IM_COL32(120, 175, 255, 230), 0.0f, 0, 2.0f);
             fg->AddText(ImVec2(a.x + 6, a.y + 4), IM_COL32(255, 255, 255, 240), kLabel[e]);
         } else if (pulse > 0.0f) {
-            fg->AddRectFilled(a, b, IM_COL32(255, 170, 60, static_cast<int>(60 * pulse)));
-            fg->AddRect(a, b, IM_COL32(255, 170, 60, static_cast<int>(255 * pulse)), 0.0f, 0, 2.5f);
+            fg->AddRectFilled(a, b, IM_COL32(255, 170, 60, static_cast<int>(110 * pulse)));
+            fg->AddRect(a, b, IM_COL32(255, 170, 60, 255), 0.0f, 0, 3.0f);
             fg->AddText(ImVec2(a.x + 6, a.y + 4), IM_COL32(255, 255, 255, static_cast<int>(255 * pulse)), kLabel[e]);
         } else {
             fg->AddRect(a, b, IM_COL32(120, 175, 255, 110), 0.0f, 0, 1.0f);

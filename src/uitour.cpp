@@ -56,7 +56,7 @@ void Line(const char* text) {
 void DrawCard() {
     const ImGuiViewport* vp = ImGui::GetMainViewport();
     const float em = ImGui::GetFontSize();
-    ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x + vp->WorkSize.x * 0.5f, vp->WorkPos.y + vp->WorkSize.y * 0.09f),
+    ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x + vp->WorkSize.x * 0.5f, vp->WorkPos.y + vp->WorkSize.y * 0.48f),
         ImGuiCond_Always, ImVec2(0.5f, 0.0f));
     ImGui::SetNextWindowSize(ImVec2(em * 26.0f, 0.0f), ImGuiCond_Always);
     bool open = true;

@@ -12,7 +12,7 @@ namespace UiTour {
 
 constexpr unsigned kVersion = 1;
 constexpr unsigned kDelayMs = 1500;   // after the first field frame, so the map has drawn before the card
-constexpr unsigned kPulseMs = 6000;   // how long "Show me" pulses the outlines
+constexpr unsigned kPulseMs = 9000;   // how long "Show me" pulses the outlines
 
 // Whether the card should come up on its own now.
 inline bool ShouldOffer(bool enabled, unsigned seen, bool inField, unsigned msInField) {
