@@ -77,6 +77,10 @@ void CheckGeometry() {
     Check(FirstLockedCell(5, 25, 24) == 20, "scrolled by a row: the last 4 visible cells are past 24 slots");
     Check(FirstLockedCell(30, 25, 24) == 0, "scrolled past the end: everything locked");
 
+    // The tab index is the inventory type: Equip 1 .. Cash 5. Cash must count (1.6.0 drew it empty).
+    Check(ValidTab(1) && ValidTab(5), "Equip and Cash are tabs");
+    Check(!ValidTab(0) && !ValidTab(6), "nothing outside 1..5");
+
     // New-item flash: centred on the tab. A stock 34px tab at [0,34) gives the stock base 34 (plate x 3).
     Check(FlashBase(0, 34) == 1 * kStockTabPitch, "stock tab 1 keeps the stock flash position");
     Check(FlashBase(34, 68) == 2 * kStockTabPitch, "stock tab 2 keeps the stock flash position");

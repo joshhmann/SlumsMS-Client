@@ -38,7 +38,7 @@ constexpr std::uint32_t kAddr_OnCreate         = 0x0081C6C9;   // CUIItem vtable
 constexpr std::uint32_t kAddr_ToggleFull       = 0x0081E541;   // called only from 0x0081D409 (button 0x7D5)
 constexpr std::uint32_t kAddr_NarrowGetterCall = 0x0081C4BE;   // call 0x0049F5DA -> m_bFull
 constexpr std::uint32_t kAddr_Instance         = 0x00BED654;   // CUIItem* (set 0x0081C455, cleared 0x0081C698)
-constexpr std::uint32_t kAddr_ScrollPosArray   = 0x00BF0EB4;   // int[5], per-tab scroll ROW
+constexpr std::uint32_t kAddr_ScrollPosArray   = 0x00BF0EB4;   // per-tab scroll ROW, indexed by tab 1..5 (0x0081D07C)
 constexpr std::uint32_t kAddr_CWvsContext      = 0x00BE7918;
 constexpr std::uint32_t kAddr_GetCharacterData = 0x00425D0B;
 constexpr std::uint32_t kAddr_ZRefRelease      = 0x00428C44;
@@ -86,7 +86,11 @@ constexpr int kOff_Height    = 0x28;
 constexpr int kOff_BgCanvas  = 0x68;    // ZRef<IWzCanvas> that CWnd::Draw blits
 constexpr int kOff_CloseX    = 0x590;   // close-button x, W - 20
 constexpr int kOff_FirstSlot = 0x5E0;   // 1-based index of the top-left visible slot
-constexpr int kOff_TabIndex  = 0x5E4;   // 0..4
+constexpr int kOff_TabIndex  = 0x5E4;   // the inventory type, 1..5 (Equip..Cash): the tab control's index + 1 (0x0081D242)
+constexpr int kFirstTab = 1, kLastTab = 5;
+// 1.6.0 took the tab index for 0..4 and refused Cash (5): its slot count read as 0, so the tab drew empty and took no
+// clicks for every player with the resize on.
+constexpr bool ValidTab(int tab) { return tab >= kFirstTab && tab <= kLastTab; }
 constexpr int kOff_TabArray  = 0x447;   // GW_CharacterData + 0x447 + 4*tab -> ZArray
 
 // ---- grid ---------------------------------------------------------------------------------------
