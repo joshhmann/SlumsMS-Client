@@ -81,6 +81,24 @@ void CheckGeometry() {
     Check(ValidTab(1) && ValidTab(5), "Equip and Cash are tabs");
     Check(!ValidTab(0) && !ValidTab(6), "nothing outside 1..5");
 
+    // Scrolling reaches every slot of every tab at every size, and no further than the row holding the last slot.
+    // 1.6.0's bias was right only at 4 columns: 8x3 with a 28-slot tab had no scrollbar, hiding slots 25-28.
+    Check(ImmValue(RangeBias, kStockCols, kStockRows) == -0x16, "stock bias at 4x6");
+    Check(ScrollPositions(28, 8, 3) == 2, "8x3, 28 slots: one scroll step to the last row");
+    Check(ScrollPositions(96, 5, 3) == 18, "5x3, 96 slots: slot 96 is reachable");
+    for (int cols = kMinCols; cols <= kMaxCols; ++cols) {
+        for (int rows = kMinRows; rows <= kMaxRows; ++rows) {
+            if (!ValidSize(cols, rows)) continue;
+            const int cells = cols * rows;
+            for (int slots = cells; slots <= 252; ++slots) {
+                const int last = ScrollPositions(slots, cols, rows) - 1;   // the furthest scroll position
+                const std::string at = std::to_string(cols) + "x" + std::to_string(rows) + " " + std::to_string(slots);
+                Check(last * cols + cells >= slots, "last slot reachable at " + at);
+                Check(last * cols < slots, "no scrolling past the last row at " + at);
+            }
+        }
+    }
+
     // New-item flash: centred on the tab. A stock 34px tab at [0,34) gives the stock base 34 (plate x 3).
     Check(FlashBase(0, 34) == 1 * kStockTabPitch, "stock tab 1 keeps the stock flash position");
     Check(FlashBase(34, 68) == 2 * kStockTabPitch, "stock tab 2 keeps the stock flash position");
