@@ -611,7 +611,7 @@
   "2388163": 8880415,
   "2388164": 8880002
  },
- "drop_rows": 21534,
+ "drop_rows": 21706,
  "format": 1,
  "mobs": {
   "100100": {
@@ -3770,7 +3770,9 @@
     400020100
    ],
    "name": "Sleepy Grobbler",
-   "reward": [],
+   "reward": [
+    2386030
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -3792,7 +3794,9 @@
     400030100
    ],
    "name": "Alert Grobbler",
-   "reward": [],
+   "reward": [
+    2386031
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -3814,7 +3818,9 @@
     400040300
    ],
    "name": "Grumpy Grobbler",
-   "reward": [],
+   "reward": [
+    2386032
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -3836,7 +3842,9 @@
     400030300
    ],
    "name": "Limestone Tokka",
-   "reward": [],
+   "reward": [
+    2386033
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -3858,7 +3866,9 @@
     400030500
    ],
    "name": "Amethyst Tokka",
-   "reward": [],
+   "reward": [
+    2386034
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -3880,7 +3890,9 @@
     400040100
    ],
    "name": "Laloong",
-   "reward": [],
+   "reward": [
+    2386035
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -3902,7 +3914,9 @@
     400010300
    ],
    "name": "Kaloong",
-   "reward": [],
+   "reward": [
+    2386036
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -3924,7 +3938,9 @@
     400030400
    ],
    "name": "Onyx Stonegar",
-   "reward": [],
+   "reward": [
+    2386037
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -3946,7 +3962,9 @@
     400010400
    ],
    "name": "Gravi Stonegar",
-   "reward": [],
+   "reward": [
+    2386038
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -3968,7 +3986,9 @@
     401010100
    ],
    "name": "Blue Speeyor",
-   "reward": [],
+   "reward": [
+    2386039
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -3991,7 +4011,9 @@
     401010200
    ],
    "name": "Red Speeyor",
-   "reward": [],
+   "reward": [
+    2386040
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -4013,7 +4035,9 @@
     401020400
    ],
    "name": "Yellow Speeyor",
-   "reward": [],
+   "reward": [
+    2386041
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -4034,7 +4058,9 @@
     401020000
    ],
    "name": "Dinoram",
-   "reward": [],
+   "reward": [
+    2386042
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -4056,7 +4082,9 @@
     401030200
    ],
    "name": "Dinodon",
-   "reward": [],
+   "reward": [
+    2386043
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -4079,7 +4107,9 @@
     401040700
    ],
    "name": "Specter Battle Hound",
-   "reward": [],
+   "reward": [
+    2386044
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -4101,7 +4131,9 @@
     401040700
    ],
    "name": "Specter Tamer",
-   "reward": [],
+   "reward": [
+    2386045
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -4123,7 +4155,9 @@
     401040200
    ],
    "name": "Specter Miner",
-   "reward": [],
+   "reward": [
+    2386046
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -4145,7 +4179,9 @@
     401040100
    ],
    "name": "Specter Shieldbearer",
-   "reward": [],
+   "reward": [
+    2386047
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -4168,7 +4204,9 @@
     401040600
    ],
    "name": "Guerrilla Specter",
-   "reward": [],
+   "reward": [
+    2386048
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -4190,7 +4228,9 @@
     401040800
    ],
    "name": "Power Specter",
-   "reward": [],
+   "reward": [
+    2386049
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -4212,7 +4252,9 @@
     401040800
    ],
    "name": "Specter Engineer",
-   "reward": [],
+   "reward": [
+    2386050
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -4236,7 +4278,9 @@
     401052002
    ],
    "name": "Warrior Specter",
-   "reward": [],
+   "reward": [
+    2386051
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -4261,7 +4305,9 @@
     401053000
    ],
    "name": "Magician Specter",
-   "reward": [],
+   "reward": [
+    2386052
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -4285,7 +4331,9 @@
     401053001
    ],
    "name": "Reaper Specter",
-   "reward": [],
+   "reward": [
+    2386053
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -4309,7 +4357,9 @@
     401051102
    ],
    "name": "Red Totem Staff",
-   "reward": [],
+   "reward": [
+    2386054
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -4331,7 +4381,9 @@
     401051102
    ],
    "name": "Blue Totem Staff",
-   "reward": [],
+   "reward": [
+    2386055
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -4354,7 +4406,9 @@
     401052102
    ],
    "name": "Purple Reagent Rock",
-   "reward": [],
+   "reward": [
+    2386056
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -4376,7 +4430,9 @@
     401052102
    ],
    "name": "Red Reagent Rock",
-   "reward": [],
+   "reward": [
+    2386057
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -4398,7 +4454,9 @@
     410000011
    ],
    "name": "Caterpillar",
-   "reward": [],
+   "reward": [
+    2386058
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -4421,7 +4479,9 @@
     410000012
    ],
    "name": "Lady Bug",
-   "reward": [],
+   "reward": [
+    2386059
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -4447,7 +4507,9 @@
     410000021
    ],
    "name": "Sparrow",
-   "reward": [],
+   "reward": [
+    2386060
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -4470,7 +4532,9 @@
     410000022
    ],
    "name": "Balloon Mouse",
-   "reward": [],
+   "reward": [
+    2386061
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -4492,7 +4556,9 @@
     410000030
    ],
    "name": "Red Poison Frog",
-   "reward": [],
+   "reward": [
+    2386062
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -4514,7 +4580,9 @@
     410000031
    ],
    "name": "Green Poison Frog",
-   "reward": [],
+   "reward": [
+    2386063
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -4536,7 +4604,9 @@
     410000040
    ],
    "name": "Delinquent Chick",
-   "reward": [],
+   "reward": [
+    2386064
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -4558,7 +4628,9 @@
     410000041
    ],
    "name": "Punk Chick",
-   "reward": [],
+   "reward": [
+    2386065
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -4580,7 +4652,9 @@
     410000050
    ],
    "name": "Mane Fur Hyena",
-   "reward": [],
+   "reward": [
+    2386066
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -4602,7 +4676,9 @@
     410000051
    ],
    "name": "Fang Hyena",
-   "reward": [],
+   "reward": [
+    2386067
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -4625,7 +4701,9 @@
     410000112
    ],
    "name": "Flutterbuzz",
-   "reward": [],
+   "reward": [
+    2386068
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -4648,7 +4726,9 @@
     410000113
    ],
    "name": "Pom Puff Bush",
-   "reward": [],
+   "reward": [
+    2386069
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -4670,7 +4750,9 @@
     410000114
    ],
    "name": "Spiney Puff Bush",
-   "reward": [],
+   "reward": [
+    2386070
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -4693,7 +4775,9 @@
     410000116
    ],
    "name": "Nettled Squirrel",
-   "reward": [],
+   "reward": [
+    2386071
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -4716,7 +4800,9 @@
     410000117
    ],
    "name": "Vicious Squirrel",
-   "reward": [],
+   "reward": [
+    2386072
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -4739,7 +4825,9 @@
     410000102
    ],
    "name": "Snowy Stjartmes",
-   "reward": [],
+   "reward": [
+    2386073
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -4762,7 +4850,9 @@
     410000103
    ],
    "name": "Stormy Stjartmes",
-   "reward": [],
+   "reward": [
+    2386074
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -4785,7 +4875,9 @@
     410000122
    ],
    "name": "Cloud Guardian",
-   "reward": [],
+   "reward": [
+    2386075
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -4808,7 +4900,9 @@
     410000123
    ],
    "name": "Wind Guardian",
-   "reward": [],
+   "reward": [
+    2386076
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -4831,7 +4925,9 @@
     402000111
    ],
    "name": "Hedgehog",
-   "reward": [],
+   "reward": [
+    2386077
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -4854,7 +4950,9 @@
     402000112
    ],
    "name": "Mutant Hedgehog",
-   "reward": [],
+   "reward": [
+    2386078
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -4876,7 +4974,9 @@
     402000220
    ],
    "name": "Nutria",
-   "reward": [],
+   "reward": [
+    2386079
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -4898,7 +4998,9 @@
     402000210
    ],
    "name": "Market Hoodlum",
-   "reward": [],
+   "reward": [
+    2386080
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -4920,7 +5022,9 @@
     402000120
    ],
    "name": "Ooze Waste",
-   "reward": [],
+   "reward": [
+    2386081
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -4942,7 +5046,9 @@
     402000121
    ],
    "name": "Flame Waste",
-   "reward": [],
+   "reward": [
+    2386082
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -4964,7 +5070,9 @@
     402000122
    ],
    "name": "Scrap Iron Waste",
-   "reward": [],
+   "reward": [
+    2386083
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -4986,7 +5094,9 @@
     402000310
    ],
    "name": "Specter Stray Dog",
-   "reward": [],
+   "reward": [
+    2386084
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -5008,7 +5118,9 @@
     402000221
    ],
    "name": "Mutant Nutria",
-   "reward": [],
+   "reward": [
+    2386085
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -5030,7 +5142,9 @@
     402000123
    ],
    "name": "Dumpy Hoodlum",
-   "reward": [],
+   "reward": [
+    2386086
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -5052,7 +5166,9 @@
     402000311
    ],
    "name": "Mutant Specter Stray Dog",
-   "reward": [],
+   "reward": [
+    2386087
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -5075,7 +5191,9 @@
     402000321
    ],
    "name": "Hazard's Rotten Crony",
-   "reward": [],
+   "reward": [
+    2386088
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -5098,7 +5216,9 @@
     402000322
    ],
    "name": "Hazard's Mean Crony",
-   "reward": [],
+   "reward": [
+    2386089
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -5121,7 +5241,9 @@
     402000125
    ],
    "name": "Prickly Hedgehog",
-   "reward": [],
+   "reward": [
+    2386090
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -5144,7 +5266,9 @@
     402000126
    ],
    "name": "Foul Ooze Waste",
-   "reward": [],
+   "reward": [
+    2386091
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -5167,7 +5291,9 @@
     402000223
    ],
    "name": "Sketchy Hooligan",
-   "reward": [],
+   "reward": [
+    2386092
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -5190,7 +5316,9 @@
     402000224
    ],
    "name": "Dangerous Nutria",
-   "reward": [],
+   "reward": [
+    2386093
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -5213,7 +5341,9 @@
     402000313
    ],
    "name": "Hazard's Grubby Crony",
-   "reward": [],
+   "reward": [
+    2386094
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -5236,7 +5366,9 @@
     402000314
    ],
    "name": "Mangy Spectral Mutt",
-   "reward": [],
+   "reward": [
+    2386095
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -5259,7 +5391,9 @@
     402000452
    ],
    "name": "Blob Glooger",
-   "reward": [],
+   "reward": [
+    2386096
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -5282,7 +5416,9 @@
     402000453
    ],
    "name": "Spine Glooger",
-   "reward": [],
+   "reward": [
+    2386097
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -5304,7 +5440,9 @@
     402000610
    ],
    "name": "Desert Mush",
-   "reward": [],
+   "reward": [
+    2386098
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -5326,7 +5464,9 @@
     402000611
    ],
    "name": "Ferocious Desert Mush",
-   "reward": [],
+   "reward": [
+    2386099
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -5348,7 +5488,9 @@
     402000612
    ],
    "name": "Sand Tortoise",
-   "reward": [],
+   "reward": [
+    2386100
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -5370,7 +5512,9 @@
     402000613
    ],
    "name": "Crystal Sand Tortoise",
-   "reward": [],
+   "reward": [
+    2386101
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -5393,7 +5537,9 @@
     402000617
    ],
    "name": "Crystal Hermit Crab",
-   "reward": [],
+   "reward": [
+    2386102
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -5416,7 +5562,9 @@
     402000618
    ],
    "name": "Bomber Hermit Crab",
-   "reward": [],
+   "reward": [
+    2386103
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -5438,7 +5586,9 @@
     402000621
    ],
    "name": "Gale Fox",
-   "reward": [],
+   "reward": [
+    2386104
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -5460,7 +5610,9 @@
     402000622
    ],
    "name": "Ferocious Gale Fox",
-   "reward": [],
+   "reward": [
+    2386105
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -5484,7 +5636,9 @@
     402000634
    ],
    "name": "Sand Helm",
-   "reward": [],
+   "reward": [
+    2386106
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -5508,7 +5662,9 @@
     402000634
    ],
    "name": "Sand Armor",
-   "reward": [],
+   "reward": [
+    2386107
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -5531,7 +5687,9 @@
     402000642
    ],
    "name": "Illusion Soldier A",
-   "reward": [],
+   "reward": [
+    2386108
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -5554,7 +5712,9 @@
     402000643
    ],
    "name": "Illusion Soldier B",
-   "reward": [],
+   "reward": [
+    2386109
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -5578,7 +5738,9 @@
     402000513
    ],
    "name": "Green Grossular",
-   "reward": [],
+   "reward": [
+    2386110
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -5602,7 +5764,9 @@
     402000519
    ],
    "name": "Purple Amethyst",
-   "reward": [],
+   "reward": [
+    2386111
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -5626,7 +5790,9 @@
     402000516
    ],
    "name": "Fire Pyrope",
-   "reward": [],
+   "reward": [
+    2386112
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -5649,7 +5815,9 @@
     402000535
    ],
    "name": "Dark Obsidian",
-   "reward": [],
+   "reward": [
+    2386113
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -5673,7 +5841,9 @@
     402000510
    ],
    "name": "Shining Gold",
-   "reward": [],
+   "reward": [
+    2386114
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -5696,7 +5866,9 @@
     402000509
    ],
    "name": "Shining Vinegold",
-   "reward": [],
+   "reward": [
+    2386115
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -5719,7 +5891,9 @@
     402000504
    ],
    "name": "Blue Larimar",
-   "reward": [],
+   "reward": [
+    2386116
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -5742,7 +5916,9 @@
     410000211
    ],
    "name": "Sikhye Crock",
-   "reward": [],
+   "reward": [
+    2386117
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -5765,7 +5941,9 @@
     410000212
    ],
    "name": "Broken Sikhye Crock",
-   "reward": [],
+   "reward": [
+    2386118
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -5787,7 +5965,9 @@
     410000213
    ],
    "name": "Jar of Stagnant Water",
-   "reward": [],
+   "reward": [
+    2386119
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -5810,7 +5990,9 @@
     410000221
    ],
    "name": "Rolling Gourd",
-   "reward": [],
+   "reward": [
+    2386120
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -5833,7 +6015,9 @@
     410000222
    ],
    "name": "Chunky Striped Gourd",
-   "reward": [],
+   "reward": [
+    2386121
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -5856,7 +6040,9 @@
     410000241
    ],
    "name": "Sewer Rat",
-   "reward": [],
+   "reward": [
+    2386122
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -5879,7 +6065,9 @@
     410000243
    ],
    "name": "Vicious Sewer Rat",
-   "reward": [],
+   "reward": [
+    2386123
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -5903,7 +6091,9 @@
     410000313
    ],
    "name": "Back Alley Cat",
-   "reward": [],
+   "reward": [
+    2386132
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -5927,7 +6117,9 @@
     410000323
    ],
    "name": "Town Square Pot",
-   "reward": [],
+   "reward": [
+    2386133
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -5951,7 +6143,9 @@
     410000325
    ],
    "name": "Monstrous News Machine",
-   "reward": [],
+   "reward": [
+    2386134
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -5975,7 +6169,9 @@
     410000333
    ],
    "name": "Torchlighter",
-   "reward": [],
+   "reward": [
+    2386135
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -5998,7 +6194,9 @@
     410000357
    ],
    "name": "Count's Wizard",
-   "reward": [],
+   "reward": [
+    2386136
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -6021,7 +6219,9 @@
     410000356
    ],
    "name": "Count's Swordsman",
-   "reward": [],
+   "reward": [
+    2386137
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -6044,7 +6244,9 @@
     410000417
    ],
    "name": "Agile Biter",
-   "reward": [],
+   "reward": [
+    2386124
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -6065,7 +6267,9 @@
     410000418
    ],
    "name": "Nimble Biter",
-   "reward": [],
+   "reward": [
+    2386125
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -6086,7 +6290,9 @@
     410000405
    ],
    "name": "Guard Robot D2-78",
-   "reward": [],
+   "reward": [
+    2386126
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -6107,7 +6313,9 @@
     410000406
    ],
    "name": "Guard Robot C1-49",
-   "reward": [],
+   "reward": [
+    2386127
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -6128,7 +6336,9 @@
     410000421
    ],
    "name": "Bulky Biter",
-   "reward": [],
+   "reward": [
+    2386128
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -6149,7 +6359,9 @@
     410000422
    ],
    "name": "Huge Biter",
-   "reward": [],
+   "reward": [
+    2386129
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -6170,7 +6382,9 @@
     410000411
    ],
    "name": "Skilled Drakas",
-   "reward": [],
+   "reward": [
+    2386130
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -6191,7 +6405,9 @@
     410000412
    ],
    "name": "Adept Drakas",
-   "reward": [],
+   "reward": [
+    2386131
+   ],
    "stats": [
     "PAD : 925",
     "MAD : 1250",
@@ -21976,7 +22192,6 @@
     1402005,
     2290009,
     2290050,
-    2290083,
     2049000,
     2049001
    ],
@@ -22036,7 +22251,6 @@
     1422010,
     2290013,
     2290067,
-    2290082,
     2290097,
     2290116,
     2049000,
@@ -22153,7 +22367,6 @@
     2044904,
     1372009,
     1472033,
-    2290106,
     2040515,
     2041022,
     2043801,
@@ -22378,7 +22591,6 @@
     1060106,
     1322028,
     1422010,
-    2290082,
     2290097,
     2040317,
     2040929,
@@ -22642,7 +22854,6 @@
     1412009,
     1422010,
     2290032,
-    2290082,
     2290114,
     2040318,
     2040801,
@@ -22846,7 +23057,6 @@
     2290042,
     2290053,
     2290073,
-    2290102,
     2290118,
     2040901,
     2041001,
@@ -22910,11 +23120,9 @@
     1302018,
     1312011,
     2290017,
-    2290021,
     2290035,
     2290042,
     2290052,
-    2290102,
     2040301,
     2040420,
     2040931,
@@ -23187,8 +23395,6 @@
     1422013,
     2290023,
     2290029,
-    2290101,
-    2290107,
     2330004,
     2040001,
     2040401,
@@ -23261,8 +23467,6 @@
     1332027,
     1482012,
     2290010,
-    2290019,
-    2290026,
     2290076,
     2290085,
     2290096,
@@ -23338,7 +23542,6 @@
     2290045,
     2290065,
     2290067,
-    2290081,
     2040602,
     2040705,
     2040924
@@ -23466,9 +23669,7 @@
     2290035,
     2290036,
     2290063,
-    2290080,
     2290098,
-    2290101,
     2290117,
     1312030,
     1322045,
@@ -23558,7 +23759,6 @@
     2040320,
     2040501,
     2290018,
-    2290019,
     2290032,
     2290042,
     2290058,
@@ -23566,10 +23766,8 @@
     2290068,
     2290069,
     2290072,
-    2290092,
     2290099,
     2290100,
-    2290102,
     2290119,
     1312030,
     1322045,
@@ -23672,8 +23870,6 @@
     2290054,
     2290066,
     2290075,
-    2290092,
-    2290103,
     2040004,
     2040419,
     2044110,
@@ -23730,7 +23926,6 @@
     2290018,
     2290038,
     2290060,
-    2290080,
     2290124,
     2040707,
     2041023,
@@ -23868,7 +24063,6 @@
     1482012,
     2290002,
     2290009,
-    2290021,
     2290034,
     2290041,
     2290052,
@@ -23944,7 +24138,6 @@
     2290018,
     2290038,
     2290060,
-    2290080,
     2290124
    ],
    "stats": [
@@ -24166,7 +24359,6 @@
     2290012,
     2290056,
     2290071,
-    2290101,
     2330004,
     2040927,
     2044412,
@@ -24535,7 +24727,6 @@
     1050099,
     1312030,
     1432030,
-    2290026,
     2290059,
     2290088,
     2290089,
@@ -24640,8 +24831,6 @@
     1060111,
     1072216,
     2290041,
-    2290092,
-    2290093,
     2290115,
     1322045,
     1452021,
@@ -24669,7 +24858,9 @@
     211060100
    ],
    "name": "Crocky the Gatekeeper",
-   "reward": [],
+   "reward": [
+    2387082
+   ],
    "stats": [
     "PAD : 850",
     "MAD : 780",
@@ -24691,7 +24882,9 @@
     211060300
    ],
    "name": "Reindeer",
-   "reward": [],
+   "reward": [
+    2387083
+   ],
    "stats": [
     "PAD : 850",
     "MAD : 780",
@@ -24713,7 +24906,9 @@
     211060500
    ],
    "name": "Blood Reindeer",
-   "reward": [],
+   "reward": [
+    2387084
+   ],
    "stats": [
     "PAD : 850",
     "MAD : 780",
@@ -24736,7 +24931,9 @@
     211060900
    ],
    "name": "Bearwolf",
-   "reward": [],
+   "reward": [
+    2387085
+   ],
    "stats": [
     "PAD : 850",
     "MAD : 780",
@@ -24760,7 +24957,9 @@
     211060810
    ],
    "name": "Grey Vulture",
-   "reward": [],
+   "reward": [
+    2387086
+   ],
    "stats": [
     "PAD : 850",
     "MAD : 780",
@@ -24784,7 +24983,9 @@
     211060830
    ],
    "name": "Castle Golem",
-   "reward": [],
+   "reward": [
+    2387087
+   ],
    "stats": [
     "PAD : 850",
     "MAD : 780",
@@ -24973,8 +25174,6 @@
     4020008,
     2290133,
     2388032,
-    2290020,
-    2290081,
     2290085,
     1302023,
     1312015,
@@ -25053,8 +25252,6 @@
     2290061,
     2290076,
     2290077,
-    2290104,
-    2290105,
     2290117,
     2290118,
     1312030,
@@ -25118,14 +25315,12 @@
     2040327,
     2040925,
     2290018,
-    2290019,
     2290024,
     2290025,
     2290058,
     2290059,
     2290076,
     2290077,
-    2290106,
     1072318,
     1050105,
     1051093,
@@ -25182,7 +25377,6 @@
     2290036,
     2290037,
     2290055,
-    2290080,
     2290099,
     1082154,
     2040318,
@@ -25575,10 +25769,7 @@
     2290078,
     2290089,
     2290091,
-    2290104,
-    2290107,
     2290121,
-    2290123,
     1082158,
     1082213,
     1040120,
@@ -25658,19 +25849,14 @@
     2290005,
     2290024,
     2290025,
-    2290026,
-    2290027,
     2290052,
     2290053,
     2290054,
     2290055,
     2290076,
     2290077,
-    2290082,
-    2290083,
     2290097,
     2290099,
-    2290106,
     2290108,
     2290112,
     2290114,
@@ -25746,19 +25932,14 @@
     2290005,
     2290024,
     2290025,
-    2290026,
-    2290027,
     2290052,
     2290053,
     2290054,
     2290055,
     2290076,
     2290077,
-    2290082,
-    2290083,
     2290097,
     2290099,
-    2290106,
     2290108,
     2290112,
     2290114,
@@ -25811,7 +25992,9 @@
     271010200
    ],
    "name": "Mutant Snail",
-   "reward": [],
+   "reward": [
+    2387088
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -25834,7 +26017,9 @@
     271020100
    ],
    "name": "Mutant Orange Mushroom",
-   "reward": [],
+   "reward": [
+    2387089
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -25860,7 +26045,9 @@
     271010301
    ],
    "name": "Mutant Slime",
-   "reward": [],
+   "reward": [
+    2387090
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -25883,7 +26070,9 @@
     271010400
    ],
    "name": "Mutant Ribbon Pig",
-   "reward": [],
+   "reward": [
+    2387091
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -25905,7 +26094,9 @@
     271000100
    ],
    "name": "Mutant Tino",
-   "reward": [],
+   "reward": [
+    2387092
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -25927,7 +26118,9 @@
     271000200
    ],
    "name": "Mutant Tiru",
-   "reward": [],
+   "reward": [
+    2387093
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -25951,7 +26144,9 @@
     271000210
    ],
    "name": "Mutant Tiguru",
-   "reward": [],
+   "reward": [
+    2387094
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -25975,7 +26170,9 @@
     271030201
    ],
    "name": "Dawn",
-   "reward": [],
+   "reward": [
+    2387095
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -25997,7 +26194,9 @@
     271030202
    ],
    "name": "Blaze",
-   "reward": [],
+   "reward": [
+    2387096
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -26019,7 +26218,9 @@
     271030203
    ],
    "name": "Wind",
-   "reward": [],
+   "reward": [
+    2387097
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -26041,7 +26242,9 @@
     271030204
    ],
    "name": "Night",
-   "reward": [],
+   "reward": [
+    2387098
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -26063,7 +26266,9 @@
     271030205
    ],
    "name": "Thunder",
-   "reward": [],
+   "reward": [
+    2387099
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -26085,7 +26290,9 @@
     271030100
    ],
    "name": "Official Knight A",
-   "reward": [],
+   "reward": [
+    2387100
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -26107,7 +26314,9 @@
     271030100
    ],
    "name": "Official Knight B",
-   "reward": [],
+   "reward": [
+    2387101
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -26129,7 +26338,9 @@
     271030200
    ],
    "name": "Official Knight C",
-   "reward": [],
+   "reward": [
+    2387102
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -26150,7 +26361,9 @@
     271030300
    ],
    "name": "Official Knight D",
-   "reward": [],
+   "reward": [
+    2387103
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -26172,7 +26385,9 @@
     271030400
    ],
    "name": "Official Knight E",
-   "reward": [],
+   "reward": [
+    2387104
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -26195,7 +26410,9 @@
     271030600
    ],
    "name": "Advanced Knight A",
-   "reward": [],
+   "reward": [
+    2387105
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -26217,7 +26434,9 @@
     271030600
    ],
    "name": "Advanced Knight B",
-   "reward": [],
+   "reward": [
+    2387106
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -26240,7 +26459,9 @@
     271030600
    ],
    "name": "Advanced Knight C",
-   "reward": [],
+   "reward": [
+    2387107
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -26263,7 +26484,9 @@
     271030600
    ],
    "name": "Advanced Knight D",
-   "reward": [],
+   "reward": [
+    2387108
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -26286,7 +26509,9 @@
     271030600
    ],
    "name": "Advanced Knight E",
-   "reward": [],
+   "reward": [
+    2387109
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -26312,7 +26537,9 @@
     273020300
    ],
    "name": "Swollen Stump",
-   "reward": [],
+   "reward": [
+    2387136
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -26337,7 +26564,9 @@
     273020300
    ],
    "name": "Swollen Dark Stump",
-   "reward": [],
+   "reward": [
+    2387137
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -26361,7 +26590,9 @@
     273020400
    ],
    "name": "Swollen Axe Stump",
-   "reward": [],
+   "reward": [
+    2387138
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -26385,7 +26616,9 @@
     273030100
    ],
    "name": "Pillaging Wild Boar",
-   "reward": [],
+   "reward": [
+    2387139
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -26409,7 +26642,9 @@
     273030200
    ],
    "name": "Pillaging Iron Boar",
-   "reward": [],
+   "reward": [
+    2387140
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -26433,7 +26668,9 @@
     273030300
    ],
    "name": "Pillaging Fire Boars",
-   "reward": [],
+   "reward": [
+    2387141
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -26457,7 +26694,9 @@
     273040000
    ],
    "name": "Sinister Wooden Mask",
-   "reward": [],
+   "reward": [
+    2387142
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -26482,7 +26721,9 @@
     273040200
    ],
    "name": "Sinister Rocky Mask",
-   "reward": [],
+   "reward": [
+    2387143
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -26507,7 +26748,9 @@
     273040300
    ],
    "name": "Sinister Steel Mask",
-   "reward": [],
+   "reward": [
+    2387144
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -26532,7 +26775,9 @@
     273060100
    ],
    "name": "Ancient Golem",
-   "reward": [],
+   "reward": [
+    2387145
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -26557,7 +26802,9 @@
     273060200
    ],
    "name": "Ancient Dark Golem",
-   "reward": [],
+   "reward": [
+    2387146
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -26582,7 +26829,9 @@
     273060300
    ],
    "name": "Ancient Mixed Golem",
-   "reward": [],
+   "reward": [
+    2387147
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -26607,7 +26856,9 @@
     450001011
    ],
    "name": "Happy Erda",
-   "reward": [],
+   "reward": [
+    2387150
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -26631,7 +26882,9 @@
     450001013
    ],
    "name": "Raging Erda",
-   "reward": [],
+   "reward": [
+    2387151
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -26655,7 +26908,9 @@
     450001015
    ],
    "name": "Sad Erda",
-   "reward": [],
+   "reward": [
+    2387152
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -26678,7 +26933,9 @@
     450001016
    ],
    "name": "Joyful Erda",
-   "reward": [],
+   "reward": [
+    2387153
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -26701,7 +26958,9 @@
     450001111
    ],
    "name": "Stone Erda",
-   "reward": [],
+   "reward": [
+    2387154
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -26725,7 +26984,9 @@
     450001113
    ],
    "name": "Blazing Erda",
-   "reward": [],
+   "reward": [
+    2387155
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -26748,7 +27009,9 @@
     450001114
    ],
    "name": "Soulful Erda",
-   "reward": [],
+   "reward": [
+    2387156
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -26778,7 +27041,9 @@
     450001218
    ],
    "name": "Tranquil Erda",
-   "reward": [],
+   "reward": [
+    2387157
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -26798,7 +27063,9 @@
    "level": 200,
    "map": [],
    "name": "Lantern Erda",
-   "reward": [],
+   "reward": [
+    2387158
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -26818,7 +27085,9 @@
    "level": 200,
    "map": [],
    "name": "Arma's Follower",
-   "reward": [],
+   "reward": [
+    2387159
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -26841,7 +27110,9 @@
     450002002
    ],
    "name": "Pinedeer",
-   "reward": [],
+   "reward": [
+    2387160
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -26864,7 +27135,9 @@
     450002005
    ],
    "name": "Bighorn Pinedeer",
-   "reward": [],
+   "reward": [
+    2387161
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -26887,7 +27160,9 @@
     450002004
    ],
    "name": "Ewenana",
-   "reward": [],
+   "reward": [
+    2387162
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -26910,7 +27185,9 @@
     450002005
    ],
    "name": "Ramanana",
-   "reward": [],
+   "reward": [
+    2387163
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -26933,7 +27210,9 @@
     450002009
    ],
    "name": "Flyon",
-   "reward": [],
+   "reward": [
+    2387164
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -26956,7 +27235,9 @@
     450002010
    ],
    "name": "Angry Flyon",
-   "reward": [],
+   "reward": [
+    2387165
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -26979,7 +27260,9 @@
     450002007
    ],
    "name": "Unripe Wolfruit",
-   "reward": [],
+   "reward": [
+    2387166
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -27002,7 +27285,9 @@
     450002010
    ],
    "name": "Ripe Wolfruit",
-   "reward": [],
+   "reward": [
+    2387167
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -27025,7 +27310,9 @@
     450002012
    ],
    "name": "Green Catfish",
-   "reward": [],
+   "reward": [
+    2387168
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -27048,7 +27335,9 @@
     450002015
    ],
    "name": "Blue Catfish",
-   "reward": [],
+   "reward": [
+    2387169
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -27071,7 +27360,9 @@
     450002014
    ],
    "name": "Rhyturtle",
-   "reward": [],
+   "reward": [
+    2387170
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -27094,7 +27385,9 @@
     450002015
    ],
    "name": "Boss Rhyturtle",
-   "reward": [],
+   "reward": [
+    2387171
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -27117,7 +27410,9 @@
     450002017
    ],
    "name": "Crilia",
-   "reward": [],
+   "reward": [
+    2387172
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -27140,7 +27435,9 @@
     450002020
    ],
    "name": "Patriarch Crilia",
-   "reward": [],
+   "reward": [
+    2387173
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -27163,7 +27460,9 @@
     450002019
    ],
    "name": "Birdshark",
-   "reward": [],
+   "reward": [
+    2387174
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -27186,7 +27485,9 @@
     450002020
    ],
    "name": "Patriarch Birdshark",
-   "reward": [],
+   "reward": [
+    2387175
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -27211,7 +27512,9 @@
     450015080
    ],
    "name": "Monkeyrog",
-   "reward": [],
+   "reward": [
+    2387244
+   ],
    "stats": [
     "PAD : 900",
     "MAD : 900",
@@ -27236,7 +27539,9 @@
     450015090
    ],
    "name": "Bunshroom",
-   "reward": [],
+   "reward": [
+    2387245
+   ],
    "stats": [
     "PAD : 900",
     "MAD : 900",
@@ -27261,7 +27566,9 @@
     450015160
    ],
    "name": "Lytone",
-   "reward": [],
+   "reward": [
+    2387246
+   ],
    "stats": [
     "PAD : 900",
     "MAD : 900",
@@ -27286,7 +27593,9 @@
     450015170
    ],
    "name": "Stonepy",
-   "reward": [],
+   "reward": [
+    2387247
+   ],
    "stats": [
     "PAD : 900",
     "MAD : 900",
@@ -27311,7 +27620,9 @@
     450015250
    ],
    "name": "Kumpider",
-   "reward": [],
+   "reward": [
+    2387248
+   ],
    "stats": [
     "PAD : 900",
     "MAD : 900",
@@ -27336,7 +27647,9 @@
     450015260
    ],
    "name": "Squirrelnon",
-   "reward": [],
+   "reward": [
+    2387249
+   ],
    "stats": [
     "PAD : 900",
     "MAD : 900",
@@ -27360,7 +27673,9 @@
     450016030
    ],
    "name": "Veritate",
-   "reward": [],
+   "reward": [
+    2387250
+   ],
    "stats": [
     "PAD : 900",
     "MAD : 900",
@@ -27384,7 +27699,9 @@
     450016060
    ],
    "name": "Volar",
-   "reward": [],
+   "reward": [
+    2387251
+   ],
    "stats": [
     "PAD : 900",
     "MAD : 900",
@@ -27408,7 +27725,9 @@
     450016090
    ],
    "name": "Oceanleli",
-   "reward": [],
+   "reward": [
+    2387252
+   ],
    "stats": [
     "PAD : 900",
     "MAD : 900",
@@ -27432,7 +27751,9 @@
     450016130
    ],
    "name": "Hyades",
-   "reward": [],
+   "reward": [
+    2387253
+   ],
    "stats": [
     "PAD : 900",
     "MAD : 900",
@@ -27456,7 +27777,9 @@
     450016160
    ],
    "name": "Denebola",
-   "reward": [],
+   "reward": [
+    2387254
+   ],
    "stats": [
     "PAD : 900",
     "MAD : 900",
@@ -27480,7 +27803,9 @@
     450016230
    ],
    "name": "Lilli Borea",
-   "reward": [],
+   "reward": [
+    2387255
+   ],
    "stats": [
     "PAD : 900",
     "MAD : 900",
@@ -27504,7 +27829,9 @@
     450016260
    ],
    "name": "Angelus",
-   "reward": [],
+   "reward": [
+    2387256
+   ],
    "stats": [
     "PAD : 900",
     "MAD : 900",
@@ -27527,7 +27854,9 @@
     450003510
    ],
    "name": "Dreamkeeper",
-   "reward": [],
+   "reward": [
+    2387176
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -27550,7 +27879,9 @@
     450003210
    ],
    "name": "Paper Bag Alley Citizen",
-   "reward": [],
+   "reward": [
+    2387177
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -27573,7 +27904,9 @@
     450003220
    ],
    "name": "Wood Board Alley Citizen",
-   "reward": [],
+   "reward": [
+    2387178
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -27596,7 +27929,9 @@
     450003320
    ],
    "name": "Gallina",
-   "reward": [],
+   "reward": [
+    2387179
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -27619,7 +27954,9 @@
     450003320
    ],
    "name": "Gallus",
-   "reward": [],
+   "reward": [
+    2387180
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -27641,7 +27978,9 @@
     450003340
    ],
    "name": "Angry Victory Plate",
-   "reward": [],
+   "reward": [
+    2387181
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -27663,7 +28002,9 @@
     450003350
    ],
    "name": "Crooked Victory Plate",
-   "reward": [],
+   "reward": [
+    2387182
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -27685,7 +28026,9 @@
     450003450
    ],
    "name": "Red Dancing Shoes",
-   "reward": [],
+   "reward": [
+    2387183
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -27708,7 +28051,9 @@
     450003420
    ],
    "name": "Angry Masquerade Citizen",
-   "reward": [],
+   "reward": [
+    2387184
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -27731,7 +28076,9 @@
     450003420
    ],
    "name": "Insane Masquerade Citizen",
-   "reward": [],
+   "reward": [
+    2387185
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -27754,7 +28101,9 @@
     450003540
    ],
    "name": "Blue-eyed Gargoyle",
-   "reward": [],
+   "reward": [
+    2387186
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -27777,7 +28126,9 @@
     450003540
    ],
    "name": "Red-eyed Gargoyle",
-   "reward": [],
+   "reward": [
+    2387187
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -27800,7 +28151,9 @@
     450005121
    ],
    "name": "Water Spirit",
-   "reward": [],
+   "reward": [
+    2387189
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -27824,7 +28177,9 @@
     450005131
    ],
    "name": "Sun Spirit",
-   "reward": [],
+   "reward": [
+    2387190
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -27847,7 +28202,9 @@
     450005131
    ],
    "name": "Earth Spirit",
-   "reward": [],
+   "reward": [
+    2387191
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -27871,7 +28228,9 @@
     450005222
    ],
    "name": "Snow Cloud Spirit",
-   "reward": [],
+   "reward": [
+    2387192
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -27895,7 +28254,9 @@
     450005222
    ],
    "name": "Thunder Cloud Spirit",
-   "reward": [],
+   "reward": [
+    2387193
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -27919,7 +28280,9 @@
     450005242
    ],
    "name": "Toxic Spirit",
-   "reward": [],
+   "reward": [
+    2387194
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -27943,7 +28306,9 @@
     450005242
    ],
    "name": "Volatile Spirit",
-   "reward": [],
+   "reward": [
+    2387195
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -27968,7 +28333,9 @@
     450005431
    ],
    "name": "Befuddled Spirit",
-   "reward": [],
+   "reward": [
+    2387196
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -27994,7 +28361,9 @@
     450005500
    ],
    "name": "Anguished Spirit",
-   "reward": [],
+   "reward": [
+    2387197
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -28022,7 +28391,9 @@
     450005520
    ],
    "name": "Mournful Spirit",
-   "reward": [],
+   "reward": [
+    2387198
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -28045,7 +28416,9 @@
     450006020
    ],
    "name": "Xenoroid Echo Type A",
-   "reward": [],
+   "reward": [
+    2387199
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -28068,7 +28441,9 @@
     450006030
    ],
    "name": "Xenoroid Echo Type B",
-   "reward": [],
+   "reward": [
+    2387200
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -28091,7 +28466,9 @@
     450006120
    ],
    "name": "Nameless Cat",
-   "reward": [],
+   "reward": [
+    2387201
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -28114,7 +28491,9 @@
     450006150
    ],
    "name": "Powerful Gangster",
-   "reward": [],
+   "reward": [
+    2387202
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -28137,7 +28516,9 @@
     450006160
    ],
    "name": "Strong Gangster",
-   "reward": [],
+   "reward": [
+    2387203
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -28161,7 +28542,9 @@
     450006220
    ],
    "name": "Blue Shadow",
-   "reward": [],
+   "reward": [
+    2387204
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -28184,7 +28567,9 @@
     450006230
    ],
    "name": "Red Shadow",
-   "reward": [],
+   "reward": [
+    2387205
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -28207,7 +28592,9 @@
     450006310
    ],
    "name": "Experiment Gone Wrong",
-   "reward": [],
+   "reward": [
+    2387206
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -28230,7 +28617,9 @@
     450006320
    ],
    "name": "Big Experiment Gone Wrong",
-   "reward": [],
+   "reward": [
+    2387207
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -28252,7 +28641,9 @@
     450006410
    ],
    "name": "Thralled Guard",
-   "reward": [],
+   "reward": [
+    2387208
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -28275,7 +28666,9 @@
     450006420
    ],
    "name": "Thralled Warhammer Knight",
-   "reward": [],
+   "reward": [
+    2387209
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -28298,7 +28691,9 @@
     450006430
    ],
    "name": "Thralled Wizard",
-   "reward": [],
+   "reward": [
+    2387210
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -28320,7 +28715,9 @@
     450006430
    ],
    "name": "Thralled Archer",
-   "reward": [],
+   "reward": [
+    2387211
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -28343,7 +28740,9 @@
     450007020
    ],
    "name": "Ahtuin",
-   "reward": [],
+   "reward": [
+    2387212
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -28366,7 +28765,9 @@
     450007030
    ],
    "name": "Atus",
-   "reward": [],
+   "reward": [
+    2387213
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -28389,7 +28790,9 @@
     450007060
    ],
    "name": "Bellalion",
-   "reward": [],
+   "reward": [
+    2387214
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -28412,7 +28815,9 @@
     450007070
    ],
    "name": "Bellalis",
-   "reward": [],
+   "reward": [
+    2387215
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -28435,7 +28840,9 @@
     450007120
    ],
    "name": "Aranya",
-   "reward": [],
+   "reward": [
+    2387216
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -28458,7 +28865,9 @@
     450007130
    ],
    "name": "Aranea",
-   "reward": [],
+   "reward": [
+    2387217
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -28481,7 +28890,9 @@
     450007150
    ],
    "name": "Keeper of Light",
-   "reward": [],
+   "reward": [
+    2387218
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -28504,7 +28915,9 @@
     450007160
    ],
    "name": "Keeper of Darkness",
-   "reward": [],
+   "reward": [
+    2387219
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -28527,7 +28940,9 @@
     450007220
    ],
    "name": "Light Executor",
-   "reward": [],
+   "reward": [
+    2387220
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -28550,7 +28965,9 @@
     450007230
    ],
    "name": "Dark Executor",
-   "reward": [],
+   "reward": [
+    2387221
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -28575,7 +28992,9 @@
     450009160
    ],
    "name": "Soot Beast",
-   "reward": [],
+   "reward": [
+    2387222
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -28600,7 +29019,9 @@
     450009160
    ],
    "name": "Soot Talon",
-   "reward": [],
+   "reward": [
+    2387223
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -28625,7 +29046,9 @@
     450009260
    ],
    "name": "Soot Slug",
-   "reward": [],
+   "reward": [
+    2387224
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -28650,7 +29073,9 @@
     450009260
    ],
    "name": "Soot Core",
-   "reward": [],
+   "reward": [
+    2387225
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -28675,7 +29100,9 @@
     450009360
    ],
    "name": "Crushing Glare",
-   "reward": [],
+   "reward": [
+    2387226
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -28700,7 +29127,9 @@
     450009360
    ],
    "name": "Burst Glare",
-   "reward": [],
+   "reward": [
+    2387227
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -28723,7 +29152,9 @@
     450011420
    ],
    "name": "Entangled Fragment",
-   "reward": [],
+   "reward": [
+    2387228
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -28746,7 +29177,9 @@
     450011410
    ],
    "name": "Faith Fragment",
-   "reward": [],
+   "reward": [
+    2387229
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -28770,7 +29203,9 @@
     993910005
    ],
    "name": "Dark Miscreation",
-   "reward": [],
+   "reward": [
+    2387230
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -28794,7 +29229,9 @@
     993910005
    ],
    "name": "Dark Construct",
-   "reward": [],
+   "reward": [
+    2387231
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -28817,7 +29254,9 @@
     450011520
    ],
    "name": "Despairing Wing",
-   "reward": [],
+   "reward": [
+    2387232
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -28840,7 +29279,9 @@
     450011530
    ],
    "name": "Despairing Blade",
-   "reward": [],
+   "reward": [
+    2387233
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -28863,7 +29304,9 @@
     450011550
    ],
    "name": "Silent Knight",
-   "reward": [],
+   "reward": [
+    2387234
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -28886,7 +29329,9 @@
     450011560
    ],
    "name": "Silent Scout",
-   "reward": [],
+   "reward": [
+    2387235
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -28909,7 +29354,9 @@
     450011570
    ],
    "name": "Silent Rogue",
-   "reward": [],
+   "reward": [
+    2387236
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -28932,7 +29379,9 @@
     450011610
    ],
    "name": "Silent Watchman",
-   "reward": [],
+   "reward": [
+    2387237
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -28955,7 +29404,9 @@
     450011650
    ],
    "name": "Silent Assassin",
-   "reward": [],
+   "reward": [
+    2387238
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -28978,7 +29429,9 @@
     450011630
    ],
    "name": "Despairing Soul",
-   "reward": [],
+   "reward": [
+    2387239
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -29001,7 +29454,9 @@
     450011640
    ],
    "name": "Despairing Prisoner",
-   "reward": [],
+   "reward": [
+    2387240
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -29051,7 +29506,9 @@
     450012030
    ],
    "name": "Ancestion",
-   "reward": [],
+   "reward": [
+    2387241
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -29076,7 +29533,9 @@
     450012340
    ],
    "name": "Ascendion",
-   "reward": [],
+   "reward": [
+    2387242
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -29101,7 +29560,9 @@
     450012110
    ],
    "name": "Transcendion",
-   "reward": [],
+   "reward": [
+    2387243
+   ],
    "stats": [
     "PAD : 1200",
     "MAD : 1250",
@@ -29180,7 +29641,6 @@
     2290006,
     2290007,
     2290016,
-    2290020,
     2290022,
     2290024,
     2290028,
@@ -29287,7 +29747,6 @@
     2049100,
     2049000,
     2290017,
-    2290021,
     2290023,
     2290041,
     2290047,
@@ -29413,7 +29872,6 @@
     2290052,
     2290084,
     2290090,
-    2290106,
     2290119,
     2020015
    ],
@@ -29531,7 +29989,6 @@
     2290052,
     2290084,
     2290090,
-    2290106,
     2290119,
     2388043,
     2020015
@@ -31076,10 +31533,8 @@
     4001024,
     2280015,
     2388021,
-    2290026,
     2290064,
     2290075,
-    2290093,
     2290111
    ],
    "stats": [
@@ -37676,7 +38131,6 @@
     2290032,
     2290060,
     2290076,
-    2290104,
     2290117
    ],
    "stats": [
@@ -38618,10 +39072,7 @@
     4010006,
     1032023,
     1332027,
-    2290081,
     2290087,
-    2290101,
-    2290103,
     2040514,
     2040721,
     2040912,
@@ -39563,7 +40014,6 @@
     2290055,
     2290063,
     2290079,
-    2290081,
     2290096,
     1032026,
     2040817,
@@ -40794,7 +41244,6 @@
     2040016,
     2040411,
     2290001,
-    2290020,
     2290045,
     2290057,
     2290086,
@@ -41402,10 +41851,7 @@
     1032023,
     2290009,
     2290051,
-    2290081,
-    2290087,
-    2290107,
-    2290123
+    2290087
    ],
    "stats": [
     "PAD : 1200",
@@ -41552,9 +41998,7 @@
     2048010,
     2290004,
     2290024,
-    2290083,
     2290087,
-    2290103,
     2290121
    ],
    "stats": [
@@ -41634,8 +42078,7 @@
     2290047,
     2290049,
     2290074,
-    2290079,
-    2290081
+    2290079
    ],
    "stats": [
     "PAD : 650",
@@ -41870,7 +42313,6 @@
     2290131,
     1022082,
     2290047,
-    2290123,
     1122059
    ],
    "stats": [
@@ -41896,7 +42338,6 @@
     2290138,
     1122015,
     2290069,
-    2290093,
     1122059
    ],
    "stats": [
@@ -43709,8 +44150,6 @@
     2290018,
     2290038,
     2290060,
-    2290080,
-    2290103,
     2040707,
     2041023,
     2043801,
@@ -43752,7 +44191,6 @@
     1092027,
     1382035,
     1402016,
-    2290123,
     2040302,
     2040501,
     2044902,
@@ -43845,11 +44283,8 @@
     2290037,
     2290043,
     2290066,
-    2290082,
-    2290083,
     2290089,
     2290091,
-    2290107,
     1302056
    ],
    "stats": [
@@ -44592,14 +45027,12 @@
     2290002,
     2290015,
     2290022,
-    2290027,
     2290034,
     2290052,
     2290054,
     2290089,
     2290094,
     2290098,
-    2290105,
     2290110,
     2290119,
     1472053,
@@ -44717,14 +45150,12 @@
     2290002,
     2290015,
     2290022,
-    2290027,
     2290034,
     2290052,
     2290054,
     2290089,
     2290094,
     2290098,
-    2290105,
     2290110,
     2290119,
     1472053,
@@ -47362,15 +47793,12 @@
     2040708,
     2040902,
     2290018,
-    2290019,
     2290032,
     2290042,
     2290058,
     2290068,
     2290072,
-    2290092,
     2290099,
-    2290102,
     2290119,
     4004003
    ],
@@ -47440,7 +47868,6 @@
     2290002,
     2290014,
     2290030,
-    2290080,
     4004000,
     4004001,
     4004002,
@@ -48979,7 +49406,6 @@
     2290032,
     2290060,
     2290076,
-    2290104,
     2290117,
     4006000,
     4006001,
