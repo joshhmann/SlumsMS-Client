@@ -275,9 +275,14 @@ void ChatModule_Draw(bool frozen, bool snap) {
             ImGui::EndTabBar();
         }
         static int s_menuLine = -1;
+        static int s_shownTab = -1;
         ImGui::PushStyleColor(ImGuiCol_ChildBg, IM_COL32(0, 0, 0, 0));
         if (ImGui::BeginChild("lines", ImVec2(0, 0), ImGuiChildFlags_None, ImGuiWindowFlags_None)) {
-            const bool atBottom = ImGui::GetScrollY() >= ImGui::GetScrollMaxY() - 2.0f;
+            // The tabs share one scroll region: a new tab starts at its newest line, and from then on new lines are
+            // followed unless the player scrolled up (the scroll state below is the previous frame's).
+            const bool tabChanged = s_shownTab != g_nTab;
+            s_shownTab = g_nTab;
+            const bool atBottom = tabChanged || ImGui::GetScrollY() >= ImGui::GetScrollMaxY() - 2.0f;
             const Chat::Tab tab = static_cast<Chat::Tab>(g_nTab);
             ImGui::PushTextWrapPos(0.0f);
             for (std::size_t i = 0; i < g_lines.Size(); ++i) {
@@ -300,10 +305,9 @@ void ChatModule_Draw(bool frozen, bool snap) {
                 }
             }
             ImGui::PopTextWrapPos();
-            if (g_lines.Serial() != g_seenSerial) {
-                g_seenSerial = g_lines.Serial();
-                if (atBottom) ImGui::SetScrollHereY(1.0f);   // follow new lines unless the player scrolled up
-            }
+            const bool arrived = g_lines.Serial() != g_seenSerial;
+            g_seenSerial = g_lines.Serial();
+            if (tabChanged || (arrived && atBottom)) ImGui::SetScrollHereY(1.0f);
             if (ImGui::BeginPopup("line")) {
                 if (s_menuLine >= 0 && static_cast<std::size_t>(s_menuLine) < g_lines.Size()) {
                     const std::string who = g_lines[static_cast<std::size_t>(s_menuLine)].sender;
