@@ -64,6 +64,18 @@ void TraceDigitSets() {
         try { Ztl_variant_t v = get_rm()->GetObjectA(path); r = v.vt; } catch (const _com_error& e) { r = static_cast<unsigned>(e.Error()); }
         DebugMessage("OVERLAY: %ls -> 0x%X (vt on success, hr on error)", path, r);
     }
+    try {
+        IWzCanvasPtr c = get_rm()->GetObjectA(L"UI/UIWindow.img/SysOpt/backgrnd").GetUnknown();
+        DebugMessage("OVERLAY: SysOpt/backgrnd height %d (stock 366, Custom.wz 396)", c ? static_cast<int>(c->height) : -1);
+    } catch (const _com_error& e) {
+        DebugMessage("OVERLAY: SysOpt/backgrnd hr=0x%08X", static_cast<unsigned>(e.Error()));
+    }
+    try {
+        IWzPropertyPtr st = get_rm()->GetObjectA(L"Mob/8880150.img/stand").GetUnknown();
+        DebugMessage("OVERLAY: Mob/8880150.img/stand count %d", st ? static_cast<int>(st->count) : -1);
+    } catch (const _com_error& e) {
+        DebugMessage("OVERLAY: Mob/8880150.img/stand hr=0x%08X", static_cast<unsigned>(e.Error()));
+    }
 }
 #endif
 auto ProcessPacket = reinterpret_cast<void(__thiscall*)(void*, CInPacket*)>(0x004965F1);
