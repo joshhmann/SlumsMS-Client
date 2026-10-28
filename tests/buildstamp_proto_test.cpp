@@ -31,21 +31,24 @@ void Check(bool ok, const std::string& what) {
     if (!ok) throw std::runtime_error(what);
 }
 
-// format 1, build 10402 (1.4.2), release "1.4.2"
-const char* kGolden = "0100a228000005003" "12e342e32";
+// format 2, build 10402 (1.4.2), release "1.4.2", caps 1 (custom NPC data)
+const char* kGolden = "0200a228000005003" "12e342e32" "01000000";
 
 }  // namespace
 
 int main() {
     try {
         Recorder golden;
-        BuildStamp_EncodeValues(golden, 10402, "1.4.2");
+        BuildStamp_EncodeValues(golden, 10402, "1.4.2", kCapCustomNpcData);
         Check(Hex(golden.bytes) == kGolden, "golden stamp bytes: " + Hex(golden.bytes));
 
         Recorder built;
-        BuildStamp_Encode(built);
-        Check(built.bytes.size() == 2 + 4 + 2 + std::strlen(SLUMS_RELEASE), "stamp length");
-        Check(built.bytes[0] == 1 && built.bytes[1] == 0, "format 1");
+        BuildStamp_Encode(built, 0);
+        Check(built.bytes.size() == 2 + 4 + 2 + std::strlen(SLUMS_RELEASE) + 4, "stamp length");
+        Check(built.bytes[0] == 2 && built.bytes[1] == 0, "format 2");
+        Check(built.bytes.back() == 0 && kCapCustomNpcData == 1, "caps last, bit 0 = custom NPC data");
+        Check(sizeof(kCustomNpcIds) / sizeof(kCustomNpcIds[0]) == 16 && kCustomNpcIds[0] == 9990000 && kCustomNpcIds[15] == 2999,
+            "Slums-chan and the 15 Lazy Penguins");
         unsigned int build = built.bytes[2] | (built.bytes[3] << 8) | (built.bytes[4] << 16) | (static_cast<unsigned int>(built.bytes[5]) << 24);
         Check(build == static_cast<unsigned int>(SLUMS_BUILD_NUMBER) && build > 0, "build number");
         Check(std::strlen(SLUMS_RELEASE) > 0 && std::strlen(SLUMS_RELEASE) <= 40, "release length the server accepts");

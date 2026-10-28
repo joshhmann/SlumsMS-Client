@@ -395,6 +395,29 @@ public:
     MEMBER_HOOK(int, 0x005F6952, SendCheckPasswordPacket, char* sID, char* sPasswd)
 };
 
+// The custom data sets this client can load (buildstamp_proto.h caps), checked once: a missing img is a failed lookup.
+static uint32_t ClientDataCaps() {
+    static uint32_t caps = 0xFFFFFFFF;
+    if (caps != 0xFFFFFFFF) return caps;
+    caps = kCapCustomNpcData;
+    for (int id : kCustomNpcIds) {
+        wchar_t path[32];
+        swprintf_s(path, L"Npc/%07d.img", id);
+        try {
+            Ztl_variant_t v = get_rm()->GetObjectA(path);
+            if (v.vt != VT_UNKNOWN && v.vt != VT_DISPATCH) caps &= ~kCapCustomNpcData;
+        } catch (...) {
+            caps &= ~kCapCustomNpcData;
+        }
+        if (!(caps & kCapCustomNpcData)) {
+            DebugMessage("Build stamp: %ls is missing, so custom NPCs stay off for this client", path);
+            break;
+        }
+    }
+    DebugMessage("Build stamp: caps 0x%08X", caps);
+    return caps;
+}
+
 int CLogin::SendCheckPasswordPacket_hook(char* sID, char* sPasswd) {
     if (m_bRequestSent) {
         return 0;
@@ -409,7 +432,7 @@ int CLogin::SendCheckPasswordPacket_hook(char* sID, char* sPasswd) {
 
     // Build stamp first (CP 0x3738, buildstamp_proto.h): the login server gates on it when it checks the password.
     COutPacket oStamp(kBuildStampOpcode);
-    BuildStamp_Encode(oStamp);
+    BuildStamp_Encode(oStamp, ClientDataCaps());
     reinterpret_cast<void(__thiscall*)(CClientSocket*, const COutPacket&)>(0x0049637B)(CClientSocket::GetInstance(), oStamp);
 
     COutPacket oPacket(1); // CP_CheckPassword
