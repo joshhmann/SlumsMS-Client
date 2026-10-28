@@ -1,5 +1,8 @@
 #include "pch.h"
 #include "hook.h"
+#include "debug.h"
+#include "ztl/ztl.h"
+#include "wvs/util.h"
 #include "wvs/packet.h"
 #include <mutex>
 #ifdef MAPLEROOT_CASHSHOP_WINDOW
@@ -26,6 +29,43 @@
 #endif
 
 namespace {
+#ifdef MAPLEROOT_RECV_TRACE
+// Diagnostic (2026-10-28 TEST drop in Effect_HP): CAnimationDisplayer (0x00BEBF6C) keeps the damage-digit sets at
+// +0x170..+0x18C (Effect_HP 0x00437D5B..0x00437DB9). Log each pointer and whether its "0" and "10" items resolve.
+void TraceDigitSets() {
+    static bool done = false;
+    if (done) return;
+    done = true;
+    char* disp = *reinterpret_cast<char**>(0x00BEBF6C);
+    DebugMessage("DIGITS: CAnimationDisplayer=%p", disp);
+    if (!disp) return;
+    for (int off = 0x170; off <= 0x18C; off += 4) {
+        IUnknown* raw = *reinterpret_cast<IUnknown**>(disp + off);
+        IWzPropertyPtr set;
+        unsigned h0 = 0xFFFFFFFF, h10 = 0xFFFFFFFF, count = 0xFFFFFFFF;
+        if (raw && SUCCEEDED(raw->QueryInterface(&set)) && set) {
+            try { Ztl_variant_t v = set->item[L"0"]; h0 = v.vt; } catch (const _com_error& e) { h0 = static_cast<unsigned>(e.Error()); }
+            try { Ztl_variant_t v = set->item[L"10"]; h10 = v.vt; } catch (const _com_error& e) { h10 = static_cast<unsigned>(e.Error()); }
+            try { count = set->count; } catch (const _com_error& e) { count = static_cast<unsigned>(e.Error()); }
+        }
+        DebugMessage("DIGITS: +0x%03X ptr=%p item0=0x%X item10=0x%X count=0x%X (vt on success, hr on error)", off, raw,
+            h0, h10, count);
+    }
+    // The live Custom.wz's other partial stock images: is the stock sibling still there next to the custom leaf?
+    static const wchar_t* kPaths[] = {
+        L"Mob/8880150.img/info/maxHP", L"Mob/8880150.img/info/defaultHP", L"Mob/8880150.img/info/speed",
+        L"Mob/8880302.img/info/maxHP", L"Mob/8880302.img/info/defaultHP",
+        L"Mob/8880415.img/info/maxHP", L"Mob/8880415.img/info/defaultHP",
+        L"UI/UIWindow.img/Item/backgrnd", L"UI/UIWindow.img/SysOpt/backgrnd",
+        L"Effect/BasicEff.img/NoRed1/0", L"Effect/BasicEff.img/NoRed1/10",
+    };
+    for (const wchar_t* path : kPaths) {
+        unsigned r = 0xFFFFFFFF;
+        try { Ztl_variant_t v = get_rm()->GetObjectA(path); r = v.vt; } catch (const _com_error& e) { r = static_cast<unsigned>(e.Error()); }
+        DebugMessage("OVERLAY: %ls -> 0x%X (vt on success, hr on error)", path, r);
+    }
+}
+#endif
 auto ProcessPacket = reinterpret_cast<void(__thiscall*)(void*, CInPacket*)>(0x004965F1);
 std::mutex dispatchGate;
 bool shuttingDown = false;
@@ -95,7 +135,26 @@ void __fastcall ProcessPacketHook(void* socket, void*, CInPacket* packet) {
         }
 #endif
     }
+#ifdef MAPLEROOT_RECV_TRACE
+    // Diagnostic build only: every received opcode and length, and the read position and bytes of a packet whose
+    // stock handler throws (a decode past the end ends the session with a CDisconnectException).
+    if (packet) DebugMessage("RECV op=0x%04X len=%u", opcode, static_cast<unsigned>(packet->LengthPublic()));
+    if (opcode == 0x0090) TraceDigitSets();   // first in-field packet after the map is set
+    try {
+        ProcessPacket(socket, packet);
+    } catch (...) {
+        if (packet && packet->BufferPublic()) {
+            char hex[3 * 96 + 1] = {};
+            const size_t n = packet->LengthPublic() < 96 ? packet->LengthPublic() : 96;
+            for (size_t i = 0; i < n; ++i) sprintf_s(hex + 3 * i, 4, "%02X ", packet->BufferPublic()[i]);
+            DebugMessage("RECV THREW op=0x%04X len=%u read-offset=%u bytes: %s", opcode,
+                static_cast<unsigned>(packet->LengthPublic()), static_cast<unsigned>(packet->GetOffset()), hex);
+        }
+        throw;
+    }
+#else
     ProcessPacket(socket, packet);
+#endif
 }
 }
 void ShutdownCustomPackets() {

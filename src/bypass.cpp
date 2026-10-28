@@ -338,6 +338,9 @@ void CWvsApp::Run_hook(int* pbTerminate) {
                     HRESULT hr = m_hrComErrorCode;
                     m_hrComErrorCode = S_OK;
                     m_hrZExceptionCode = S_OK;
+#ifdef MAPLEROOT_RECV_TRACE
+                    DebugMessage("RUN ends on COM error hr=0x%08X", static_cast<unsigned>(hr));
+#endif
                     _com_raise_error(hr, nullptr);
                 }
                 // CWvsApp::ExtractZExceptionCode(this, &hr)
@@ -345,6 +348,9 @@ void CWvsApp::Run_hook(int* pbTerminate) {
                     HRESULT hr = m_hrZExceptionCode;
                     m_hrComErrorCode = S_OK;
                     m_hrZExceptionCode = S_OK;
+#ifdef MAPLEROOT_RECV_TRACE
+                    DebugMessage("RUN ends on ZException hr=0x%08X", static_cast<unsigned>(hr));
+#endif
                     if (hr == 0x20000000) {
                         throw CPatchException(m_nTargetVersion);
                     } else if (hr >= 0x21000000 && hr <= 0x21000006) {
@@ -369,6 +375,9 @@ void CWvsApp::Run_hook(int* pbTerminate) {
             Sleep(1);
         }
     } while (!*pbTerminate && msg.message != WM_QUIT);
+#ifdef MAPLEROOT_RECV_TRACE
+    DebugMessage("RUN loop ended: WM_QUIT=%d terminate=%d", msg.message == WM_QUIT ? 1 : 0, *pbTerminate ? 1 : 0);
+#endif
 
     if (msg.message == WM_QUIT) {
         PostQuitMessage(0);
