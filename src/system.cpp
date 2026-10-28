@@ -4,6 +4,7 @@
 #include "buildshow_text.h"
 #ifdef MAPLEROOT_INTEGRATION
 #include "d3d9host.h"
+#include "window_policy.h"
 #endif
 
 #define WIN32_LEAN_AND_MEAN
@@ -54,6 +55,13 @@ LRESULT WndProc_hook(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     static POINT ptOffset;
     static bool bMoving;
     switch (msg) {
+    case WM_WINDOWPOSCHANGED:   // the game sized the window (start-up or a resolution change): keep it centred
+        if (g_bBorderless && !(reinterpret_cast<const WINDOWPOS*>(lParam)->flags & SWP_NOSIZE)) {
+            const LRESULT r = CallWindowProcA(g_WndProc, hWnd, msg, wParam, lParam);
+            PlaceBorderless(hWnd);
+            return r;
+        }
+        break;
     case WM_SETCURSOR: {
         if (LOWORD(lParam) != HTCLIENT) {
             while (ShowCursor(TRUE) < 0)
@@ -112,6 +120,33 @@ LRESULT WndProc_hook(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     return CallWindowProcA(g_WndProc, hWnd, msg, wParam, lParam);
 }
 
+// [graphics] borderless / dpiaware (window_policy.h). Read once, before the game creates its window.
+static bool g_bBorderless = false;
+
+static bool ReadGraphicsSwitch(const char* key) {
+    char value[16] = {};
+    GetPrivateProfileStringA("graphics", key, "", value, sizeof(value), ".\\" CONSTANTS_CONFIG_NAME);
+    return WindowPolicy::IniTrue(value);
+}
+
+// Centre the borderless window on its monitor at its current client size (the game's resolution).
+static void PlaceBorderless(HWND hWnd) {
+    static bool s_placing = false;
+    if (!g_bBorderless || s_placing) return;
+    RECT rc;
+    MONITORINFO mi = {sizeof(mi)};
+    if (!GetClientRect(hWnd, &rc) || !GetMonitorInfoA(MonitorFromWindow(hWnd, MONITOR_DEFAULTTOPRIMARY), &mi)) return;
+    int x, y;
+    const WindowPolicy::Rect m{mi.rcMonitor.left, mi.rcMonitor.top, mi.rcMonitor.right, mi.rcMonitor.bottom};
+    WindowPolicy::Place(m, rc.right, rc.bottom, x, y);
+    RECT wr;
+    GetWindowRect(hWnd, &wr);
+    if (wr.left == x && wr.top == y) return;
+    s_placing = true;
+    SetWindowPos(hWnd, NULL, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+    s_placing = false;
+}
+
 HWND WINAPI CreateWindowExA_hook(DWORD dwExStyle, LPCSTR lpClassName, LPCSTR lpWindowName, DWORD dwStyle, int X, int Y, int nWidth, int nHeight, HWND hWndParent, HMENU hMenu, HINSTANCE hInstance, LPVOID lpParam) {
     if (!lpClassName || strcmp(lpClassName, "MapleStoryClass") != 0) {
         return CreateWindowExA_orig(dwExStyle, lpClassName, lpWindowName, dwStyle, X, Y, nWidth, nHeight, hWndParent, hMenu, hInstance, lpParam);
@@ -120,9 +155,11 @@ HWND WINAPI CreateWindowExA_hook(DWORD dwExStyle, LPCSTR lpClassName, LPCSTR lpW
     // another CreateWindowExA hook (MapleRoot's has its own name) sits inside this one.
     char sTitle[96];
     BuildShow::WindowTitle(sTitle, sizeof(sTitle), SLUMS_RELEASE, SLUMS_BUILD_NUMBER);
-    HWND hWnd = CreateWindowExA_orig(dwExStyle, lpClassName, sTitle, 0xCA0000, CW_USEDEFAULT, CW_USEDEFAULT, nWidth, nHeight, hWndParent, hMenu, hInstance, lpParam);
+    const DWORD style = g_bBorderless ? WS_POPUP : 0xCA0000;   // borderless: no caption, no frame
+    HWND hWnd = CreateWindowExA_orig(dwExStyle, lpClassName, sTitle, style, CW_USEDEFAULT, CW_USEDEFAULT, nWidth, nHeight, hWndParent, hMenu, hInstance, lpParam);
     if (hWnd) SetWindowTextA(hWnd, sTitle);
     g_WndProc = reinterpret_cast<WNDPROC>(SetWindowLongPtrA(hWnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(&WndProc_hook)));
+    if (hWnd) PlaceBorderless(hWnd);
     return hWnd;
 }
 
@@ -223,6 +260,11 @@ int WINAPI MessageBoxW_hook(HWND window, LPCWSTR text, LPCWSTR title, UINT flags
 #endif
 
 void AttachSystemHooks() {
+    g_bBorderless = ReadGraphicsSwitch("borderless");
+    if (ReadGraphicsSwitch("dpiaware")) {
+        // Before any window exists: Windows then shows the game pixel for pixel on a scaled display.
+        SetProcessDPIAware();
+    }
 #ifdef MAPLEROOT_INTEGRATION
     InstallCrashDiagnostics();
     ATTACH_HOOK(MessageBoxA_orig, MessageBoxA_hook);

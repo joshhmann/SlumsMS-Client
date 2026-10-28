@@ -141,3 +141,5 @@ add_test(NAME bounce_doubletap_and_zones COMMAND bounce_rules_test)
 
 add_executable(hud_meters_policy_test hud_meters_policy_test.cpp)
 add_test(NAME hud_meters_exp_dps COMMAND hud_meters_policy_test)
+add_executable(window_policy_test window_policy_test.cpp)
+add_test(NAME window_borderless_place COMMAND window_policy_test)
