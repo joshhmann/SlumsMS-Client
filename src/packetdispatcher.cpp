@@ -2,6 +2,7 @@
 #include "hook.h"
 #include "debug.h"
 #include "ztl/ztl.h"
+#include "wvs/util.h"
 #include "wvs/packet.h"
 #include <mutex>
 #ifdef MAPLEROOT_CASHSHOP_WINDOW
@@ -49,6 +50,19 @@ void TraceDigitSets() {
         }
         DebugMessage("DIGITS: +0x%03X ptr=%p item0=0x%X item10=0x%X count=0x%X (vt on success, hr on error)", off, raw,
             h0, h10, count);
+    }
+    // The live Custom.wz's other partial stock images: is the stock sibling still there next to the custom leaf?
+    static const wchar_t* kPaths[] = {
+        L"Mob/8880150.img/info/maxHP", L"Mob/8880150.img/info/defaultHP", L"Mob/8880150.img/info/speed",
+        L"Mob/8880302.img/info/maxHP", L"Mob/8880302.img/info/defaultHP",
+        L"Mob/8880415.img/info/maxHP", L"Mob/8880415.img/info/defaultHP",
+        L"UI/UIWindow.img/Item/backgrnd", L"UI/UIWindow.img/SysOpt/backgrnd",
+        L"Effect/BasicEff.img/NoRed1/0", L"Effect/BasicEff.img/NoRed1/10",
+    };
+    for (const wchar_t* path : kPaths) {
+        unsigned r = 0xFFFFFFFF;
+        try { Ztl_variant_t v = get_rm()->GetObjectA(path); r = v.vt; } catch (const _com_error& e) { r = static_cast<unsigned>(e.Error()); }
+        DebugMessage("OVERLAY: %ls -> 0x%X (vt on success, hr on error)", path, r);
     }
 }
 #endif
