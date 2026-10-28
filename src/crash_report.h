@@ -5,7 +5,8 @@
 #include <cstdint>
 #include <windows.h>
 
-void InstallCrashReport();                                         // from DllMain setup: paths, writer thread, buffers
+void InstallCrashReport();
+LPTOP_LEVEL_EXCEPTION_FILTER CrashReport_Wrap(LPTOP_LEVEL_EXCEPTION_FILTER requested);   // system.cpp: ours in front of the game's                                         // from DllMain setup: paths, writer thread, buffers
 void CrashReport_SetNextFilter(LPTOP_LEVEL_EXCEPTION_FILTER next);  // system.cpp's SetUnhandledExceptionFilter hook
 void CrashReport_NoteField(int fieldId);                            // resolution.cpp set_stage_hook: the current map
 void CrashReport_NoteCxx(uint32_t hr);                              // crash_diagnostics.cpp: the last C++ throw code
