@@ -366,4 +366,7 @@ void Overlay_DrawSettings() {
         InvResize_ResetSize();
 #endif
     }
+#ifdef MAPLEROOT_DISPLAY_TOGGLES
+    Display_DrawSettings();
+#endif
 }
