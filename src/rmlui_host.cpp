@@ -50,7 +50,7 @@ const char* const kTestRml = R"RML(<rml>
 <head>
 <title>SlumsMS HUD host test</title>
 <style>
-body { position: absolute; top: 12px; left: 50%; margin-left: -170px; width: 340px; font-family: Tahoma;
+body { position: absolute; top: 12px; left: 50%; margin-left: -210px; width: 420px; font-family: Tahoma;
        font-size: 14px; color: #333333; }
 div, p { display: block; }
 .panel { background-color: #EEEEDDF2; border: 2px #557799; border-radius: 10px; padding: 10px 12px; }
@@ -67,7 +67,7 @@ button:active { background-color: #557799; }
 <body data-model="hosttest">
 <div class="panel">
   <div class="title">SlumsMS HUD skin: host test</div>
-  <p class="row">{{ fps }} fps at {{ size }}</p>
+  <p class="row">{{ fps }} fps at {{ screen }}</p>
   <div class="bar"><div class="fill" data-style-width="pulse + '%'"></div></div>
   <p class="row">Clicks: {{ clicks }}</p>
   <button data-event-click="clicks = clicks + 1">Click me</button>
@@ -85,7 +85,7 @@ void TestReady() {
     Rml::DataModelConstructor c = g_pContext->CreateDataModel("hosttest");
     if (!c) return;
     c.Bind("fps", &g_nFps);
-    c.Bind("size", &g_sSize);
+    c.Bind("screen", &g_sSize);   // "size" is reserved in RmlUi data models
     c.Bind("clicks", &g_nClicks);
     c.Bind("pulse", &g_nPulse);
     g_testModel = c.GetModelHandle();
@@ -101,7 +101,7 @@ void TestFrame() {
         g_dwFpsTick = now;
         g_sSize = std::to_string(g_nWidth) + "x" + std::to_string(g_nHeight);
         g_testModel.DirtyVariable("fps");
-        g_testModel.DirtyVariable("size");
+        g_testModel.DirtyVariable("screen");
     }
     g_nPulse = static_cast<int>((now / 20) % 101);
     g_testModel.DirtyVariable("pulse");
@@ -258,6 +258,8 @@ bool RmlHost_HandleMessage(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam, bo
     if (!g_bReady || g_bFailed || !InField()) return false;
     const bool mouse = msg >= WM_MOUSEFIRST && msg <= WM_MOUSELAST;
     if (imguiOnTop && msg != WM_MOUSEMOVE) return false;   // an ImGui tool window is above ours: its input
+    // The game window has CS_DBLCLKS: a quick second click arrives as a double-click, which RmlUi's helper ignores.
+    if (msg == WM_LBUTTONDBLCLK || msg == WM_RBUTTONDBLCLK || msg == WM_MBUTTONDBLCLK) msg -= 2;   // -> ..BUTTONDOWN
     try {
         const bool propagate = RmlWin32::WindowProcedure(g_pContext, *g_pIme, hWnd, msg, wParam, lParam);
         // Moves always go on (ImGui hover, the game); a click, wheel or key RmlUi handled stays with it.
