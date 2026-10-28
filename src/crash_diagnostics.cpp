@@ -4,6 +4,11 @@
 #include <cstdio>
 
 namespace {
+#ifdef MAPLEROOT_RECV_TRACE
+constexpr LONG kMaxEvents = 4000;   // diagnostic build: keep logging until the session ends
+#else
+constexpr LONG kMaxEvents = 16;
+#endif
 volatile LONG reporting = 0;
 volatile LONG cppEvents = 0;
 volatile LONG fatalEvents = 0;
@@ -28,7 +33,7 @@ LONG CALLBACK OnException(EXCEPTION_POINTERS* pointers) {
     const bool cpp = code == 0xE06D7363;
     if ((!fatalCandidate && !cpp) || InterlockedCompareExchange(&reporting, 1, 0))
         return EXCEPTION_CONTINUE_SEARCH;
-    if (InterlockedIncrement(cpp ? &cppEvents : &fatalEvents) > 16) {
+    if (InterlockedIncrement(cpp ? &cppEvents : &fatalEvents) > kMaxEvents) {
         InterlockedExchange(&reporting, 0);
         return EXCEPTION_CONTINUE_SEARCH;
     }
@@ -50,7 +55,7 @@ LONG CALLBACK OnException(EXCEPTION_POINTERS* pointers) {
             __try { value = *reinterpret_cast<DWORD*>(pointers->ExceptionRecord->ExceptionInformation[1]); }
             __except(EXCEPTION_EXECUTE_HANDLER) { value = 0; }
             if ((value >= 0x20000000 && value <= 0x2200000E) || (value & 0xFFFF0000) == 0x80040000 ||
-                (value & 0xFFFF0000) == 0x80070000) {
+                (value & 0xFFFF0000) == 0x80070000 || (value & 0xFFFF0000) == 0x80030000) {
                 sprintf_s(line, "exception_hresult=%08lX\n", value); AppendLine(file, line);
             }
         }
