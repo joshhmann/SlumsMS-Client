@@ -4,6 +4,7 @@
 #include "wvs/wvsapp.h"
 #include "wvs/util.h"
 #include "ztl/ztl.h"
+#include "customwz_policy.h"
 #ifdef MAPLEROOT_CASHSHOP_WINDOW
 #include "cashshopwnd.h"
 #endif
@@ -23,6 +24,7 @@
 
 static IWzNameSpacePtr g_pCustomNameSpace;
 static std::vector<Ztl_bstr_t> g_vecOverrides;
+static std::vector<std::wstring> g_vecStockImages;   // Custom.wz images that also exist in stock: merged, never served whole
 
 class IWzNameSpaceImpl {
 public:
@@ -35,6 +37,12 @@ public:
             return hr;
         }
         if (!std::binary_search(g_vecOverrides.begin(), g_vecOverrides.end(), Ztl_bstr_t(sPath))) {
+            return hr;
+        }
+        // A miss here can be the game-folder mount before ./Data is tried (customwz_policy.h): a stock image must
+        // come from stock, with its Custom.wz leaves merged in by the Serialize hook below.
+        const std::wstring sImage = CustomWz::ImagePrefix(sPath ? sPath : L"");
+        if (!sImage.empty() && std::binary_search(g_vecStockImages.begin(), g_vecStockImages.end(), sImage)) {
             return hr;
         }
         return g_pCustomNameSpace->raw__OnGetLocalObject(nIndex, sPath, pnPathUsed, pvRet);
@@ -146,6 +154,35 @@ void CWvsApp::InitializeResMan_hook() {
     }
     std::sort(g_vecOverrides.begin(), g_vecOverrides.end()); // uses operator<
 
+    // Which Custom.wz images exist in stock: a loose ./Data/<image> file, or a <top>.wz package in the game folder.
+    {
+        wchar_t sGameDir[MAX_PATH];
+        GetModuleFileNameW(nullptr, sGameDir, MAX_PATH);
+        if (wchar_t* slash = wcsrchr(sGameDir, L'\\')) *slash = 0;
+        size_t uMerged = 0, uWhole = 0;
+        for (const auto& sUOL : g_vecOverrides) {
+            const wchar_t* wUOL = static_cast<const wchar_t*>(sUOL);
+            if (!wUOL) continue;
+            const std::wstring sPath(wUOL);
+            if (CustomWz::ImagePrefix(sPath) != sPath) continue;   // only the image nodes themselves
+            std::wstring sFile = std::wstring(sGameDir) + L"\\Data\\" + sPath;
+            std::replace(sFile.begin(), sFile.end(), L'/', L'\\');
+            const std::wstring sPackage = std::wstring(sGameDir) + L"\\" + CustomWz::TopDir(sPath) + L".wz";
+            const bool bStock = GetFileAttributesW(sFile.c_str()) != INVALID_FILE_ATTRIBUTES ||
+                (!CustomWz::TopDir(sPath).empty() && GetFileAttributesW(sPackage.c_str()) != INVALID_FILE_ATTRIBUTES);
+            if (bStock) {
+                g_vecStockImages.push_back(sPath);
+                ++uMerged;
+            } else {
+                ++uWhole;
+            }
+            DebugMessage("Custom.wz: %ls %s", sPath.c_str(), bStock ? "merges into stock" : "is served whole");
+        }
+        std::sort(g_vecStockImages.begin(), g_vecStockImages.end());
+        DebugMessage("Custom.wz: %u image(s) merge into stock, %u served whole", static_cast<unsigned>(uMerged),
+            static_cast<unsigned>(uWhole));
+    }
+
     // NameSpace.dll - try resolving from g_pCustomNameSpace
     IWzNameSpaceImpl::raw__OnGetLocalObject_orig = static_cast<IWzNameSpaceImpl::raw__OnGetLocalObject_t>(GetAddressByPattern("NAMESPACE.DLL", "B8 ?? ?? ?? ?? E8 ?? ?? ?? ?? 81 EC 80"));
     ATTACH_HOOK(IWzNameSpaceImpl::raw__OnGetLocalObject_orig, IWzNameSpaceImpl::raw__OnGetLocalObject_hook);
@@ -186,6 +223,7 @@ void CWvsApp::CleanUp_hook() {
 #endif
     ReleaseItemEffectResources();
     std::vector<Ztl_bstr_t>().swap(g_vecOverrides);
+    std::vector<std::wstring>().swap(g_vecStockImages);
     if (g_pCustomNameSpace && get_root()) {
         IWzWritableNameSpacePtr writable;
         if (SUCCEEDED(get_root()->QueryInterface(&writable))) {
