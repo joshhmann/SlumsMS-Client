@@ -135,3 +135,6 @@ add_test(NAME ui_wheel_direction COMMAND ui_wheel_test)
 
 add_executable(bounce_rules_test bounce_rules_test.cpp)
 add_test(NAME bounce_doubletap_and_zones COMMAND bounce_rules_test)
+
+add_executable(window_policy_test window_policy_test.cpp)
+add_test(NAME window_borderless_place COMMAND window_policy_test)
