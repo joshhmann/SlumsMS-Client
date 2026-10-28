@@ -135,3 +135,6 @@ add_test(NAME ui_wheel_direction COMMAND ui_wheel_test)
 
 add_executable(bounce_rules_test bounce_rules_test.cpp)
 add_test(NAME bounce_doubletap_and_zones COMMAND bounce_rules_test)
+
+add_executable(chat_policy_test chat_policy_test.cpp)
+add_test(NAME chat_tabs_filters COMMAND chat_policy_test)
