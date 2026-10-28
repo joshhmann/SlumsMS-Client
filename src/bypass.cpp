@@ -8,6 +8,9 @@
 #include "buildstamp_proto.h"
 #include "wvs/exception.h"
 #include "wvs/util.h"
+#ifdef MAPLEROOT_INTEGRATION
+#include "d3d9host.h"
+#endif
 #include "ztl/ztl.h"
 #ifdef MAPLEROOT_CASHSHOP_WINDOW
 #include "cashshopwnd.h"
@@ -323,6 +326,9 @@ void CWvsApp::Run_hook(int* pbTerminate) {
                 if (!reinterpret_cast<int(__thiscall*)(CInputSystem*, ISMSG*)>(0x0059A306)(CInputSystem::GetInstance(), &isMsg)) {
                     break;
                 }
+#ifdef MAPLEROOT_INTEGRATION
+                if (!D3D9Host_PassGameInput(isMsg.message)) continue;   // a click on an overlay window, not the map
+#endif
                 // CWvsApp::ISMsgProc(this, isMsg.message, isMsg.wParam, isMsg.lParam);
                 reinterpret_cast<void(__thiscall*)(CWvsApp*, unsigned int, unsigned int, int)>(0x009F97B7)(this, isMsg.message, isMsg.wParam, isMsg.lParam);
             } while (!*pbTerminate);

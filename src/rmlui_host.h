@@ -50,8 +50,12 @@ void Show(Rml::ElementDocument* doc, bool visible);
 void SetRect(Rml::ElementDocument* doc, float x, float y, float w, float h);
 
 // True while the mouse is over a visible RmlUi element (or one is being dragged): the overlay keeps such input
-// from the game window. Clicks still reach the game through DirectInput, as for ImGui windows today.
+// from the game, both the window messages and the DirectInput clicks (D3D9Host_PassGameInput, bypass.cpp).
 bool WantsMouse();
+
+// True when back-buffer pixel (x, y) is over a visible RmlUi panel element (the root/background does not count).
+// For hooks that decide whether the stock UI under a panel should take a click (e.g. CUIStatusBar::HitTest).
+bool IsOverPanel(int x, int y);
 
 }  // namespace RmlHost
 

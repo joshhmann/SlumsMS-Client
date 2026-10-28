@@ -310,6 +310,30 @@ bool D3D9Host_HandleMessage(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     return false;
 }
 
+// The game reads the mouse through DirectInput, so holding back window messages (above) does not stop a click on an
+// overlay window from also clicking the map under it. The game's input loop asks here before each ISMSG: a button
+// press or wheel turn is held back while an overlay window has the mouse, and a release follows its press (a press
+// the game got always gets its release, so nothing sticks). Moves and keys always pass.
+bool D3D9Host_PassGameInput(unsigned int message) {
+    if (message < WM_LBUTTONDOWN || message > WM_MOUSEWHEEL) return true;
+    bool overlay = g_bImGuiReady && ImGui::GetIO().WantCaptureMouse;
+#ifdef MAPLEROOT_RMLUI
+    overlay = overlay || RmlHost::WantsMouse();
+#endif
+    if (message == WM_MOUSEWHEEL) return !overlay;
+    static bool s_held[3] = {};   // left, right, middle: the press went to the overlay
+    const unsigned int rel = message - WM_LBUTTONDOWN;   // 0..8: down, up, double-click per button
+    const int button = static_cast<int>(rel / 3);
+    if (button > 2) return true;
+    if (rel % 3 == 1) {   // up
+        const bool held = s_held[button];
+        s_held[button] = false;
+        return !held;
+    }
+    s_held[button] = overlay;   // down or double-click
+    return !overlay;
+}
+
 void AttachD3D9Host() {
     if (!ReadIniBool("graphics", "d3d9host", true)) {
         DebugMessage("D3D9: host off ([graphics] d3d9host=false)");

@@ -7,6 +7,10 @@ void AttachD3D9Host();
 // From the game window procedure (system.cpp): returns true when the overlay consumed the message.
 bool D3D9Host_HandleMessage(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
+// From the game's own input loop (bypass.cpp, before CWvsApp::ISMsgProc): false holds back a DirectInput mouse
+// message that belongs to an overlay window (RmlUi panel or ImGui window under the mouse).
+bool D3D9Host_PassGameInput(unsigned int message);
+
 // settings_overlay.cpp: the in-game HUD window, drawn by the overlay while it is open.
 void SettingsOverlay_Draw(bool* pOpen);
 

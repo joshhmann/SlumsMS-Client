@@ -202,6 +202,13 @@ void SetRect(Rml::ElementDocument* doc, float x, float y, float w, float h) {
 
 bool WantsMouse() { return Context() && g_pContext->IsMouseInteracting(); }
 
+bool IsOverPanel(int x, int y) {
+    Rml::Context* c = Context();
+    if (!c) return false;
+    Rml::Element* e = c->GetElementAtPoint(Rml::Vector2f(static_cast<float>(x), static_cast<float>(y)));
+    return e && e != c->GetRootElement();
+}
+
 }  // namespace RmlHost
 
 // ---- d3d9host.cpp's side ----------------------------------------------------------------------------------------
