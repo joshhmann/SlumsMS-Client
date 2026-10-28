@@ -100,10 +100,10 @@ constexpr int kMinCols = 4, kMaxCols = 16;
 constexpr int kMinRows = 3, kMaxRows = 14;
 constexpr int kStockCols = 4, kStockRows = 6;
 
-// Two patched operands are signed imm8: the Draw loop's limit (cells) and the scroll bias (-(cells-2)).
+// Two patched operands are signed imm8: the Draw loop's limit (cells) and the scroll bias (-(cells-cols+2)).
 constexpr int kMaxCells = 120;
 static_assert(kMaxCells <= 127, "cells must fit the Draw loop's imm8");
-static_assert(kMaxCells - 2 <= 128, "cells-2 must fit the scroll bias imm8");
+static_assert(kMaxCells - kMinCols + 2 <= 128, "cells-cols+2 must fit the scroll bias imm8");
 static_assert(kMaxCols <= 127, "cols must fit the scroll divisor and stride imm8");
 
 constexpr int kGripThickness = 7;
@@ -191,7 +191,7 @@ constexpr std::array<Imm, kImmCount> kImms = {{
     {0x0081DCD8, 1, 4, "meso right-align x"},  // mov esi, 0x8A    -> W - 37
     {0x0081DD5F, 1, 4, "meso y"},              // push 0x10A       -> H - 23
     {0x0081DDF9, 2, 1, "draw loop limit"},     // add eax, 0x18    -> cells
-    {0x0081D293, 2, 1, "scroll range bias"},   // add eax, -0x16   -> -(cells-2)
+    {0x0081D293, 2, 1, "scroll range bias"},   // add eax, -0x16   -> -(cells-cols+2)
     {0x0081D296, 1, 1, "scroll range div"},    // push 4           -> cols
 }};
 
@@ -209,10 +209,18 @@ constexpr int ImmValue(int id, int cols, int rows) {
     case MesoX: return W - 37;
     case MesoY: return H - 23;
     case DrawLimit: return cells;
-    case RangeBias: return -(cells - 2);
+    // The scrollbar gets (count + bias) / cols + 1 positions (0x0081D28D-0x0081D29C, count = slots + 1). Stock's
+    // -0x16 is -(cells - cols + 2) at 4x6: a ceiling division, so a part-filled last row can still be scrolled to.
+    // 1.6.0 used -(cells - 2), right only at 4 columns: wider grids lost their last row (1.6.1).
+    case RangeBias: return -(cells - cols + 2);
     case RangeDiv: return cols;
     default: return 0;
     }
+}
+
+// The scroll positions the client computes from the patched bias and divisor (idiv truncates toward zero).
+constexpr int ScrollPositions(int slots, int cols, int rows) {
+    return (slots + 1 + ImmValue(RangeBias, cols, rows)) / ImmValue(RangeDiv, cols, rows) + 1;
 }
 
 // The column count is also an SIB scale (x4) in two scroll-stride leas, which can only be 1/2/4/8, so the
