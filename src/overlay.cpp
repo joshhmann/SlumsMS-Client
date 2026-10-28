@@ -300,6 +300,7 @@ void Overlay_DrawHud() {
         }
         ImGui::End();
     }
+    UiTour_Draw();   // last, so the card and the Edit UI strip sit above the modules
 }
 
 // The HUD window's controls: they apply at once, no restart.
@@ -366,4 +367,6 @@ void Overlay_DrawSettings() {
         InvResize_ResetSize();
 #endif
     }
+    ImGui::SameLine();
+    if (ImGui::Button("Show the UI tour again")) UiTour_Replay();
 }

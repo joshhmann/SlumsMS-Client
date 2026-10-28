@@ -25,6 +25,14 @@ void HudVitals_DrawHP();
 void HudVitals_DrawMP();
 void HudVitals_DrawEXP();
 
+// uitour.cpp: the first-run Edit UI tour (1.6.1).
+void UiTour_Setup(bool enabled);   // config.ini [clienthax] uitour
+bool UiTour_Wants();               // the overlay must draw for the tour (card, pulse, or waiting to show)
+void UiTour_Draw();                // from Overlay_DrawHud, in the field
+float UiTour_Pulse();              // "Show me" outline strength 0..1 (uilayout.cpp)
+void UiTour_Replay();
+bool UiTour_HandleEscape();        // true when Esc closed the card
+
 // uilayout.cpp: grips over the stock status bar and quick slot while the HUD is unfrozen, and their reset.
 void UiLayout_DrawGrips();
 void UiLayout_Reset();
