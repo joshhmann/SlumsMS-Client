@@ -13,6 +13,7 @@
 #include "hook.h"
 #include "debug.h"
 #include "damagefmt_policy.h"
+#include "wvs/util.h"
 #include "ztl/ztl.h"
 
 #include "imgui.h"
