@@ -50,6 +50,7 @@ struct Widget {
     bool place;          // apply the stored layout this frame (first frame, freeze change, resolution change)
     int textPct;         // the module's text size, percent of the HUD size
     int alpha;           // background opacity, percent
+    int (*extraRows)() = nullptr;   // rows the module adds right now (DPS: the party rank lines while they show)
 };
 
 constexpr int kTextDefault = 125;   // module text starts a size up (readability, owner 2026-10-26)
@@ -63,7 +64,8 @@ Widget g_widgets[] = {
 #ifdef MAPLEROOT_HUD_METERS
     // Ticket 118: off until switched on in the HUD window.
     {"exprate", "EXP rate", &HudMeters_DrawExpRate, 1, 125, 3625, 3200, 600, false, 0, 0, 0, 0, false, true, 100, 94},
-    {"dps", "DPS", &HudMeters_DrawDps, 1, 125, 4250, 3200, 600, false, 0, 0, 0, 0, false, true, 100, 94},
+    {"dps", "DPS", &HudMeters_DrawDps, 1, 125, 4250, 3200, 600, false, 0, 0, 0, 0, false, true, 100, 94,
+        &HudMeters_DpsExtraRows},
 #endif
 };
 constexpr int kTextMin = 60, kTextMax = 200, kAlphaMin = 0, kAlphaMax = 100;
@@ -270,7 +272,8 @@ void Overlay_DrawHud() {
         const float titlePx = ImGui::GetIO().FontGlobalScale * g_fAtlasPx;
         const float fontPx = titlePx * w.textPct / 100.0f;
         const float rowH = fontPx + st.FramePadding.y * 2;
-        const float h = w.rows * rowH + (w.rows - 1) * st.ItemSpacing.y + st.WindowPadding.y * 2 +
+        const int rows = w.rows + (w.extraRows ? w.extraRows() : 0);
+        const float h = rows * rowH + (rows - 1) * st.ItemSpacing.y + st.WindowPadding.y * 2 +
             (g_bFrozen ? 0.0f : titlePx + st.FramePadding.y * 2);
         const OverlayPolicy::Rect r =
             OverlayPolicy::FromFractions(w.fx, w.fy, w.fw, OverlayPolicy::ToFraction(h, screen.y), screen.x, screen.y,
