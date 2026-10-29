@@ -8,7 +8,8 @@
 // which holds only the added leaves: the damage digit sets without "0".."9" (rc3-rc5) and the Arcane bosses' Mob info
 // without maxHP (1.6.0.2), 2026-10-28. Now only images with no stock file are served whole; a stock image keeps its
 // own data and gets the Custom.wz leaves merged in (CWzProperty::Serialize hook: added, or replaced since bNoReplace
-// is false).
+// is false). Since 1.6.1-rc11 the hook also adds a whole Custom.wz sub-folder that the stock image lacks (the Grandis
+// link, Map/WorldMap/WorldMap080.img/MapLink/2); a folder stock has is still merged leaf by leaf.
 // ============================================================
 
 #include <string>

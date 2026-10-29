@@ -4,7 +4,7 @@
 Copies UIWindow.img/DailyCheckin (backgrnd, 513x346) from the addon's packed UI.wz
 (assets/dailycheckin/UI.wz) into Custom.wz as UI/UIWindowEx.img/DailyCheckin. UIWindowEx.img
 does not exist in the stock client, so resman.cpp serves the whole image from Custom.wz (as for
-MobHPRatioInfo); a new sub-property of the stock UIWindow.img would not be merged.
+MobHPRatioInfo); before 1.6.1-rc11 a new sub-property of the stock UIWindow.img was not merged.
 
 Idempotent: re-running replaces the node with the same bytes. Every other node of Custom.wz is
 checked to be semantically unchanged before the file is replaced.

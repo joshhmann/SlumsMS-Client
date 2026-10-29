@@ -87,6 +87,17 @@ public:
             IWzPropertyPtr pSub;
             if (!pUnk || FAILED(pUnk->QueryInterface(&pSub))) {
                 this->Add(sNext, pProperty->item[sNext], false);
+                continue;
+            }
+            // A sub-folder stock already has is merged when it serializes (this hook, one level down). One stock
+            // lacks (WorldMap080.img/MapLink/2, the Grandis link) is added whole, or it would never be seen.
+            Ztl_variant_t vStock;
+            try {
+                vStock = this->item[sNext];
+            } catch (...) {
+            }
+            if (vStock.vt == VT_EMPTY) {
+                this->Add(sNext, pProperty->item[sNext], false);
             }
         }
         return S_OK;
