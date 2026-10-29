@@ -3446,11 +3446,26 @@ struct WorldMapSubItem
 	char pad_[20];
 };
 
+struct WorldMapLink
+{
+	// CUIWorldMap's MapLink entries, 12 bytes (0x009EE338, 0x009EBB89)
+	int unknown;
+	char* linkMap; // the page this link opens; the left-click handler (0x009EE30E) follows it when non-empty
+	void* linkImg;
+};
+
 struct WorldMapPanel
 {
-	char pad[0x5B4];
+	char pad[0x5A0];
+	int hoveredLink; // +5A0 (CUIWorldMap +5A4): the MapLink under the cursor, -1 for none (ctor 0x009E986A)
+	char pad_[0x10];
 	ZArray<WorldMapSubItem> subItems; // Located at +5B4
+	ZArray<WorldMapLink> links; // +5B8 (CUIWorldMap +5BC)
 };
+static_assert(sizeof(WorldMapLink) == 12, "WorldMapLink is the wrong size");
+static_assert(offsetof(WorldMapPanel, hoveredLink) == 0x5A0, "WorldMapPanel::hoveredLink moved");
+static_assert(offsetof(WorldMapPanel, subItems) == 0x5B4, "WorldMapPanel::subItems moved");
+static_assert(offsetof(WorldMapPanel, links) == 0x5B8, "WorldMapPanel::links moved");
 
 typedef int(__cdecl* CUtilDlg__YesNo_t)(void* sMsg, bool bCenter, bool bFixedW);
 static auto CUtilDlg__YesNo = reinterpret_cast<CUtilDlg__YesNo_t>(0x00992DFD);
@@ -3474,9 +3489,14 @@ void __fastcall Hook_WorldMapOnMouseButton(void* _this, void* _EDX, unsigned int
 
 	// SlumsMS 1.6.1-rc11: a click had to land within sqrt(17) px of a spot's centre, so most clicks on a map icon did
 	// nothing (the Future pages looked dead to the Hyper Teleport Rock). Take the nearest spot within 10 px instead.
+	// 1.6.1-rc11 (owner's call): a click on a link image opens that page, as in the stock client, even where a town
+	// spot sits under it (Arcana on the Arcane page, Vulpes on the Grandis page); the rock teleports from that page.
+	const int link = __this->hoveredLink;
+	const bool onLink = link >= 0 && static_cast<size_t>(link) < __this->links.GetCount()
+		&& __this->links[link].linkMap != nullptr && __this->links[link].linkMap[0] != 0;
 	size_t nearest = count;
 	int nearestDistance = 10 * 10 + 1;
-	for (size_t i = 0; i < count && a2 == 514; i++)
+	for (size_t i = 0; i < count && a2 == 514 && !onLink; i++)
 	{
 		const auto subItem = &__this->subItems[i];
 		int distance = ((fix_x - subItem->x) * (fix_x - subItem->x)) + ((fix_y - subItem->y) * (fix_y - subItem->y));
