@@ -174,7 +174,26 @@ LPTOP_LEVEL_EXCEPTION_FILTER CrashReport_Wrap(LPTOP_LEVEL_EXCEPTION_FILTER reque
 }
 
 void CrashReport_SetNextFilter(LPTOP_LEVEL_EXCEPTION_FILTER next) { g_next = next; }
-void CrashReport_NoteField(int fieldId) { InterlockedExchange(&g_field, fieldId); }
+#ifdef MAPLEROOT_CRASH_SELFTEST
+// TEST-only diagnostic (never in a release build): [clienthax] crashtest=<seconds> crashes the client that many
+// seconds after it first enters a field, with a null write on a thread of its own, so QA can prove the report path.
+static DWORD WINAPI CrashSelfTest(LPVOID seconds) {
+    Sleep(static_cast<DWORD>(reinterpret_cast<uintptr_t>(seconds)) * 1000);
+    *static_cast<volatile int*>(nullptr) = 0x5105;
+    return 0;
+}
+#endif
+
+void CrashReport_NoteField(int fieldId) {
+    InterlockedExchange(&g_field, fieldId);
+#ifdef MAPLEROOT_CRASH_SELFTEST
+    static LONG armed = 0;
+    if (fieldId > 0 && InterlockedCompareExchange(&armed, 1, 0) == 0) {
+        const UINT seconds = GetPrivateProfileIntA("clienthax", "crashtest", 0, ".\\config.ini");
+        if (seconds) CloseHandle(CreateThread(nullptr, 0, CrashSelfTest, reinterpret_cast<LPVOID>(static_cast<uintptr_t>(seconds)), 0, nullptr));
+    }
+#endif
+}
 void CrashReport_NoteCxx(uint32_t hr) { InterlockedExchange(&g_lastCxx, static_cast<LONG>(hr)); }
 void CrashReport_NoteMissing(const wchar_t* path) {
     if (!path) return;
