@@ -124,6 +124,14 @@ void HudMeters_DrawDps() {
     }
 }
 
+// The DPS window grows by the rank lines while they show (overlay.cpp sizes every module to its rows).
+int HudMeters_DpsExtraRows() {
+    std::lock_guard<std::mutex> lock(g_rankLock);
+    const uint32_t now = GetTickCount();
+    if (!g_rankMs || now - g_rankMs > kRankShowMs) return 0;
+    return static_cast<int>(g_rank.rows.size());
+}
+
 // LP 0x3739 (packetdispatcher.cpp). The dispatcher only peeked the opcode, so the body starts 2 bytes in.
 void HudMeters_HandleDamageRank(CInPacket* pPacket) {
     const unsigned char* p = pPacket ? pPacket->CurrentPublic() : nullptr;
