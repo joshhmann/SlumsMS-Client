@@ -57,6 +57,13 @@ static WNDPROC g_WndProc;
 
 // [graphics] borderless / dpiaware (window_policy.h). Read once, before the game creates its window.
 static bool g_bBorderless = false;
+static HWND g_hGameWnd = nullptr;
+// The frame the game puts back on every resolution change (CWzGr2D::ScreenResolution restyles the window to
+// WS_CAPTION | WS_SYSMENU and sizes it frame included); borderless keeps WS_POPUP and the client size instead.
+constexpr LONG kFrameBits = WS_CAPTION | WS_THICKFRAME | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX;
+int get_screen_width();
+int get_screen_height();
+void Borderless_Apply();
 
 static bool ReadGraphicsSwitch(const char* key) {
     char value[16] = {};
@@ -89,6 +96,21 @@ LRESULT WndProc_hook(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     static POINT ptOffset;
     static bool bMoving;
     switch (msg) {
+    case WM_STYLECHANGING:      // borderless: whatever style the game sets, no frame
+        if (g_bBorderless && wParam == static_cast<WPARAM>(GWL_STYLE)) {
+            auto* ss = reinterpret_cast<STYLESTRUCT*>(lParam);
+            ss->styleNew = (ss->styleNew & ~kFrameBits) | WS_POPUP;
+        }
+        break;
+    case WM_WINDOWPOSCHANGING:  // borderless: the window is exactly the game's resolution (no frame to add)
+        if (g_bBorderless) {
+            auto* wp = reinterpret_cast<WINDOWPOS*>(lParam);
+            if (!(wp->flags & SWP_NOSIZE) && !IsIconic(hWnd) && wp->x > -32000) {   // never while minimising
+                wp->cx = get_screen_width();
+                wp->cy = get_screen_height();
+            }
+        }
+        break;
     case WM_WINDOWPOSCHANGED:   // the game sized the window (start-up or a resolution change): keep it centred
         if (g_bBorderless && !(reinterpret_cast<const WINDOWPOS*>(lParam)->flags & SWP_NOSIZE)) {
             const LRESULT r = CallWindowProcA(g_WndProc, hWnd, msg, wParam, lParam);
@@ -166,8 +188,22 @@ HWND WINAPI CreateWindowExA_hook(DWORD dwExStyle, LPCSTR lpClassName, LPCSTR lpW
     HWND hWnd = CreateWindowExA_orig(dwExStyle, lpClassName, sTitle, style, CW_USEDEFAULT, CW_USEDEFAULT, nWidth, nHeight, hWndParent, hMenu, hInstance, lpParam);
     if (hWnd) SetWindowTextA(hWnd, sTitle);
     g_WndProc = reinterpret_cast<WNDPROC>(SetWindowLongPtrA(hWnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(&WndProc_hook)));
-    if (hWnd) PlaceBorderless(hWnd);
+    g_hGameWnd = hWnd;
+    Borderless_Apply();
     return hWnd;
+}
+
+// Borderless: no frame, the window the size of the game's resolution, centred. At creation and from
+// set_screen_resolution (resolution.cpp) once the new size is known, since the game's own resize ran before it.
+void Borderless_Apply() {
+    if (!g_bBorderless || !g_hGameWnd) return;
+    const LONG style = GetWindowLongA(g_hGameWnd, GWL_STYLE);
+    if ((style & kFrameBits) || !(style & WS_POPUP)) SetWindowLongA(g_hGameWnd, GWL_STYLE, (style & ~kFrameBits) | WS_POPUP);
+    SetWindowPos(g_hGameWnd, NULL, 0, 0, get_screen_width(), get_screen_height(),
+        SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+    PlaceBorderless(g_hGameWnd);
+    DebugMessage("Borderless: %dx%d, style %08lX", get_screen_width(), get_screen_height(),
+        static_cast<unsigned long>(GetWindowLongA(g_hGameWnd, GWL_STYLE)));
 }
 
 
