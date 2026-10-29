@@ -2,10 +2,10 @@
 """Bake the Monster Book addon's data into src/Custom.wz (ticket 19; runs on Linux, no WZ editor needed).
 
 Writes three things, all through the Custom.wz rules in resman.cpp (a new top-level image is served whole; an
-existing image only gets leaf values added or replaced):
+existing image gets leaf values added or replaced, and since 1.6.1-rc11 whole sub-folders it lacks added):
 
   String/MonsterBookEx.img   the whole book: per mob map/<i>, reward/<i>, episode. It is a NEW image because a
-                             stock image cannot gain or lose sub-folders through Custom.wz; monsterbook.cpp points
+                             stock image cannot lose sub-folders through Custom.wz; monsterbook.cpp points
                              the book loader at it (StringPool 0x8BF) only when it exists, so a Custom.wz without
                              it leaves the stock book in charge.
   (no Mob/<id>.img)          1.6.0-1.6.1-rc6 also wrote Mob/<id>.img/info/defaultHP for mobs whose maxHP the book

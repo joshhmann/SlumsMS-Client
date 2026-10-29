@@ -3472,13 +3472,24 @@ void __fastcall Hook_WorldMapOnMouseButton(void* _this, void* _EDX, unsigned int
 	boolean canTP = false;
 	unsigned char* ucharPointer = nullptr;
 
+	// SlumsMS 1.6.1-rc11: a click had to land within sqrt(17) px of a spot's centre, so most clicks on a map icon did
+	// nothing (the Future pages looked dead to the Hyper Teleport Rock). Take the nearest spot within 10 px instead.
+	size_t nearest = count;
+	int nearestDistance = 10 * 10 + 1;
 	for (size_t i = 0; i < count && a2 == 514; i++)
 	{
 		const auto subItem = &__this->subItems[i];
 		int distance = ((fix_x - subItem->x) * (fix_x - subItem->x)) + ((fix_y - subItem->y) * (fix_y - subItem->y));
+		if (distance < nearestDistance) {
+			nearest = i;
+			nearestDistance = distance;
+		}
+	}
 
-		if (distance <= 17) {
-			if (subItem->type == 2) { break; }
+	if (nearest < count)
+	{
+		const auto subItem = &__this->subItems[nearest];
+		if (subItem->type != 2) {
 			auto mapName = subItem->mapName;
 			void* msg = nullptr;
 			std::string toCopy = "Would you like to teleport to:"; 

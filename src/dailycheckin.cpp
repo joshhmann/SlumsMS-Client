@@ -262,7 +262,7 @@ public:
 
     void LoadSprites() {
         // The art ships in Custom.wz as UI/UIWindowEx.img (a custom-only image, served whole from Custom.wz like
-        // MobHPRatioInfo; a new sub-property of the stock UIWindow.img would not be merged). The stock path is the
+        // MobHPRatioInfo; before 1.6.1-rc11 a new sub-property of the stock UIWindow.img was not merged). The stock path is the
         // fallback for a client that packed the node into its own UI.wz.
         m_pBg          = LoadSprite(L"UI/UIWindowEx.img/DailyCheckin/backgrnd");
         if (!m_pBg) m_pBg = LoadSprite(L"UI/UIWindow.img/DailyCheckin/backgrnd");
