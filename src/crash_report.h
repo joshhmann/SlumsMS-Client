@@ -11,3 +11,4 @@ void CrashReport_SetNextFilter(LPTOP_LEVEL_EXCEPTION_FILTER next);  // system.cp
 void CrashReport_NoteField(int fieldId);                            // resolution.cpp set_stage_hook: the current map
 void CrashReport_NoteCxx(uint32_t hr);                              // crash_diagnostics.cpp: the last C++ throw code
 void CrashReport_NoteMissing(const wchar_t* path);                  // resman.cpp: a data lookup that failed
+void CrashReport_NoteFound(const wchar_t* path);                    // resman.cpp: clears it when a later mount finds it
