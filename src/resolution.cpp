@@ -38,6 +38,7 @@ static int g_nScreenHeight = 600;
 static int g_nAdjustCenterY = 0;
 
 void set_screen_resolution(int nResolution, bool bSave);
+void Borderless_Apply();
 
 int get_screen_width() {
     return g_nScreenWidth;
@@ -681,6 +682,7 @@ void set_screen_resolution(int nResolution, bool bSave) {
         }
         g_nScreenWidth = nScreenWidth;
         g_nScreenHeight = nScreenHeight;
+        Borderless_Apply();   // system.cpp: the game's resize put its frame back
 #ifdef MAPLEROOT_INTEGRATION
         UpdateMapleRootResolution(nScreenWidth, nScreenHeight);
         DebugMessage("SESSION_RESOLUTION width=%d height=%d", nScreenWidth, nScreenHeight);
