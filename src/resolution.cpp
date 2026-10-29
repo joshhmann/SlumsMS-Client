@@ -2,6 +2,9 @@
 #include "hook.h"
 #include "constants.h"
 #include "wvs/config.h"
+#ifdef MAPLEROOT_CRASH_REPORT
+#include "crash_report.h"
+#endif
 #include "wvs/wnd.h"
 #include "wvs/wndman.h"
 #include "wvs/tooltip.h"
@@ -115,11 +118,25 @@ void get_default_position(int nUIType, int* pnDefaultX, int* pnDefaultY) {
 
 
 static auto set_stage = reinterpret_cast<void(__cdecl*)(CStage*, void*)>(0x00777347);
+
+#ifdef MAPLEROOT_CRASH_REPORT
+// The map the crash report names: CWvsContext::GetCurFieldID (0x00A1238B) ignores 'this' (weather.cpp).
+static void NoteCurrentField() {
+    __try {
+        CrashReport_NoteField(reinterpret_cast<int(__thiscall*)(void*)>(0x00A1238B)(nullptr));
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+    }
+}
+#endif
+
 void __cdecl set_stage_hook(CStage* pStage, void* pParam) {
     // CField::ms_RTTI_CField - change resolution before set_stage
     if (pStage && pStage->IsKindOf(reinterpret_cast<const CRTTI*>(0x00BED758))) {
         set_screen_resolution(g_nResolution, 0);
         set_stage(pStage, pParam);
+#ifdef MAPLEROOT_CRASH_REPORT
+        NoteCurrentField();
+#endif
         return;
     }
     set_stage(pStage, pParam);

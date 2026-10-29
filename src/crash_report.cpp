@@ -201,3 +201,11 @@ void CrashReport_NoteMissing(const wchar_t* path) {
     for (; path[i] && i < sizeof(g_missing) - 1; ++i) g_missing[i] = path[i] < 128 ? static_cast<char>(path[i]) : '?';
     g_missing[i] = 0;
 }
+// The game folder is mounted before ./Data, so most misses are found a moment later: those are not the culprit.
+void CrashReport_NoteFound(const wchar_t* path) {
+    if (!path || !g_missing[0]) return;
+    size_t i = 0;
+    for (; path[i] && g_missing[i]; ++i)
+        if (g_missing[i] != (path[i] < 128 ? static_cast<char>(path[i]) : '?')) return;
+    if (!path[i] && !g_missing[i]) g_missing[0] = 0;
+}

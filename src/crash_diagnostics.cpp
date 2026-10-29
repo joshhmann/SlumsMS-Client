@@ -2,6 +2,9 @@
 #include "mapleroot.h"
 #include <windows.h>
 #include <cstdio>
+#ifdef MAPLEROOT_CRASH_REPORT
+#include "crash_report.h"
+#endif
 
 namespace {
 volatile LONG reporting = 0;
@@ -26,6 +29,18 @@ LONG CALLBACK OnException(EXCEPTION_POINTERS* pointers) {
     const bool fatalCandidate = code == EXCEPTION_ACCESS_VIOLATION || code == EXCEPTION_ILLEGAL_INSTRUCTION ||
         code == EXCEPTION_INT_DIVIDE_BY_ZERO || code == EXCEPTION_STACK_OVERFLOW;
     const bool cpp = code == 0xE06D7363;
+#ifdef MAPLEROOT_CRASH_REPORT
+    // Every C++ throw, not only the first 16 crash.log keeps: the crash report names the last one.
+    if (cpp && pointers->ExceptionRecord->NumberParameters >= 2) {
+        __try {
+            const DWORD hr = *reinterpret_cast<DWORD*>(pointers->ExceptionRecord->ExceptionInformation[1]);
+            if ((hr >= 0x20000000 && hr <= 0x2200000E) || (hr & 0xFFFF0000) == 0x80040000 ||
+                (hr & 0xFFFF0000) == 0x80070000 || (hr & 0xFFFF0000) == 0x80030000)
+                CrashReport_NoteCxx(hr);
+        } __except (EXCEPTION_EXECUTE_HANDLER) {
+        }
+    }
+#endif
     if ((!fatalCandidate && !cpp) || InterlockedCompareExchange(&reporting, 1, 0))
         return EXCEPTION_CONTINUE_SEARCH;
     if (InterlockedIncrement(cpp ? &cppEvents : &fatalEvents) > 16) {

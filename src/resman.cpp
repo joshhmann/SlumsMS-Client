@@ -5,6 +5,9 @@
 #include "wvs/util.h"
 #include "ztl/ztl.h"
 #include "customwz_policy.h"
+#ifdef MAPLEROOT_CRASH_REPORT
+#include "crash_report.h"
+#endif
 #ifdef MAPLEROOT_CASHSHOP_WINDOW
 #include "cashshopwnd.h"
 #endif
@@ -33,6 +36,11 @@ public:
 
     HRESULT __stdcall raw__OnGetLocalObject_hook(int nIndex, BSTR sPath, int* pnPathUsed, VARIANT* pvRet) {
         HRESULT hr = raw__OnGetLocalObject_orig(this, nIndex, sPath, pnPathUsed, pvRet);
+#ifdef MAPLEROOT_CRASH_REPORT
+        // The crash report's "missing data" line: the last path that missed and was not found by a later mount.
+        if (FAILED(hr)) CrashReport_NoteMissing(sPath);
+        else CrashReport_NoteFound(sPath);
+#endif
         if (SUCCEEDED(hr) || !g_pCustomNameSpace) {
             return hr;
         }
