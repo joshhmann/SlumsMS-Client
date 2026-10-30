@@ -55,10 +55,13 @@ void HandleLinkProperty(IWzCanvasPtr pCanvas) {
         pCanvas->Create(nWidth, nHeight, nMagLevel, nFormat);
         pCanvas->AddRawCanvas(0, 0, pSource->rawCanvas[0][0]);
 
-        // Set target origin
+        // Set target origin. Some linked canvases have none (minimaps: Map2/211060100.img/miniMap/canvas links to
+        // Map3/306010100.img), and a null origin here throws E_POINTER and closes the client on map load.
         IWzVector2DPtr pOrigin = pCanvas->property->item[L"origin"].GetUnknown();
-        pCanvas->cx = pOrigin->x;
-        pCanvas->cy = pOrigin->y;
+        if (pOrigin) {
+            pCanvas->cx = pOrigin->x;
+            pCanvas->cy = pOrigin->y;
+        }
         break;
     }
 }
