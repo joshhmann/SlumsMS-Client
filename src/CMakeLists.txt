@@ -31,14 +31,11 @@ target_precompile_headers(injector PRIVATE pch.h)
 target_compile_definitions(injector PRIVATE SLUMS_BUILD_NUMBER=${SLUMS_BUILD_NUMBER} "SLUMS_RELEASE=\"${SLUMS_RELEASE}\"")
 file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/$<CONFIG>/slums-build.txt"
     CONTENT "release=${SLUMS_RELEASE}\nbuild=${SLUMS_BUILD_NUMBER}\n")
-# slums.dll's version resource: FileVersion major.minor.patch.build from the build number (10600 -> 1.6.0.10600),
+# slums.dll's version resource: FileVersion major.minor.patch.build from VERSION and the build (1.6.2.10720),
 # ProductVersion the release string, and SlumsBuild the build number, so Explorer and the launcher can read it.
 if(SLUMS_BUILD_NUMBER GREATER 65535)
     message(FATAL_ERROR "VERSIONINFO fields are 16-bit; build ${SLUMS_BUILD_NUMBER} does not fit")
 endif()
-math(EXPR SLUMS_VER_MAJOR "${SLUMS_BUILD_NUMBER} / 10000")
-math(EXPR SLUMS_VER_MINOR "(${SLUMS_BUILD_NUMBER} / 100) % 100")
-math(EXPR SLUMS_VER_PATCH "${SLUMS_BUILD_NUMBER} % 100")
 configure_file(slums.rc.in "${CMAKE_CURRENT_BINARY_DIR}/slums.rc" @ONLY)
 target_sources(injector PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/slums.rc")
 if(MAPLEROOT_MOUNT_INFO)

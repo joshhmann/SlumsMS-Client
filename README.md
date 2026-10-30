@@ -27,7 +27,9 @@ logins below its `MIN_CLIENT_BUILD` with "Your game is out of date: open the Slu
 without the stamp (1.4.1 and older) count as build 0.
 
 - The numbers come from `VERSION` (repo root) on every configure: release = its text, build =
-  major*10000 + minor*100 + patch (1.4.2 -> 10402; 1.4.2-rc1 is also 10402). `cmake/BuildStamp.cmake` checks them.
+  major*10000 + (minor+1)*100 + patch*10 (1.6.2 -> 10720; 1.6.2-rc1 is also 10720). Up to 1.6.0 it was
+  major*10000 + minor*100 + patch; the change (b205) keeps every new build above the 1.6.1 candidates (10700, 10710).
+  `cmake/BuildStamp.cmake` checks them.
 - A release bumps `VERSION` in its release commit, nothing else. The build prints
   `slums.dll build stamp: <release> (build <n>)` and writes `build/Release/slums-build.txt` (`release=`, `build=`);
   the server release sets `MIN_CLIENT_BUILD` to that build (SlumsMS `tools/release/set-min-client-build`).
@@ -35,7 +37,7 @@ without the stamp (1.4.1 and older) count as build 0.
 - `buildstamp_wire_format` (ctest) checks the bytes against the server's golden packet.
 - Players see the same numbers: the window title is `SlumsMS <release> (<build>)`, the login screen's bottom-right
   corner shows `SlumsMS <release> · build <build>` (`src/buildshow.cpp`), and slums.dll carries a version resource
-  (FileVersion `1.6.0.10600`, ProductVersion the release, custom `SlumsBuild` = the build; `src/slums.rc.in`).
+  (FileVersion `1.6.2.10720`, ProductVersion the release, custom `SlumsBuild` = the build; `src/slums.rc.in`).
 
 ## Server address
 
