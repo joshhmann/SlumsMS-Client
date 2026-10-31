@@ -25,6 +25,12 @@ Inputs:
                                         server has no spawn for, cover every client card, and report the diff.
 
 The rewards are the server's drop_data, best chance first. Mobs the server does not know keep their stock entry.
+Found In: the server's spawn maps; for a mob the server places nowhere (an event or script spawn), FOUND_IN below,
+else the stock maps. The client's String/MonsterBook.img (the repack's, sha256 f808835b...) lists 450005000 (Arcana,
+Grove of the Spirit Tree) as a placeholder for many such bosses, which is how Papulatus showed Arcana (b086).
+
+--check builds the same book as a real run, so give it the same --stock-book/--stock-cards: without them it builds
+the book from the server data alone (no stock Form lines, maps or stock-only mobs) and always reports stale.
 
     python3 tools/wz/add_monster_book.py [--stock-book ...] [--stock-cards ...] [--check]
 """
@@ -50,6 +56,11 @@ UI_IMG = 'UI/UIWindowEx.img'
 SEARCH_ART = ('itemBox0', 'itemBox1', 'mobBox0', 'mobBox1')
 FORM_RE = re.compile(r'^\s*Form\s*:\s*(.*?)\s*$', re.I)
 LEVEL_RE = re.compile(r'^\s*Lv\.?\s*:\s*(\d+)\s*$', re.I)
+# Found In for mobs the server spawns from an event or script (no spawn map in its WZ data), in place of the stock
+# placeholder. Each map id must be a field in the client's Data/Map.
+FOUND_IN = {
+    8500002: [220080001],   # Papulatus: Ludibrium Clocktower, Origin of Clocktower (stock: 450005000, b086)
+}
 
 
 def stock_entries(path):
@@ -108,7 +119,8 @@ def episode_text(level, form, stats):
 def build_book(book, stock, cards):
     server = book['mobs']
     ids = sorted({int(m) for m in cards.values()} | set(stock) | {int(m) for m in book['cards'].values()})
-    report = {'entries': 0, 'from_server': 0, 'stock_only': 0, 'reward_changed': 0, 'maps_from_stock': 0}
+    report = {'entries': 0, 'from_server': 0, 'stock_only': 0, 'reward_changed': 0, 'maps_from_stock': 0,
+              'maps_pinned': 0}
     root = Node(BOOK_IMG, 'property')
     for mob in ids:
         s, old = server.get(str(mob)), stock.get(mob)
@@ -120,8 +132,10 @@ def build_book(book, stock, cards):
             report['stock_only'] += 1
         else:
             level, form = stock_header(old['episode']) if old else (None, None)
-            maps = s['map'] or (old['map'] if old else [])
-            if not s['map'] and old and old['map']:
+            maps = s['map'] or FOUND_IN.get(mob) or (old['map'] if old else [])
+            if not s['map'] and mob in FOUND_IN:
+                report['maps_pinned'] += 1
+            elif not s['map'] and old and old['map']:
                 report['maps_from_stock'] += 1
             reward = s['reward']
             episode = episode_text(s['level'] or level or 0, form, s['stats'])
@@ -193,6 +207,8 @@ def main():
             return 0
         if args.check:
             print(f'{CUSTOM.relative_to(ROOT)} is stale: {sorted(stale)[:10]} drop {drop}')
+            if not (args.stock_book and args.stock_cards):
+                print('  (checked without --stock-book/--stock-cards: the release book is built with them)')
             return 1
         for path in sorted(stale):
             blob = write_img(targets[path], 'gms')
@@ -237,7 +253,8 @@ def main():
     print(f'wrote {CUSTOM.relative_to(ROOT)} sha256 {digest}')
     print(f'  {BOOK_IMG}: {report["entries"]} entries ({report["from_server"]} from the server, '
           f'{report["stock_only"]} kept stock, {report["reward_changed"]} with a changed Dropping list, '
-          f'{report["maps_from_stock"]} with stock Found In maps), {book["drop_rows"]} drop rows')
+          f'{report["maps_from_stock"]} with stock Found In maps, {report["maps_pinned"]} from FOUND_IN), '
+          f'{book["drop_rows"]} drop rows')
     print(f'  removed {drop or "no"} partial Mob images; {UI_IMG}/MonsterBook/search: {len(SEARCH_ART)} canvases')
     return 0
 
