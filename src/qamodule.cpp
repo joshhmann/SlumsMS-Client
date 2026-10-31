@@ -13,6 +13,7 @@
 #include "qamodule_policy.h"
 #include "buildstamp_proto.h"
 #include "debug.h"
+#include "constants.h"   // wndman.h uses CONSTANTS_CENTER_STATUSBAR without including it
 #include "wvs/wnd.h"
 #include "wvs/wndman.h"
 
@@ -189,7 +190,7 @@ void PollWindows() {
     Fresh fresh[kMaxFresh];
     size_t freshCount = 0;
 
-    CWnd** pos = CWndMan::ms_lpWindow.GetHeadPosition();
+    auto pos = CWndMan::ms_lpWindow.GetHeadPosition();
     while (pos) {
         CWnd* w = CWndMan::ms_lpWindow.GetNext(pos);
         if (!w) continue;
