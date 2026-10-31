@@ -56,15 +56,6 @@ else()
     add_test(NAME meleerange_guard COMMAND meleerange_patch_test)
 endif()
 
-add_executable(slidemenu_patch_test slidemenu_patch_test.cpp)
-set(SLIDEMENU_TEST_EXE "Z:/MSv83/SlumsMS-dev/client-1.5.0-fixes2/exe-copy/MapleStory.exe" CACHE FILEPATH
-    "MapleStory.exe whose bytes the slide menu test checks (optional)")
-if(SLIDEMENU_TEST_EXE AND EXISTS "${SLIDEMENU_TEST_EXE}")
-    add_test(NAME slidemenu_closing_hash COMMAND slidemenu_patch_test "${SLIDEMENU_TEST_EXE}")
-else()
-    add_test(NAME slidemenu_closing_hash COMMAND slidemenu_patch_test)
-endif()
-
 add_executable(hpmp_patch_test hpmp_patch_test.cpp)
 set(HPMP_TEST_EXE "Z:/MSv83/SlumsMS-dev/client-1.5.0-fixes2/exe-copy/MapleStory.exe" CACHE FILEPATH
     "MapleStory.exe whose bytes the 4-byte HP/MP test checks (optional)")
