@@ -73,6 +73,8 @@ add_test(NAME d3d9host_adapter_fallback COMMAND d3d9host_policy_test)
 
 add_executable(customwz_policy_test customwz_policy_test.cpp)
 add_test(NAME customwz_image_prefix COMMAND customwz_policy_test)
+add_executable(qamodule_policy_test qamodule_policy_test.cpp)
+add_test(NAME qamodule_runner_channel COMMAND qamodule_policy_test)
 add_executable(overlay_policy_test overlay_policy_test.cpp)
 add_test(NAME overlay_hud_layout COMMAND overlay_policy_test)
 

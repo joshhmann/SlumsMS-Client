@@ -22,6 +22,7 @@
 #include "constants.h"
 #include "attackstop_patch.h"
 #include "d3d9host.h"
+#include "qamodule.h"
 #include "d3d9host_policy.h"
 
 #include <d3d9.h>
@@ -182,12 +183,16 @@ void DrawOverlay(IDirect3DDevice9* dev) {
 }
 
 HRESULT STDMETHODCALLTYPE EndScene_hook(IDirect3DDevice9* dev) {
-    if (dev == g_pDevice) DrawOverlay(dev);
+    if (dev == g_pDevice) {
+        DrawOverlay(dev);
+        QaModule_OnFrame(dev);   // QA builds only (ticket 166): ready signals and burst frames, as the player sees it
+    }
     return g_EndScene(dev);
 }
 
 HRESULT STDMETHODCALLTYPE Reset_hook(IDirect3DDevice9* dev, D3DPRESENT_PARAMETERS* pp) {
     const bool bOurs = dev == g_pDevice && g_bImGuiReady;
+    if (dev == g_pDevice) QaModule_OnDeviceReset();
     if (bOurs) ImGui_ImplDX9_InvalidateDeviceObjects();
     const HRESULT hr = g_Reset(dev, pp);
     if (FAILED(hr)) {

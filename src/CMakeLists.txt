@@ -30,6 +30,10 @@ target_precompile_headers(injector PRIVATE pch.h)
 # Build stamp reported at login (cmake/BuildStamp.cmake); slums-build.txt beside slums.dll is for the release tools.
 target_compile_definitions(injector PRIVATE SLUMS_BUILD_NUMBER=${SLUMS_BUILD_NUMBER} "SLUMS_RELEASE=\"${SLUMS_RELEASE}\"")
 if(SLUMS_QA_MODULE)
+    if(NOT MAPLEROOT_INTEGRATION)
+        message(FATAL_ERROR "SLUMS_QA_MODULE needs MAPLEROOT_INTEGRATION (the D3D9 host it captures from)")
+    endif()
+    target_sources(injector PRIVATE qamodule.cpp)
     target_compile_definitions(injector PRIVATE SLUMS_QA_MODULE)
 endif()
 file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/$<CONFIG>/slums-build.txt"
