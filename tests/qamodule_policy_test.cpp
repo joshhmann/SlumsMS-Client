@@ -189,6 +189,8 @@ int main() {
         Check(std::strcmp(LoginStepForOpcode(kOpRecommendedWorldMessage), "recommended") == 0, "the recommended worlds are a login step");
         Check(std::strcmp(LoginStepForOpcode(kOpCharacterList), "charlist") == 0, "the character list is a login step");
         Check(LoginStepForOpcode(0x7D) == nullptr, "SET_FIELD is not a login phase packet");
+        Check(std::strcmp(LoginStepForOpcode(kOpSpawnPlayer), "user_enter") == 0, "a player spawn is logged (b250)");
+        Check(std::strcmp(LoginStepForOpcode(kOpRemovePlayer), "user_leave") == 0, "a player remove is logged (b250)");
         Check(LoginStepForOpcode(0x44) == nullptr, "a notice is not a login phase packet");
         Check(LoginStepForOpcode(0x11) == nullptr, "a keep-alive ping is not worth a line");
 

@@ -248,7 +248,10 @@ inline ChatLine ParseChatPacket(uint16_t opcode, const unsigned char* data, size
 constexpr uint16_t kOpServerList = 0x0A;             // the world list; the same opcode with a 0xFF end marker ends it
 constexpr uint16_t kOpLastConnectedWorld = 0x1A;     // the world the client preselects
 constexpr size_t kMaxLoginHex = 512;                 // bytes of a login packet an event carries
-constexpr size_t kMaxLoginPackets = 256;             // packets kept per client process (one login phase is about eight)
+constexpr size_t kMaxLoginPackets = 4096;            // packets kept per client process (login is about eight; the
+                                                     // player spawn/remove lines below need room on busy maps)
+constexpr uint16_t kOpSpawnPlayer = 0xA0;            // SPAWN_PLAYER: another character's name and look (b250)
+constexpr uint16_t kOpRemovePlayer = 0xA1;           // REMOVE_PLAYER_FROM_MAP: its leaving (a lost one leaves a ghost)
 
 // The login phase's opcodes and the step each is logged under; nullptr for everything else.
 inline const char* LoginStepForOpcode(uint16_t opcode) {
@@ -265,6 +268,10 @@ inline const char* LoginStepForOpcode(uint16_t opcode) {
     case 0x16: return "relog_response";
     case kOpLastConnectedWorld: return "last_world";
     case kOpRecommendedWorldMessage: return "recommended";
+    // Not login packets, but logged the same way: a bald, faceless, nameless figure the owner sees on TEST maps (b250)
+    // is either a look the client cannot draw or a character whose remove never arrived; these two lines tell which.
+    case kOpSpawnPlayer: return "user_enter";
+    case kOpRemovePlayer: return "user_leave";
     default: return nullptr;
     }
 }
