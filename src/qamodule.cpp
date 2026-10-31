@@ -9,13 +9,18 @@
 // ============================================================
 #include "pch.h"
 #include "qamodule.h"
+#include "qamodule_patch.h"
 #include "qamodule_policy.h"
 #include "buildstamp_proto.h"
 #include "debug.h"
+#include "wvs/wnd.h"
+#include "wvs/wndman.h"
 
 #include <d3d9.h>
 #include <atomic>
 #include <condition_variable>
+#include <cstdio>
+#include <cstring>
 #include <deque>
 #include <mutex>
 #include <string>
@@ -58,6 +63,213 @@ void Emit(const char* name, const std::string& extra = std::string()) {
 }
 
 void EmitError(const std::string& msg) { Emit("error", ",\"msg\":\"" + JsonEscape(msg) + "\""); }
+
+// ---- stock-byte guards (ticket 170) -----------------------------------------------------------------------------
+// The QA module installs no patches; it rides the existing packet detour and reads the client's own window list.
+// Both addresses it stands on are compared with qamodule_patch.h before anything uses them. This runs before the
+// client's hooks go in (DllMain -> AttachSystemHooks -> QaModule_Start; AttachClientHooks comes later), so the
+// bytes here are the stock ones. A mismatch switches that part off and says so, instead of sending wrong signals.
+bool g_dispatchSiteOk = false;
+bool g_fieldSiteOk = false;
+
+void CheckHookSites() {
+    g_dispatchSiteOk = QaPatch::Matches(reinterpret_cast<const unsigned char*>(QaPatch::kAddr_ProcessPacket),
+                                        QaPatch::ProcessPacketBytes().data(), QaPatch::ProcessPacketBytes().size());
+    if (!g_dispatchSiteOk) {
+        EmitError("hook site 0x004965F1 (CClientSocket::ProcessPacket) is not the stock code this build expects: "
+                  "ready signals and chat.received are off");
+    }
+    g_fieldSiteOk = QaPatch::Matches(reinterpret_cast<const unsigned char*>(QaPatch::kAddr_GetCurFieldID),
+                                     QaPatch::GetCurFieldIDBytes().data(), QaPatch::GetCurFieldIDBytes().size());
+    if (!g_fieldSiteOk) {
+        EmitError("hook site 0x00A1238B (CWvsContext::GetCurFieldID) is not the stock code this build expects: "
+                  "field.ready carries no map_id");
+    }
+}
+
+// The map the client is in, read the way the rest of the client reads it (bounce.cpp, lamps.cpp, weather.cpp).
+// Returns false when the site check failed, so field.ready then omits map_id rather than reporting a wrong map.
+bool CurMapId(int& mapId) {
+    if (!g_fieldSiteOk) return false;
+    mapId = reinterpret_cast<int(__thiscall*)(void*)>(QaPatch::kAddr_GetCurFieldID)(nullptr);
+    return true;
+}
+
+// ---- windows (ticket 170) ---------------------------------------------------------------------------------------
+// Once a frame the client's own window list (CWndMan::ms_lpWindow) is compared with the list from the last frame;
+// a window that appeared is window.open, one that went away is window.closed. Nothing is patched and nothing is
+// clicked. Only what the runner can act on is reported: UIWindow windows (they have a background UOL), windows named
+// by class, and dialogs a packet asked for. Game logic and rendering share one thread in this client, so the list is
+// stable between frames and this needs no lock.
+//
+// A window is keyed by its address AND its CreateWnd serial (CWnd+0x14, zeroed on Destroy), so a new window that
+// reuses a freed address is still reported as a new window.
+constexpr size_t kMaxTrackedWindows = 128;
+constexpr size_t kMaxPendingDialogs = 8;
+constexpr uint64_t kDialogQueueMs = 3000;   // a queued dialog name nobody used is stale after this
+
+struct PendingDialog {
+    const char* name;
+    uint64_t expiresMs;
+};
+
+struct TrackedWindow {
+    uintptr_t ptr;
+    uint32_t createId;
+    std::string name;
+};
+
+PendingDialog g_pendingDialogs[kMaxPendingDialogs];
+size_t g_pendingCount = 0;
+bool g_cuiwndSeen = false;      // the client's class test found at least one UI window
+unsigned g_windowScanFrames = 0;
+TrackedWindow g_windows[kMaxTrackedWindows];
+size_t g_windowCount = 0;
+
+void DropExpiredDialogs(uint64_t now) {
+    size_t keep = 0;
+    for (size_t i = 0; i < g_pendingCount; ++i) {
+        if (g_pendingDialogs[i].expiresMs >= now) g_pendingDialogs[keep++] = g_pendingDialogs[i];
+    }
+    g_pendingCount = keep;
+}
+
+// The dialog a packet asked for; the next window with no name of its own takes it (see qamodule_policy.h).
+void QueueDialog(const char* name) {
+    if (!name) return;
+    DropExpiredDialogs(NowMs());
+    if (g_pendingCount == kMaxPendingDialogs) {   // wait too long and the oldest request is the stale one
+        memmove(&g_pendingDialogs[0], &g_pendingDialogs[1], sizeof(g_pendingDialogs[0]) * (g_pendingCount - 1));
+        --g_pendingCount;
+    }
+    g_pendingDialogs[g_pendingCount].name = name;
+    g_pendingDialogs[g_pendingCount].expiresMs = NowMs() + kDialogQueueMs;
+    ++g_pendingCount;
+}
+
+const char* TakeDialog() {
+    DropExpiredDialogs(NowMs());
+    if (g_pendingCount == 0) return nullptr;
+    const char* name = g_pendingDialogs[0].name;
+    memmove(&g_pendingDialogs[0], &g_pendingDialogs[1], sizeof(g_pendingDialogs[0]) * (g_pendingCount - 1));
+    --g_pendingCount;
+    return name;
+}
+
+uint32_t CreateIdOf(const CWnd* w) {
+    return *reinterpret_cast<const uint32_t*>(reinterpret_cast<const char*>(w) + 0x14);   // invresize_patch.h kOff_CreateId
+}
+
+uint32_t VtableOf(const CWnd* w) { return static_cast<uint32_t>(reinterpret_cast<uintptr_t>(*reinterpret_cast<void* const*>(w))); }
+
+// The background UOL a UIWindow window was made from (CUIWnd::m_sBackgrndUOL at +0x5AC, ZXString = one pointer).
+const wchar_t* UolOf(const CWnd* w) {
+    return *reinterpret_cast<const wchar_t* const*>(reinterpret_cast<const char*>(w) + 0x5AC);
+}
+
+// UOLs are ASCII; anything else is not a name we can map, so it becomes '?' rather than widening the event.
+std::string NarrowUol(const wchar_t* w, size_t max) {
+    std::string s;
+    if (!w) return s;
+    for (size_t i = 0; i < max && w[i]; ++i) s.push_back(w[i] < 0x80 ? static_cast<char>(w[i]) : '?');
+    return s;
+}
+
+void PollWindows() {
+    bool seen[kMaxTrackedWindows] = {};
+    // Windows that appeared this frame, named after the walk so a dialog name is only handed to one of them and
+    // never to a window that was already up.
+    struct Fresh {
+        CWnd* w;
+        uint32_t createId;
+        std::string uol;
+        const char* name;
+    };
+    constexpr size_t kMaxFresh = 16;
+    Fresh fresh[kMaxFresh];
+    size_t freshCount = 0;
+
+    CWnd** pos = CWndMan::ms_lpWindow.GetHeadPosition();
+    while (pos) {
+        CWnd* w = CWndMan::ms_lpWindow.GetNext(pos);
+        if (!w) continue;
+        const uint32_t createId = CreateIdOf(w);
+        if (createId == 0) continue;                              // not created yet (Destroy zeroes the serial)
+        if (!w->IsKindOf(&CUIWnd::ms_RTTI_CUIWnd)) continue;      // HUD layers and children are not runner screens
+        g_cuiwndSeen = true;
+
+        size_t slot = kMaxTrackedWindows;
+        for (size_t i = 0; i < g_windowCount; ++i) {
+            if (g_windows[i].ptr == reinterpret_cast<uintptr_t>(w) && g_windows[i].createId == createId) {
+                slot = i;
+                break;
+            }
+        }
+        if (slot != kMaxTrackedWindows) {
+            seen[slot] = true;                                    // already reported open
+            continue;
+        }
+        if (freshCount == kMaxFresh) continue;
+
+        Fresh& f = fresh[freshCount++];
+        f.w = w;
+        f.createId = createId;
+        f.uol = NarrowUol(UolOf(w), 128);
+        f.name = WindowNameFromUol(f.uol);
+        if (!f.name) f.name = WindowNameForVtable(VtableOf(w));
+    }
+
+    // Dialogs are one class for a party invite, a proposal, an npc dialog and a notice, so the name comes from the
+    // packet that asked for the dialog. A window with no UOL of its own is the surest match, so those are served
+    // first; only then the rest.
+    if (!g_cuiwndSeen && ++g_windowScanFrames == 600) {   // ten seconds of frames with no UI window at all
+        EmitError("the window list shows no UI windows: window.open and window.closed are off (class test failed)");
+    }
+
+    for (int pass = 0; pass < 2; ++pass) {
+        const bool wantEmptyUol = pass == 0;
+        for (size_t i = 0; i < freshCount; ++i) {
+            if (fresh[i].name || fresh[i].uol.empty() != wantEmptyUol) continue;
+            fresh[i].name = TakeDialog();
+        }
+    }
+
+    for (size_t i = 0; i < freshCount; ++i) {
+        const Fresh& f = fresh[i];
+        // A window with no name and no UOL is HUD furniture the runner does not act on (the minimap, the status
+        // bar's children). It is still remembered below, so it cannot take a dialog name queued a frame later.
+        const bool report = f.name != nullptr || !f.uol.empty();
+        if (report) {
+            std::string extra = ",\"window\":\"" + JsonEscape(f.name ? f.name : "unknown") + "\"";
+            if (!f.name) {
+                char vtable[16] = {};
+                snprintf(vtable, sizeof(vtable), "0x%08X", VtableOf(f.w));
+                extra += ",\"vtable\":\"";
+                extra += vtable;
+                extra += "\",\"uol\":\"" + JsonEscape(f.uol) + "\"";
+            }
+            Emit("window.open", extra);
+        }
+        if (g_windowCount < kMaxTrackedWindows) {
+            g_windows[g_windowCount].ptr = reinterpret_cast<uintptr_t>(f.w);
+            g_windows[g_windowCount].createId = f.createId;
+            g_windows[g_windowCount].name = report ? (f.name ? f.name : "unknown") : std::string();
+            seen[g_windowCount] = true;
+            ++g_windowCount;
+        }
+    }
+
+    for (size_t i = 0; i < g_windowCount;) {
+        if (seen[i]) {
+            ++i;
+            continue;
+        }
+        if (!g_windows[i].name.empty()) Emit("window.closed", ",\"window\":\"" + JsonEscape(g_windows[i].name) + "\"");
+        g_windows[i] = g_windows[g_windowCount - 1];
+        seen[i] = seen[g_windowCount - 1];
+        --g_windowCount;
+    }
+}
 
 std::wstring PipeName(const wchar_t* suffix) {
     return L"\\\\.\\pipe\\slums-qa-" + std::to_wstring(GetCurrentProcessId()) + L"-" + suffix;
@@ -268,6 +480,7 @@ void QaModule_Start() {
     if (!g_started.compare_exchange_strong(expected, true)) return;
     QueryPerformanceFrequency(&g_qpcFreq);
     QueryPerformanceCounter(&g_qpcStart);
+    CheckHookSites();   // before the client's hooks go in: these must be the stock bytes
     std::thread(EventsThread).detach();
     std::thread(CommandsThread).detach();
     std::thread(WriterThread).detach();
@@ -275,8 +488,18 @@ void QaModule_Start() {
         GetCurrentProcessId(), kSlumsRelease);
 }
 
-void QaModule_OnPacket(uint16_t opcode) {
+void QaModule_OnPacket(uint16_t opcode, const void* packet, size_t size) {
     if (!g_started) return;
+    const auto* bytes = static_cast<const unsigned char*>(packet);
+    // A dialog the runner must expect: queued before the window shows up (qamodule_policy.h DialogForPacket).
+    QueueDialog(DialogForPacket(opcode, bytes, size));
+    if (!g_dispatchSiteOk) return;
+    // A line the client puts in its chat log: map chat, buddy/party/guild, whisper, spouse, notice, yellow tip.
+    const ChatLine chat = ParseChatPacket(opcode, bytes, size);
+    if (chat.ok) {
+        Emit("chat.received",
+            ",\"kind\":" + std::to_string(chat.kind) + ",\"text\":\"" + JsonEscape(TruncateUtf8(chat.text, kMaxChatText)) + "\"");
+    }
     const char* signal = SignalForOpcode(opcode);
     if (!signal) return;
     std::lock_guard<std::mutex> lock(g_signalMutex);
@@ -292,13 +515,20 @@ void QaModule_OnFrame(IDirect3DDevice9* dev) {
         std::lock_guard<std::mutex> lock(g_signalMutex);
         for (size_t i = 0; i < g_armed.size();) {
             if (--g_armed[i].second <= 0) {
-                Emit(g_armed[i].first);
+                const char* name = g_armed[i].first;
+                int mapId = 0;
+                std::string extra;
+                if (std::strcmp(name, "field.ready") == 0 && CurMapId(mapId)) {
+                    extra = ",\"map_id\":" + std::to_string(mapId);
+                }
+                Emit(name, extra);
                 g_armed.erase(g_armed.begin() + static_cast<std::ptrdiff_t>(i));
             } else {
                 ++i;
             }
         }
     }
+    PollWindows();
     if (!g_active.on) {
         std::lock_guard<std::mutex> lock(g_burstMutex);
         if (g_burstQueue.empty()) return;

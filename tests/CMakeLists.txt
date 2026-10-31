@@ -75,6 +75,15 @@ add_executable(customwz_policy_test customwz_policy_test.cpp)
 add_test(NAME customwz_image_prefix COMMAND customwz_policy_test)
 add_executable(qamodule_policy_test qamodule_policy_test.cpp)
 add_test(NAME qamodule_runner_channel COMMAND qamodule_policy_test)
+
+add_executable(qamodule_patch_test qamodule_patch_test.cpp)
+set(QAMODULE_TEST_EXE "Z:/MSv83/SlumsMS-dev/client-1.5.0-fixes2/exe-copy/MapleStory.exe" CACHE FILEPATH
+    "MapleStory.exe whose bytes the QA-module sites are checked against (optional)")
+if(QAMODULE_TEST_EXE AND EXISTS "${QAMODULE_TEST_EXE}")
+    add_test(NAME qamodule_sites COMMAND qamodule_patch_test "${QAMODULE_TEST_EXE}")
+else()
+    add_test(NAME qamodule_sites COMMAND qamodule_patch_test)
+endif()
 add_executable(overlay_policy_test overlay_policy_test.cpp)
 add_test(NAME overlay_hud_layout COMMAND overlay_policy_test)
 

@@ -97,7 +97,8 @@ void __fastcall ProcessPacketHook(void* socket, void*, CInPacket* packet) {
 #endif
     }
     ProcessPacket(socket, packet);
-    QaModule_OnPacket(opcode);   // QA builds only (ticket 166): a handled packet may make a screen ready
+    // QA builds only (ticket 166): a handled packet may make a screen ready, add a chat line, or ask for a dialog.
+    if (packet) QaModule_OnPacket(opcode, packet->BufferPublic(), packet->LengthPublic());
 }
 }
 void ShutdownCustomPackets() {
