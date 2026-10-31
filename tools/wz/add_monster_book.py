@@ -25,9 +25,11 @@ Inputs:
                                         server has no spawn for, cover every client card, and report the diff.
 
 The rewards are the server's drop_data, best chance first. Mobs the server does not know keep their stock entry.
-Found In: the server's spawn maps; for a mob the server places nowhere (an event or script spawn), FOUND_IN below,
-else the stock maps. The client's String/MonsterBook.img (the repack's, sha256 f808835b...) lists 450005000 (Arcana,
-Grove of the Spirit Tree) as a placeholder for many such bosses, which is how Papulatus showed Arcana (b086).
+Found In: the server's spawn maps; for a mob the server places nowhere on a map (an event or script spawn, or a
+stock-only page), FOUND_IN below, else the stock maps. The client's String/MonsterBook.img (the repack's, sha256
+f808835b...) lists 450005000 (Arcana, Grove of the Spirit Tree) as a placeholder for many such mobs, which is how
+Papulatus showed Arcana (b086). FOUND_IN replaces every one of them: the map the server's event or NPC script spawns
+the mob in, or no map at all when nothing on the server spawns it. A stock-fallback 450005000 left over is reported.
 
 --check builds the same book as a real run, so give it the same --stock-book/--stock-cards: without them it builds
 the book from the server data alone (no stock Form lines, maps or stock-only mobs) and always reports stale.
@@ -59,8 +61,34 @@ LEVEL_RE = re.compile(r'^\s*Lv\.?\s*:\s*(\d+)\s*$', re.I)
 # Found In for mobs the server spawns from an event or script (no spawn map in its WZ data), in place of the stock
 # placeholder. Each map id must be a field in the client's Data/Map.
 FOUND_IN = {
-    8500002: [220080001],   # Papulatus: Ludibrium Clocktower, Origin of Clocktower (stock: 450005000, b086)
+    # mob: maps -- source (SlumsMS server repo, release-1.6.2; every map id is in the client's Data/Map)
+    8500002: [220080001],   # Papulatus: Origin of Clocktower (stock v83; event spawn, b086)
+    8800002: [280030000],   # Zakum3: scripts/event/ZakumBattle.js entryMap (the altar)
+    8810018: [240060200],   # Horntail: scripts/event/HorntailBattle.js (dispatchRaiseQuestMobCount(8810018, 240060200))
+    8820001: [270050100],   # Pink Bean: scripts/event/PinkBeanBattle.js (spawned in 270050100)
+    8850012: [271040100],   # Cygnus: scripts/event/CygnusBattle.js entryMap; MapleMap.afterBossKilled after the last guard
+    8847777: [211070100],   # Von Leon (after 8840000): scripts/event/VonLeonBattle.js entryMap; MapleMap.afterBossKilled
+    8880150: [450004750],   # Lucid: scripts/event/LucidBattle.js entryMap
+    8880302: [450007440],   # Will: scripts/event/WillBattle.js entryMap
+    8880415: [450010100],   # Weakened Verus Hilla: scripts/event/VerusBattle.js entryMap (NPC 3003554 spawns her there)
+    8645009: [450012210],   # Guard Captain Darknell: scripts/event/DarknellBattle.js entryMap (NPC 3003921)
+    9990150: [450004751],   # scripts/event/NLucidBattle.js entryMap
+    9990301: [450007441],   # scripts/event/NWillBattle.js entryMap
+    9990415: [450010101],   # scripts/event/NVerusBattle.js entryMap
+    9995009: [450012211],   # scripts/event/NDarknellBattle.js entryMap
+    9400408: [800040410],   # Castellan: scripts/event/CastellanBattle.js (spawned in 800040410)
+    9400409: [800040410],   # Castellan Toad: scripts/event/CastellanBattle.js (its boss, same single-map instance)
+    9420522: [541020800],   # Krexel: scripts/event/KrexelBattle.js entryMap
+    9420544: [551030200],   # Furious Targa: scripts/event/ScargaBattle.js entryMap
+    9420549: [551030200],   # Furious Scarlion Boss: scripts/event/ScargaBattle.js entryMap
+    # Nothing on the server spawns these (no map life, no script): no Found In rather than the placeholder.
+    8641008: [], 8641009: [],                       # Lantern Erda, Arma's Follower
+    8642107: [], 8644413: [], 8644510: [], 8644622: [], 8644623: [], 8644624: [], 8644625: [], 8644626: [],
+    8644627: [], 8644713: [], 8645040: [],          # stock-only Arcane pages
+    8880000: [],                                    # MagnusBattle.js spawns 8880002, never 8880000
+    9400400: [], 9400401: [], 9400402: [], 9400403: [], 9400404: [], 9400405: [], 9400406: [],
 }
+PLACEHOLDER_MAP = 450005000
 
 
 def stock_entries(path):
@@ -120,7 +148,7 @@ def build_book(book, stock, cards):
     server = book['mobs']
     ids = sorted({int(m) for m in cards.values()} | set(stock) | {int(m) for m in book['cards'].values()})
     report = {'entries': 0, 'from_server': 0, 'stock_only': 0, 'reward_changed': 0, 'maps_from_stock': 0,
-              'maps_pinned': 0}
+              'maps_pinned': 0, 'placeholder_left': []}
     root = Node(BOOK_IMG, 'property')
     for mob in ids:
         s, old = server.get(str(mob)), stock.get(mob)
@@ -128,11 +156,13 @@ def build_book(book, stock, cards):
             continue
         if s is None:
             # the server has no Mob.wz entry for it, so it can never spawn: keep the stock page
-            maps, reward, episode = old['map'], old['reward'], old['episode']
+            maps, reward, episode = FOUND_IN.get(mob, old['map']), old['reward'], old['episode']
             report['stock_only'] += 1
+            if mob in FOUND_IN:
+                report['maps_pinned'] += 1
         else:
             level, form = stock_header(old['episode']) if old else (None, None)
-            maps = s['map'] or FOUND_IN.get(mob) or (old['map'] if old else [])
+            maps = s['map'] or (FOUND_IN[mob] if mob in FOUND_IN else (old['map'] if old else []))
             if not s['map'] and mob in FOUND_IN:
                 report['maps_pinned'] += 1
             elif not s['map'] and old and old['map']:
@@ -142,6 +172,8 @@ def build_book(book, stock, cards):
             report['from_server'] += 1
             if old is not None and old['reward'] != reward:
                 report['reward_changed'] += 1
+        if PLACEHOLDER_MAP in maps and not (s and PLACEHOLDER_MAP in s['map']):
+            report['placeholder_left'].append(mob)
         entry = Node(str(mob), 'property', children=[
             Node('map', 'property', children=[Node(str(i), 'int', v) for i, v in enumerate(maps)]),
             Node('reward', 'property', children=[Node(str(i), 'int', v) for i, v in enumerate(reward)]),
@@ -187,6 +219,9 @@ def main():
     if missing:
         sys.exit(f'{len(missing)} card mobs would have no book entry (the book would print "HP : (null)"): '
                  f'{missing[:20]}')
+    if report['placeholder_left']:
+        print(f'WARNING: stock placeholder {PLACEHOLDER_MAP} still the Found In of {report["placeholder_left"]}; '
+              f'add them to FOUND_IN')
     art = search_art()
 
     with Archive(CUSTOM, 83, 'gms') as wz:
