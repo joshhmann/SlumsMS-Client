@@ -421,6 +421,9 @@ def main(argv=None):
     parser.add_argument('--life-index', help='client Data listing, one Npc/<id>|Mob/<id>|Reactor/<id>'
                                              ' file name per line, to check life entries')
     parser.add_argument('--list', help='write the crash list here (mapid reason, sorted)')
+    parser.add_argument('--manual', help='rows the data cannot show, one "mapid reason" per line'
+                                         ' (a map the owner\'s client closed on, for instance);'
+                                         ' they are listed and counted apart from the findings')
     parser.add_argument('--verbose', action='store_true')
     parser.add_argument('maps', nargs='*', type=int, help='map ids to check')
     args = parser.parse_args(argv)
@@ -437,6 +440,15 @@ def main(argv=None):
                 if name.isdigit():
                     life_index.setdefault(kind, set()).add(int(name))
     client = Client(args.data, args.verbose, life_index)
+    manual = []
+    if args.manual:
+        with open(args.manual, encoding='utf-8') as handle:
+            for line in handle:
+                line = line.split('#', 1)[0].strip()
+                if not line:
+                    continue
+                map_id, _, reason = line.partition(' ')
+                manual.append((int(map_id), reason.strip() or 'manual'))
     ids = list(args.maps)
     if args.server_maps:
         ids = sorted(set(ids) | set(server_map_ids(args.server_maps)))
@@ -465,12 +477,17 @@ def main(argv=None):
 
     if args.list:
         with open(args.list, 'w', encoding='utf-8') as handle:
-            handle.write(f'# {len(ids)} maps scanned, {len(listed)} listed, {len(found)} findings\n')
+            handle.write(f'# {len(ids)} maps scanned, {len(listed)} listed, {len(found)} findings'
+                         + (f', {len(manual)} manual rows' if manual else '') + '\n')
             handle.write('# listed = a whole set image the client lacks (fatal) or the b103 linked-canvas\n')
             handle.write('# shape rc12 fixes (marked fixed-in-rc12). Everything counted below as a note is a\n')
             handle.write('# name or an index the client tables do not have, which it draws around.\n')
             for (cls, section), n in sorted(counts.items()):
                 handle.write(f'#   {n:6d} {cls:6s} {section}\n')
+            if manual:
+                handle.write('# manual rows: known map problems the data checks cannot see\n')
+                for map_id, reason in manual:
+                    handle.write(f'{map_id} {reason}\n')
             for map_id in sorted(listed):
                 reason, more = listed[map_id]
                 handle.write(f'{map_id} {reason}' + (f' (+{more} more)' if more else '') + '\n')
