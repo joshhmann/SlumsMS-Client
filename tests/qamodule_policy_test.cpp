@@ -16,6 +16,7 @@ int main() {
     using namespace QaPolicy;
     try {
         Check(std::strcmp(SignalForOpcode(0x1B), "worldselect.ready") == 0, "world select after the recommended-world packet");
+        Check(std::strcmp(SignalForOpcode(0x03), "channels.ready") == 0, "the channel panel after the world click");
         Check(std::strcmp(SignalForOpcode(0x0B), "charselect.ready") == 0, "character select after the character list");
         Check(std::strcmp(SignalForOpcode(0x7D), "field.ready") == 0, "map ready after SET_FIELD");
         Check(SignalForOpcode(0x0A) == nullptr, "the world list itself is not ready yet (more packets follow)");

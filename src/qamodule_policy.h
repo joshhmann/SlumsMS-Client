@@ -9,7 +9,8 @@
 //   \\.\pipe\slums-qa-<pid>-commands  runner -> client, one command per line
 // Ready signals replace the runner's fixed timings (the world-select "empty channel list" on 2026-10-30 was a click
 // landing before the list was processed): a signal fires once the client has HANDLED the server packet that makes the
-// screen ready and drawn kSettleFrames more frames after it.
+// screen ready and drawn kSettleFrames more frames after it. channels.ready answers the world click: no
+// channels.ready after a click on a world means the click was lost (click again), not that the server is slow.
 // Commands:
 //   ping                         -> {"ev":"pong"}
 //   burst <fps> <ms> <label>     -> back-buffer captures at <fps> for <ms>, to qa-captures\<label>\NNNN.bmp beside
@@ -24,6 +25,7 @@ namespace QaPolicy {
 
 // Server -> client opcodes (v83, the server's SendOpcode) after which a screen is ready.
 constexpr uint16_t kOpRecommendedWorldMessage = 0x1B;   // last packet of the world list (list, end, last world, this)
+constexpr uint16_t kOpServerStatus = 0x03;              // the reply to clicking a world: its channel panel can draw
 constexpr uint16_t kOpCharacterList = 0x0B;             // the character list for the chosen channel
 constexpr uint16_t kOpSetField = 0x7D;                  // entering a map (login, warp, channel change)
 
@@ -33,6 +35,7 @@ constexpr int kSettleFrames = 2;   // frames drawn after the packet before the s
 inline const char* SignalForOpcode(uint16_t opcode) {
     switch (opcode) {
     case kOpRecommendedWorldMessage: return "worldselect.ready";
+    case kOpServerStatus: return "channels.ready";
     case kOpCharacterList: return "charselect.ready";
     case kOpSetField: return "field.ready";
     default: return nullptr;
