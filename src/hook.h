@@ -178,6 +178,13 @@ inline void AttachClientHooks() {
 #endif
         },
         [] {
+#ifdef SLUMS_QA_MODULE
+            // QA build only (b250 bisect): [debug] chair=0 leaves the chair/riding/bodyRelMove hooks out.
+            if (GetPrivateProfileIntA("debug", "chair", 1, ".\\" CONSTANTS_CONFIG_NAME) == 0) {
+                DebugMessage("Skipping: AttachAvatarChairMod(); ([debug] chair=0, QA build)");
+                return;
+            }
+#endif
             DebugMessage("Installing: AttachAvatarChairMod();");
             AttachAvatarChairMod();
         },
@@ -221,9 +228,17 @@ inline void AttachClientHooks() {
     VerifyKaentakeHooks("Monster Book");
 #endif
 #ifdef MAPLEROOT_COLOR_PRISM
-    AttachWeaponTintMod();
-    AttachColoringPrismMod();
-    AttachColoringPrismHostHooks();
+    // QA build only (b250 bisect): [debug] prism=0 leaves the weapon tint and Coloring Prism hooks out.
+    #ifdef SLUMS_QA_MODULE
+    if (GetPrivateProfileIntA("debug", "prism", 1, ".\\" CONSTANTS_CONFIG_NAME) == 0) {
+        DebugMessage("Skipping: Coloring Prism + weapon tint ([debug] prism=0, QA build)");
+    } else
+#endif
+    {
+        AttachWeaponTintMod();
+        AttachColoringPrismMod();
+        AttachColoringPrismHostHooks();
+    }
 #ifdef MAPLEROOT_INTEGRATION
     VerifyKaentakeHooks("Coloring Prism");
 #endif
@@ -258,8 +273,16 @@ inline void AttachClientHooks() {
     AttachHudMetersMod();
 #endif
 #ifdef MAPLEROOT_DISPLAY_TOGGLES
-    DebugMessage("Installing: AttachDisplayMod();");
-    AttachDisplayMod();
+    // QA build only (b250 bisect): [debug] display=0 leaves the display toggles out.
+    #ifdef SLUMS_QA_MODULE
+    if (GetPrivateProfileIntA("debug", "display", 1, ".\\" CONSTANTS_CONFIG_NAME) == 0) {
+        DebugMessage("Skipping: AttachDisplayMod(); ([debug] display=0, QA build)");
+    } else
+#endif
+    {
+        DebugMessage("Installing: AttachDisplayMod();");
+        AttachDisplayMod();
+    }
 #endif
     DebugMessage("Installing: AttachMidAirMod();");
     AttachMidAirMod();
