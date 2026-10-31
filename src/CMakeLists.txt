@@ -4,6 +4,7 @@ add_library(injector SHARED
     system.cpp
     bypass.cpp
     inlink.cpp
+    inlink_guard.cpp
     resman.cpp
     avatar.cpp
     itemeff.cpp

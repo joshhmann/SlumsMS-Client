@@ -108,6 +108,13 @@ if(MAPLEROOT_WEATHER AND EXISTS "${MOVEMENTKEYS_TEST_CLIENT}/Data/Map/Obj/connec
     add_test(NAME weather_rope_sway_no_box COMMAND weather_rope_clear_test "${MOVEMENTKEYS_TEST_CLIENT}")
 endif()
 
+if(EXISTS "${MOVEMENTKEYS_TEST_CLIENT}/Data/Map/Tile/allInvisibleTile.img")
+    add_executable(inlink_guard_test inlink_guard_test.cpp ../src/inlink_guard.cpp ../src/debug.cpp)
+    target_link_libraries(inlink_guard_test PRIVATE WzLib)
+    target_include_directories(inlink_guard_test PRIVATE ../src)
+    add_test(NAME inlink_broken_link_no_crash COMMAND inlink_guard_test "${MOVEMENTKEYS_TEST_CLIENT}")
+endif()
+
 if(MAPLEROOT_MOUNT_INFO)
     add_executable(mountinfo_layout_test mountinfo_layout_test.cpp)
     add_test(NAME mount_preview_layout COMMAND mountinfo_layout_test)
