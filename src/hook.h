@@ -2,6 +2,7 @@
 #include "debug.h"
 #include "mapleroot.h"
 #include "avatar_features.h"
+#include "constants.h"
 #include <type_traits>
 
 #ifdef _DEBUG
@@ -181,6 +182,13 @@ inline void AttachClientHooks() {
             AttachAvatarChairMod();
         },
         [] {
+#ifdef SLUMS_QA_MODULE
+            // QA build only (b250 bisect): [debug] itemeff=0 in config.ini leaves the item-effect hooks out.
+            if (GetPrivateProfileIntA("debug", "itemeff", 1, ".\\" CONSTANTS_CONFIG_NAME) == 0) {
+                DebugMessage("Skipping: AttachItemEffectMod(); ([debug] itemeff=0, QA build)");
+                return;
+            }
+#endif
             DebugMessage("Installing: AttachItemEffectMod();");
             AttachItemEffectMod();
 #ifdef MAPLEROOT_INTEGRATION
