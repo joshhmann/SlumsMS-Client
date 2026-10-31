@@ -265,18 +265,16 @@ inline bool StartsWith(const std::string& s, const char* prefix) {
     return s.size() >= n && s.compare(0, n, prefix) == 0;
 }
 
-// The runner's name for a window created from this UOL, or nullptr. Full UOLs are compared lowercased by prefix
-// first (the two screens), then by the leaf after the last '/'.
+// The runner's name for a window created from this UOL, or nullptr. The two screens that live outside
+// UIWindow.img are matched by prefix; everything else by the folders in the path, deepest match first, because the
+// string CUIWnd keeps is the window's *background* canvas (UI/UIWindow.img/Item/backgrnd) rather than the window.
 inline const char* WindowNameFromUol(const std::string& uol) {
     if (uol.empty()) return nullptr;
     const std::string low = LowerAscii(uol);
     if (StartsWith(low, "ui/cashshop.img")) return "cash_shop";
     if (StartsWith(low, "ui/login.img/newchar")) return "character_create";
-    const size_t slash = low.find_last_of('/');
-    std::string leaf = slash == std::string::npos ? low : low.substr(slash + 1);
-    if (leaf.size() > 4 && leaf.compare(leaf.size() - 4, 4, ".img") == 0) leaf.erase(leaf.size() - 4);
     struct Entry {
-        const char* leaf;
+        const char* part;
         const char* name;
     };
     static const Entry kTable[] = {
@@ -296,13 +294,21 @@ inline const char* WindowNameFromUol(const std::string& uol) {
         {"trunk", "storage"},
         {"inventory", "item"},
     };
-    for (const Entry& e : kTable) {
-        if (leaf == e.leaf) return e.name;
+    const char* name = nullptr;
+    size_t start = 0;
+    while (start < low.size()) {
+        size_t slash = low.find('/', start);
+        if (slash == std::string::npos) slash = low.size();
+        std::string part = low.substr(start, slash - start);
+        if (part.size() > 4 && part.compare(part.size() - 4, 4, ".img") == 0) part.erase(part.size() - 4);
+        for (const Entry& e : kTable) {
+            if (part == e.part) name = e.name;   // keep walking: the deepest match wins
+        }
+        start = slash + 1;
     }
-    return nullptr;
+    return name;
 }
 
-// The dialog a packet opens, or nullptr.
 inline const char* DialogForPacket(uint16_t opcode, const unsigned char* data, size_t size) {
     if (!data || size < 3) return nullptr;
     switch (opcode) {
