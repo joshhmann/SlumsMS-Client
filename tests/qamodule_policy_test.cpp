@@ -161,6 +161,10 @@ int main() {
         Check(WindowNameFromUol("UI/UIWindow.img/KeyConfig") == nullptr, "an unnamed window stays unnamed");
         Check(WindowNameFromUol("") == nullptr, "an empty UOL names nothing");
         Check(std::string(WindowNameFromUol("ui/uiwindow.img/item")) == "item", "UOL matching ignores case");
+        Check(std::string(WindowNameFromUol("UI/UIWindow.img/Item/backgrnd")) == "item", "the kept UOL is the background canvas");
+        Check(std::string(WindowNameFromUol("UI/UIWindow.img/Equip/backgrnd")) == "equip", "equip background canvas");
+        Check(WindowNameFromUol("UI/UIWindow.img/UtilDlgEx/it") == nullptr, "a dialog is not named from its UOL");
+        Check(WindowNameFromUol("UI/UIWindow.img/KeyConfig/backgrnd") == nullptr, "settings stay unnamed");
 
         Check(std::string(DialogForPacket(kOpPartyOperation, std::vector<unsigned char>{0x3E, 0x00, 4}.data(), 3)) == "party_invite",
             "party invite dialog");
