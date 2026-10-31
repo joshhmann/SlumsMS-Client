@@ -120,6 +120,12 @@ The game Data tree is intentionally external. The accepted checkpoint separately
 
 Do not overwrite files while the game is open or write assets through a junction into a different client. Launch with the matching host and port. A client-only source build is not a server deployment.
 
+## QA build (`SLUMS_QA_MODULE`)
+
+A build configured with `-DSLUMS_QA_MODULE=ON` (which needs `MAPLEROOT_INTEGRATION`) is for the automated QA client and is never shipped to a player. It opens two one-way pipes, `\\.\pipe\slums-qa-<pid>-events` and `-commands`, reports screen readiness as JSON lines (`worldselect.ready`, `channels.ready`, `charselect.ready`, `field.ready`, plus `window.*`, `chat.received`, `burst.*`), and writes burst frames to `qa-captures\` beside the game folder. It installs no patch of its own: it rides the existing `CClientSocket::ProcessPacket` detour and checks the stock bytes at both addresses it stands on before reporting anything.
+
+Since b249 it also keeps the login phase's packets, because a login can end on a world list with a black, empty channel panel and no server-side trace. Each login packet (`SERVERLIST`, its end marker, `SERVERSTATUS`, `LAST_CONNECTED_WORLD`, `RECOMMENDED_WORLD_MESSAGE`, `CHARLIST`, `SERVER_IP`, the channel and status steps) becomes a `packet.login` event carrying `step`, `op`, `size`, the first 512 bytes as `hex` and, where the layout is fixed by the server's `PacketCreator`, a one-line `summary` (`world 1 Bera channels 5`, `end of list`, `status 0`). The same line is appended to `qa-captures\login-packets.log`, prefixed with a UTC stamp, so the evidence survives a client that is killed or crashes mid-login. The capture is read-only and stops after 256 packets per process.
+
 ## Preserved and added
 
 MapleRoot gameplay remains in the companion code (`mapleroot/ijl15`, linked into `slums.dll`; it no longer ships as a separate `ijl15.dll` proxy): custom skills, long EXP, expanded equipment/quickslots and existing packet contracts. Kaentake owns startup/resolution and the Custom namespace. Additions include field SHOP, visual weather/time/lamps, direction bindings and multipart character-info mount fitting/name clipping. Optional weather gameplay modifiers and the separate 64-bit damage guide remain excluded.

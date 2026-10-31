@@ -182,6 +182,87 @@ int main() {
         Check(std::string(WindowNameForVtable(0x00B39FE0)) == "monster_book", "monster book by vtable");
         Check(WindowNameForVtable(0x00B39114) == nullptr, "an unknown vtable names nothing");
 
+        // ---- login packets (b249): the bytes of a login, and a reading of the ones whose layout is fixed ----
+        Check(std::strcmp(LoginStepForOpcode(kOpServerList), "serverlist") == 0, "the world list is a login step");
+        Check(std::strcmp(LoginStepForOpcode(kOpServerStatus), "serverstatus") == 0, "the click's reply is a login step");
+        Check(std::strcmp(LoginStepForOpcode(kOpLastConnectedWorld), "last_world") == 0, "the preselected world is a login step");
+        Check(std::strcmp(LoginStepForOpcode(kOpRecommendedWorldMessage), "recommended") == 0, "the recommended worlds are a login step");
+        Check(std::strcmp(LoginStepForOpcode(kOpCharacterList), "charlist") == 0, "the character list is a login step");
+        Check(LoginStepForOpcode(0x7D) == nullptr, "SET_FIELD is not a login phase packet");
+        Check(LoginStepForOpcode(0x44) == nullptr, "a notice is not a login phase packet");
+        Check(LoginStepForOpcode(0x11) == nullptr, "a keep-alive ping is not worth a line");
+
+        {
+            const unsigned char b[3] = {0x00, 0x0A, 0xFF};
+            Check(HexBytes(b, 3, kMaxLoginHex) == "00 0a ff", "hex is lowercase and spaced");
+            Check(HexBytes(b, 0, kMaxLoginHex).empty(), "no bytes, no hex");
+            Check(HexBytes(nullptr, 3, kMaxLoginHex).empty(), "no buffer, no hex");
+        }
+        Check(HexBytes(std::vector<unsigned char>(600, 0xAB).data(), 600, kMaxLoginHex).size() == kMaxLoginHex * 3 - 1,
+            "hex stops at 512 bytes (512 bytes and 511 spaces)");
+
+        Check(LogStamp(UtcTime{2026, 10, 31, 9, 42, 11, 7}) == "2026-10-31T09:42:11.007Z", "log stamp is UTC, millisecond padded");
+        Check(LogStamp(UtcTime{2026, 1, 2, 3, 4, 5, 0}) == "2026-01-02T03:04:05.000Z", "log stamp pads every field");
+
+        {
+            // The world packet the server writes for Bera (PacketCreator.getServerList): opcode, world id, name,
+            // flag, event message, five rate bytes, channel count, then the channels.
+            Packet p(kOpServerList);
+            p.U8(1).Str("Bera").U8(0).Str("").U8(100).U8(0).U8(100).U8(0).U8(0).U8(5);
+            Check(LoginPacketSummary(kOpServerList, p.b.data(), p.b.size()) == "world 1 Bera channels 5",
+                "a world packet reads as its id, name and channel count");
+            Packet full(kOpServerList);
+            full.b = p.b;
+            full.Str("Bera-1").U32(125).U8(1).U8(0).U8(0);
+            Check(LoginPacketSummary(kOpServerList, full.b.data(), full.b.size()) == "world 1 Bera channels 5",
+                "the channel records after the count do not change the reading");
+        }
+        {
+            Packet p(kOpServerList);
+            p.U8(0xFF);
+            Check(LoginPacketSummary(kOpServerList, p.b.data(), p.b.size()) == "end of list", "the end marker is named");
+        }
+        {
+            Packet p(kOpServerStatus);
+            p.U16(0);
+            Check(LoginPacketSummary(kOpServerStatus, p.b.data(), p.b.size()) == "status 0", "the click's reply reads as its status");
+            Packet q(kOpServerStatus);
+            q.U16(2);
+            Check(LoginPacketSummary(kOpServerStatus, q.b.data(), q.b.size()) == "status 2", "a full world reads as status 2");
+        }
+        {
+            Packet p(kOpLastConnectedWorld);
+            p.U32(1);
+            Check(LoginPacketSummary(kOpLastConnectedWorld, p.b.data(), p.b.size()) == "world 1", "the preselected world reads as its id");
+            Packet q(kOpRecommendedWorldMessage);
+            q.U8(0);
+            Check(LoginPacketSummary(kOpRecommendedWorldMessage, q.b.data(), q.b.size()) == "recommended 0", "an empty recommended list says so");
+        }
+        {
+            Packet p(kOpCharacterList);   // no fixed layout here: no reading rather than a wrong one
+            p.U8(0).U32(1);
+            Check(LoginPacketSummary(kOpCharacterList, p.b.data(), p.b.size()).empty(), "a packet with no layout gets no reading");
+            Packet cut(kOpServerList);    // a cut-off world packet is refused
+            cut.U8(1).U16(50).b.insert(cut.b.end(), {'a', 'b'});
+            Check(LoginPacketSummary(kOpServerList, cut.b.data(), cut.b.size()).empty(), "a cut-off world packet gets no reading");
+        }
+        {
+            Packet p(kOpServerStatus);
+            p.U16(0);
+            Check(LoginExtra(kOpServerStatus, p.b.data(), p.b.size()) ==
+                ",\"step\":\"serverstatus\",\"op\":\"0x03\",\"size\":4,\"hex\":\"03 00 00 00\",\"summary\":\"status 0\"",
+                "the event extra carries step, opcode, size, hex and reading");
+            Packet big(kOpServerList);
+            big.b.insert(big.b.end(), 600, 0xAB);
+            const std::string extra = LoginExtra(kOpServerList, big.b.data(), big.b.size());
+            Check(extra.find("\"size\":602") != std::string::npos, "size is the whole packet, not the hex");
+            Check(extra.find(std::string(kMaxLoginHex * 3 - 1, ' ')) == std::string::npos, "hex stays one byte per pair");
+            Check(LoginExtra(0x7D, p.b.data(), p.b.size()).empty(), "a packet outside the login phase adds nothing");
+        }
+        Check(LoginLogLine("2026-10-31T09:42:11.007Z", "packet.login", 1234, ",\"step\":\"serverstatus\"") ==
+            "2026-10-31T09:42:11.007Z {\"ev\":\"packet.login\",\"t\":1234,\"step\":\"serverstatus\"}\n",
+            "a log line starts with the UTC stamp and carries the event");
+
         std::cout << "qa module policy ok\n";
     } catch (const std::exception& e) {
         std::cerr << "FAIL: " << e.what() << "\n";

@@ -65,6 +65,49 @@ void Emit(const char* name, const std::string& extra = std::string()) {
 
 void EmitError(const std::string& msg) { Emit("error", ",\"msg\":\"" + JsonEscape(msg) + "\""); }
 
+// ---- login packets (b249) ---------------------------------------------------------------------------------------
+// The login phase's packets are kept twice over: as packet.login events for the runner, and appended to
+// qa-captures\login-packets.log, which survives a client that is killed or crashes with the channel panel still black
+// (qamodule_policy.h has the layouts and the reading). Read-only on the packet. One login phase is about eight
+// packets, so the file is opened per line: the line is on disk before the next packet arrives, and a client that dies
+// mid-login leaves nothing buffered.
+std::mutex g_loginLogMutex;
+size_t g_loginPacketsLogged = 0;
+bool g_loginCapTold = false;
+
+void AppendLoginLog(const std::string& line) {
+    static bool dirMade = false;
+    if (!dirMade) {
+        CreateDirectoryW((GameDir() + L"\\qa-captures").c_str(), nullptr);
+        dirMade = true;
+    }
+    const std::wstring path = GameDir() + L"\\qa-captures\\login-packets.log";
+    FILE* out = nullptr;
+    if (_wfopen_s(&out, path.c_str(), L"ab") != 0 || !out) return;
+    fwrite(line.data(), 1, line.size(), out);
+    fclose(out);
+}
+
+void CaptureLoginPacket(uint16_t opcode, const unsigned char* bytes, size_t size) {
+    if (!LoginStepForOpcode(opcode)) return;
+    std::lock_guard<std::mutex> lock(g_loginLogMutex);
+    if (g_loginPacketsLogged >= kMaxLoginPackets) {
+        if (!g_loginCapTold) {
+            g_loginCapTold = true;
+            EmitError("login packet capture stopped at " + std::to_string(kMaxLoginPackets) + " packets");
+        }
+        return;
+    }
+    ++g_loginPacketsLogged;
+    const std::string extra = LoginExtra(opcode, bytes, size);
+    Emit("packet.login", extra);
+    SYSTEMTIME utc = {};
+    GetSystemTime(&utc);
+    const UtcTime t{utc.wYear, utc.wMonth, utc.wDay, utc.wHour, utc.wMinute, utc.wSecond, utc.wMilliseconds};
+    AppendLoginLog(LoginLogLine(LogStamp(t), "packet.login", NowMs(), extra));
+}
+
+
 // ---- stock-byte guards (ticket 170) -----------------------------------------------------------------------------
 // The QA module installs no patches; it rides the existing packet detour and reads the client's own window list.
 // Both addresses it stands on are compared with qamodule_patch.h before anything uses them. This runs before the
@@ -495,6 +538,8 @@ void QaModule_OnPacket(uint16_t opcode, const void* packet, size_t size) {
     // A dialog the runner must expect: queued before the window shows up (qamodule_policy.h DialogForPacket).
     QueueDialog(DialogForPacket(opcode, bytes, size));
     if (!g_dispatchSiteOk) return;
+    // The login phase's own bytes, for a world select that leaves the channel panel black (ticket b249).
+    CaptureLoginPacket(opcode, bytes, size);
     // A line the client puts in its chat log: map chat, buddy/party/guild, whisper, spouse, notice, yellow tip.
     const ChatLine chat = ParseChatPacket(opcode, bytes, size);
     if (chat.ok) {

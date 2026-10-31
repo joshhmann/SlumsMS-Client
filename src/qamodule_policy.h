@@ -236,6 +236,122 @@ inline ChatLine ParseChatPacket(uint16_t opcode, const unsigned char* data, size
     return line;
 }
 
+// ---- login packets (b249) ---------------------------------------------------------------------------------------
+// The world select sometimes draws its world list ("Bera" on the barrel) and leaves the channel panel under it a black
+// empty box, so no channel can be picked; 1 login in 1-4 on 2026-10-31, and the server log showed no fault. The channel
+// list is not a reply to the click: it travels inside the world-list packet (SERVERLIST), while the click's reply
+// (SERVERSTATUS) carries only a two-byte status. So a black panel means either the click produced no request, or the
+// client drew from world/channel state that was empty or wrong. To tell those apart next time the QA module keeps the
+// login phase's own bytes: a packet.login event per packet (opcode, size, first kMaxLoginHex bytes as hex) with the
+// step name, and the same line appended to qa-captures\login-packets.log under a UTC stamp. The packets whose layout
+// the server's PacketCreator fixes also get a one-line reading, so a log reads without decoding hex.
+constexpr uint16_t kOpServerList = 0x0A;             // the world list; the same opcode with a 0xFF end marker ends it
+constexpr uint16_t kOpLastConnectedWorld = 0x1A;     // the world the client preselects
+constexpr size_t kMaxLoginHex = 512;                 // bytes of a login packet an event carries
+constexpr size_t kMaxLoginPackets = 256;             // packets kept per client process (one login phase is about eight)
+
+// The login phase's opcodes and the step each is logged under; nullptr for everything else.
+inline const char* LoginStepForOpcode(uint16_t opcode) {
+    switch (opcode) {
+    case 0x00: return "login_status";
+    case 0x02: return "account_info";
+    case kOpServerStatus: return "serverstatus";
+    case 0x08: return "view_all_char";
+    case kOpServerList: return "serverlist";
+    case kOpCharacterList: return "charlist";
+    case 0x0C: return "server_ip";
+    case 0x10: return "change_channel";
+    case 0x14: return "channel_selected";
+    case 0x16: return "relog_response";
+    case kOpLastConnectedWorld: return "last_world";
+    case kOpRecommendedWorldMessage: return "recommended";
+    default: return nullptr;
+    }
+}
+
+// Lowercase hex, one byte at a time, space separated, at most max bytes ("00 0a ff").
+inline std::string HexBytes(const unsigned char* data, size_t size, size_t max) {
+    std::string out;
+    if (!data) return out;
+    static const char kDigits[] = "0123456789abcdef";
+    const size_t n = size < max ? size : max;
+    out.reserve(n * 3);
+    for (size_t i = 0; i < n; ++i) {
+        if (i) out += ' ';
+        out += kDigits[data[i] >> 4];
+        out += kDigits[data[i] & 0x0F];
+    }
+    return out;
+}
+
+struct UtcTime { int year, month, day, hour, minute, second, millis; };
+
+// "2026-10-31T09:42:11.007Z": the stamp a login-packets.log line starts with.
+inline std::string LogStamp(const UtcTime& t) {
+    char buf[40];
+    std::snprintf(buf, sizeof buf, "%04d-%02d-%02dT%02d:%02d:%02d.%03dZ",
+        t.year, t.month, t.day, t.hour, t.minute, t.second, t.millis);
+    return std::string(buf);
+}
+
+// What the packet says, for the opcodes whose layout the server's PacketCreator fixes: "" when this opcode has no
+// layout here, and also when the bytes are too short or cut off -- no reading beats a wrong one.
+inline std::string LoginPacketSummary(uint16_t opcode, const unsigned char* data, size_t size) {
+    if (!data || size < 3) return std::string();
+    if (opcode != kOpServerList && opcode != kOpServerStatus && opcode != kOpLastConnectedWorld &&
+        opcode != kOpRecommendedWorldMessage) {
+        return std::string();
+    }
+    detail::Reader r{data, size, 2};
+    int v = 0;
+    switch (opcode) {
+    case kOpServerList: {
+        if (data[2] == 0xFF) return "end of list";
+        int id = 0, flag = 0, channels = 0;
+        std::string name, event;
+        if (!r.U8(id) || !r.Str(name) || !r.U8(flag) || !r.Str(event)) return std::string();
+        r.at += 5;   // 100, 0, 100, 0, 0: the rates and the event rates, before the channel count
+        if (!r.U8(channels)) return std::string();
+        return "world " + std::to_string(id) + " " + name + " channels " + std::to_string(channels);
+    }
+    case kOpServerStatus:
+        if (!r.U16(v)) return std::string();
+        return "status " + std::to_string(v);
+    case kOpLastConnectedWorld:
+        if (!r.U32(v)) return std::string();
+        return "world " + std::to_string(v);
+    default:   // kOpRecommendedWorldMessage: the count, then one id and one reason per world
+        if (!r.U8(v)) return std::string();
+        return "recommended " + std::to_string(v);
+    }
+}
+
+// The extra of a packet.login event: ,"step":"serverstatus","op":"0x03","size":4,"hex":"03 00 00 00","summary":"status 0"
+// Empty for a packet outside the login phase.
+inline std::string LoginExtra(uint16_t opcode, const unsigned char* data, size_t size) {
+    const char* step = LoginStepForOpcode(opcode);
+    if (!step) return std::string();
+    char op[8];
+    std::snprintf(op, sizeof op, "0x%02X", opcode);
+    std::string extra = ",\"step\":\"";
+    extra += step;
+    extra += "\",\"op\":\"";
+    extra += op;
+    extra += "\",\"size\":";
+    extra += std::to_string(size);
+    extra += ",\"hex\":\"";
+    extra += HexBytes(data, size, kMaxLoginHex);
+    extra += "\"";
+    const std::string summary = LoginPacketSummary(opcode, data, size);
+    if (!summary.empty()) extra += ",\"summary\":\"" + JsonEscape(summary) + "\"";
+    return extra;
+}
+
+// One line of login-packets.log: the UTC stamp, then the event line the runner sees.
+inline std::string LoginLogLine(const std::string& stamp, const char* name, uint64_t ms, const std::string& extra) {
+    return stamp + " " + EventLine(name, ms, extra);
+}
+
 // ---- windows (ticket 170) ---------------------------------------------------------------------------------------
 // The runner needs to know which window is up, by name, before it clicks. A window is named by the class that made
 // it, never by where it sits: the client's own window list (CWndMan::ms_lpWindow) is walked once a frame, and a
