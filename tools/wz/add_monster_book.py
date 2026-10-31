@@ -66,7 +66,9 @@ FOUND_IN = {
     8800002: [280030000],   # Zakum3: scripts/event/ZakumBattle.js entryMap (the altar)
     8810018: [240060200],   # Horntail: scripts/event/HorntailBattle.js (dispatchRaiseQuestMobCount(8810018, 240060200))
     8820001: [270050100],   # Pink Bean: scripts/event/PinkBeanBattle.js (spawned in 270050100)
+    8850011: [271040100],   # Cygnus (first form, the book's card): NPC 3003903 in the CygnusBattle room (RebirthBosses)
     8850012: [271040100],   # Cygnus: scripts/event/CygnusBattle.js entryMap; MapleMap.afterBossKilled after the last guard
+    8840000: [211070100],   # Von Leon (first form): NPC 2161008 in the VonLeonBattle room (RebirthBosses)
     8847777: [211070100],   # Von Leon (after 8840000): scripts/event/VonLeonBattle.js entryMap; MapleMap.afterBossKilled
     8880150: [450004750],   # Lucid: scripts/event/LucidBattle.js entryMap
     8880302: [450007440],   # Will: scripts/event/WillBattle.js entryMap
