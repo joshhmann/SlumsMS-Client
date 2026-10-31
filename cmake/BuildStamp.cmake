@@ -35,6 +35,11 @@ endif()
 if(SLUMS_BUILD_NUMBER_OVERRIDE)
     set(SLUMS_BUILD_NUMBER "${SLUMS_BUILD_NUMBER_OVERRIDE}")
 endif()
+# A QA client (SLUMS_QA_MODULE, ticket 166) says so in its release ("1.6.2-qa") as well as in caps bit 31, so the
+# launcher, the release tools and the server's logs all tell it apart from a player build with the same number.
+if(SLUMS_QA_MODULE AND NOT SLUMS_RELEASE MATCHES "-qa$")
+    set(SLUMS_RELEASE "${SLUMS_RELEASE}-qa")
+endif()
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/VERSION")
 if(NOT SLUMS_BUILD_NUMBER MATCHES "^[0-9]+$" OR SLUMS_BUILD_NUMBER GREATER 2147483647)
     message(FATAL_ERROR "SLUMS_BUILD_NUMBER must be a non-negative 32-bit integer")

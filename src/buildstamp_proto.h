@@ -6,6 +6,7 @@
 // Format 1 (1.4.2 to 1.6.1-rc4) had no caps; the server still accepts it and falls back to the build number.
 // caps says which custom data sets this client can load, checked at login (bypass.cpp ClientDataCaps):
 //   bit 0  kCapCustomNpcData  Npc/9990000.img (Slums-chan) and Npc/0002985-0002999.img (Lazy Penguins) all resolve.
+//   bit 31 kCapQaBuild        a QA client (SLUMS_QA_MODULE, ticket 166): TEST and RC accept it, live refuses it.
 // The server sends custom NPC spawns only to clients with bit 0: a client without the img leaves the game on the
 // spawn (COM error 0x80030002), 2026-10-28.
 // build is monotonic (VERSION major*10000 + minor*100 + patch, cmake/BuildStamp.cmake); the server refuses logins
@@ -23,6 +24,12 @@
 constexpr uint16_t kBuildStampOpcode = 0x3738;
 constexpr uint16_t kBuildStampFormat = 2;
 constexpr uint32_t kCapCustomNpcData = 1u << 0;
+constexpr uint32_t kCapQaBuild       = 1u << 31;
+#ifdef SLUMS_QA_MODULE
+constexpr bool kSlumsQaBuild = true;
+#else
+constexpr bool kSlumsQaBuild = false;
+#endif
 constexpr int32_t  kSlumsBuildNumber = SLUMS_BUILD_NUMBER;
 constexpr const char* kSlumsRelease  = SLUMS_RELEASE;
 

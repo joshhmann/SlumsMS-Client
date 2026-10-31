@@ -1,6 +1,9 @@
 add_executable(buildstamp_proto_test buildstamp_proto_test.cpp)
 target_include_directories(buildstamp_proto_test PRIVATE ../src)
 target_compile_definitions(buildstamp_proto_test PRIVATE SLUMS_BUILD_NUMBER=${SLUMS_BUILD_NUMBER} "SLUMS_RELEASE=\"${SLUMS_RELEASE}\"")
+if(SLUMS_QA_MODULE)
+    target_compile_definitions(buildstamp_proto_test PRIVATE SLUMS_QA_MODULE)
+endif()
 add_test(NAME buildstamp_wire_format COMMAND buildstamp_proto_test)
 
 add_executable(buildshow_test buildshow_test.cpp)
