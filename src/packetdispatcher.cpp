@@ -2,6 +2,7 @@
 #include "hook.h"
 #include "wvs/packet.h"
 #include <mutex>
+#include "qamodule.h"
 #ifdef MAPLEROOT_CASHSHOP_WINDOW
 #include "cashshopwnd.h"
 #endif
@@ -96,6 +97,8 @@ void __fastcall ProcessPacketHook(void* socket, void*, CInPacket* packet) {
 #endif
     }
     ProcessPacket(socket, packet);
+    // QA builds only (ticket 166): a handled packet may make a screen ready, add a chat line, or ask for a dialog.
+    if (packet) QaModule_OnPacket(opcode, packet->BufferPublic(), packet->LengthPublic());
 }
 }
 void ShutdownCustomPackets() {

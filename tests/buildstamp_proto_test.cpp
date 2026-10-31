@@ -53,6 +53,9 @@ int main() {
         Check(build == static_cast<unsigned int>(SLUMS_BUILD_NUMBER) && build > 0, "build number");
         Check(std::strlen(SLUMS_RELEASE) > 0 && std::strlen(SLUMS_RELEASE) <= 40, "release length the server accepts");
         Check(kBuildStampOpcode == 0x3738, "opcode");
+        const size_t n = std::strlen(SLUMS_RELEASE);
+        const bool qaRelease = n >= 3 && std::strcmp(SLUMS_RELEASE + n - 3, "-qa") == 0;
+        Check(qaRelease == kSlumsQaBuild && kCapQaBuild == 0x80000000u, "a QA build, and only a QA build, says -qa");
         std::cout << "build stamp " << SLUMS_RELEASE << " (" << SLUMS_BUILD_NUMBER << "): " << Hex(built.bytes) << "\n";
     } catch (const std::exception& e) {
         std::cerr << "FAIL: " << e.what() << "\n";

@@ -1,4 +1,5 @@
 #include "pch.h"
+#include "qamodule.h"
 #include "hook.h"
 #include "constants.h"
 #include "buildshow_text.h"
@@ -320,5 +321,6 @@ void AttachSystemHooks() {
     ATTACH_HOOK(WSPStartup_orig, WSPStartup_hook);
 #ifdef MAPLEROOT_INTEGRATION
     AttachD3D9Host();   // before the game creates its Direct3D objects
+    QaModule_Start();   // QA builds only (ticket 166): the runner's pipes; a no-op in player builds
 #endif
 }
