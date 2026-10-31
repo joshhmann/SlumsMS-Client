@@ -6,6 +6,13 @@
 // Effect/SetEff.img on a character that is not this one goes into a small registry and gets `visible` from the
 // toggle, so flipping it applies at once. The rules are display_policy.h (tested natively). Map back/tile/object,
 // opacity and the animation cap follow (research note docs/research-119-120.md).
+//
+// b250 (2026-10-31): this file used to keep up to 512 IWzGr2DLayerPtr of other characters' effect layers so a toggle
+// could flip them at once. Those strong references outlived the characters: a character that left the map, or the
+// whole field on a map or channel change, stayed drawn as a body with its equipment and effect but no face, hair or
+// name tag, in every later map and even on the login screen, until the client closed. No reference is kept now: each
+// layer gets `visible` once, when it loads, and the client reloads these layers on every action and map change, so a
+// flipped toggle reaches the layers on screen within moments.
 // ============================================================
 
 #include "pch.h"
@@ -20,7 +27,6 @@
 
 #include <cstring>
 #include <cwchar>
-#include <deque>
 
 namespace {
 
@@ -28,11 +34,9 @@ constexpr uintptr_t kAddr_UserLocal = 0x00BEBF98;   // CUserLocal* (a CUser at o
 constexpr uintptr_t kAddr_LoadLayer = 0x00941417;
 constexpr unsigned char kLoadLayerStock[] = {0xB8, 0x73, 0xD7, 0xAD, 0x00, 0xE8, 0x77, 0xF7, 0x11, 0x00};
 constexpr const char* kPrefKey = "Software\\SlumsMS\\Overlay";
-constexpr size_t kMaxTracked = 512;                 // the oldest drop off; they stay as they were last set
 
 Display::Prefs g_prefs;
 bool g_loaded = false;
-std::deque<IWzGr2DLayerPtr> g_othersCash;           // other characters' ItemEff/SetEff layers
 
 void LoadPrefs() {
     if (g_loaded) return;
@@ -47,7 +51,8 @@ void SavePrefs() {
     RegSetKeyValueA(HKEY_CURRENT_USER, kPrefKey, "hide_others_cash", REG_DWORD, &v, sizeof(v));
 }
 
-void Apply(IWzGr2DLayerPtr& layer) {
+// Sets `visible` on a layer the client owns. Never stores the pointer: a kept reference keeps the character drawn (b250).
+void Apply(IWzGr2DLayer* layer) {
     try {
         const Display::LayerState s = Display::Decide(Display::Category::CashEffect, Display::Owner::Others, g_prefs);
         layer->visible = s.visible ? 1 : 0;
@@ -68,9 +73,7 @@ int __fastcall CUser_LoadLayer_hook(CUser* pThis, void* /*edx*/, Ztl_bstr_t bsUO
     const int r = CUser_LoadLayer(pThis, bsUOL, bLeft, l, pnRepeat);
     if (r && cash && l.pLayer && pThis != *reinterpret_cast<CUser* const*>(kAddr_UserLocal)) {
         LoadPrefs();
-        g_othersCash.push_back(l.pLayer);
-        if (g_othersCash.size() > kMaxTracked) g_othersCash.pop_front();
-        Apply(g_othersCash.back());
+        Apply(l.pLayer.GetInterfacePtr());
     }
     return r;
 }
@@ -82,8 +85,7 @@ void Display_DrawSettings() {
     LoadPrefs();
     ImGui::SeparatorText("Display");
     if (ImGui::Checkbox("Hide other players' cash and set effects", &g_prefs.hideOthersCash)) {
-        SavePrefs();
-        for (auto& layer : g_othersCash) Apply(layer);
+        SavePrefs();   // applies as each effect layer reloads (every action and map change); none is kept (b250)
     }
 }
 
