@@ -102,6 +102,227 @@ inline std::string EventLine(const char* name, uint64_t ms, const std::string& e
     return std::string("{\"ev\":\"") + name + "\",\"t\":" + std::to_string(ms) + extra + "}\n";
 }
 
+// ---- chat lines (ticket 170) ------------------------------------------------------------------------------------
+// chat.received is decoded from the server packets that put a line in the player's chat log, not hooked out of the
+// chat log itself: the log append sits inside the field's packet handler with no address we could pin (three
+// searches, none conclusive), and these layouts are the server's own (PacketCreator), so both sides agree. The
+// opcodes below are the client's chat sources: map chat, buddy/party/guild chat, whispers, spouse chat, server
+// notices and megaphones, the yellow tip a GM command replies with, and the chat bubble text.
+//   kind is the packet's own type/mode byte, so the runner can tell a whisper from a guild line without parsing text:
+//   0xA2 the gm byte (0 a normal line, 1 an admin line)  0x86 mode (0 buddy, 1 party, 2 guild, 3 alliance)
+//   0x87 the whisper flag (0x12 received)        0x88 mode (4 engaged, 5 spouse)
+//   0x44 the notice type                         0x4D the tip type (0xFF from yellowMessage)
+constexpr uint16_t kOpServerMessage = 0x44;
+constexpr uint16_t kOpYellowTip = 0x4D;    // SET_WEEK_EVENT_MESSAGE: "Spawned 1 BISHOP TrainingBot ... cids [123]"
+constexpr uint16_t kOpMultiChat = 0x86;
+constexpr uint16_t kOpWhisper = 0x87;
+constexpr uint16_t kOpSpouseChat = 0x88;
+constexpr uint16_t kOpChatText = 0xA2;
+
+constexpr size_t kMaxChatText = 200;       // bytes of chat text an event carries
+
+struct ChatLine {
+    bool ok = false;
+    int kind = -1;
+    std::string text;                      // what the client shows, cut to kMaxChatText (JsonEscape'd by the caller)
+};
+
+// s cut to at most max bytes without splitting a UTF-8 sequence.
+inline std::string TruncateUtf8(const std::string& s, size_t max) {
+    if (s.size() <= max) return s;
+    size_t n = max;
+    while (n > 0 && (static_cast<unsigned char>(s[n]) & 0xC0) == 0x80) --n;   // back off continuation bytes
+    return s.substr(0, n);
+}
+
+namespace detail {
+struct Reader {
+    const unsigned char* p;
+    size_t n;
+    size_t at;
+    bool U8(int& v) {
+        if (at + 1 > n) return false;
+        v = p[at++];
+        return true;
+    }
+    bool U16(int& v) {
+        if (at + 2 > n) return false;
+        v = p[at] | (p[at + 1] << 8);
+        at += 2;
+        return true;
+    }
+    bool U32(int& v) {
+        if (at + 4 > n) return false;
+        v = static_cast<int>(static_cast<unsigned>(p[at]) | (static_cast<unsigned>(p[at + 1]) << 8) |
+                             (static_cast<unsigned>(p[at + 2]) << 16) | (static_cast<unsigned>(p[at + 3]) << 24));
+        at += 4;
+        return true;
+    }
+    bool Str(std::string& s) {
+        int len = 0;
+        if (!U16(len) || len < 0 || at + static_cast<size_t>(len) > n) return false;
+        s.assign(reinterpret_cast<const char*>(p + at), static_cast<size_t>(len));
+        at += static_cast<size_t>(len);
+        return true;
+    }
+};
+}  // namespace detail
+
+// One server packet (starting at its 2-byte opcode) as a chat line; ok=false when the opcode is not a chat source
+// or the payload does not decode.
+inline ChatLine ParseChatPacket(uint16_t opcode, const unsigned char* data, size_t size) {
+    ChatLine line;
+    if (!data || size < 2) return line;
+    detail::Reader r{data, size, 2};
+    int v = 0;
+    switch (opcode) {
+    case kOpChatText: {                       // int cid, byte gm, string text, byte show
+        int cid = 0, gm = 0;
+        std::string text;
+        if (!r.U32(cid) || !r.U8(gm) || !r.Str(text)) return line;
+        line.kind = gm;                       // 0 a normal line, 1 an admin (yellow) line
+        line.text = text;
+        break;
+    }
+    case kOpMultiChat: {                      // byte mode, string name, string text
+        std::string name, text;
+        if (!r.U8(v) || !r.Str(name) || !r.Str(text)) return line;
+        line.kind = v;
+        line.text = name + ": " + text;
+        break;
+    }
+    case kOpWhisper: {                        // byte flag; 0x12 received: string from, byte channel, byte admin, text
+        if (!r.U8(v) || v != 0x12) return line;
+        std::string from, text;
+        int channel = 0, admin = 0;
+        if (!r.Str(from) || !r.U8(channel) || !r.U8(admin) || !r.Str(text)) return line;
+        line.kind = v;
+        line.text = from + ": " + text;
+        break;
+    }
+    case kOpSpouseChat: {                     // byte mode (5 spouse: string from), byte, string text
+        int mode = 0, flag = 0;
+        std::string from, text;
+        if (!r.U8(mode) || (mode != 4 && mode != 5)) return line;
+        if (mode == 5 && !r.Str(from)) return line;
+        if (!r.U8(flag) || !r.Str(text)) return line;
+        line.kind = mode;
+        line.text = from.empty() ? text : from + ": " + text;
+        break;
+    }
+    case kOpServerMessage: {                  // byte type, [byte 1 ticker], string text, then the type's tail
+        int type = 0;
+        if (!r.U8(type)) return line;
+        // The scrolling ticker (type 4 with the flag) carries one byte before the text; a plain type-4 notice does
+        // not. The server's own decoder tells them apart by the whole packet being 6 bytes longer than the text.
+        if (type == 4 && size >= 6 && size == 6 + static_cast<size_t>(data[4] | (data[5] << 8))) ++r.at;
+        std::string text;
+        if (!r.Str(text)) return line;
+        line.kind = type;
+        line.text = text;
+        break;
+    }
+    case kOpYellowTip: {                      // byte 0xFF, string tip, short 0
+        std::string text;
+        if (!r.U8(v) || !r.Str(text)) return line;
+        line.kind = v;
+        line.text = text;
+        break;
+    }
+    default: return line;
+    }
+    line.ok = true;
+    line.text = TruncateUtf8(line.text, kMaxChatText);
+    return line;
+}
+
+// ---- windows (ticket 170) ---------------------------------------------------------------------------------------
+// The runner needs to know which window is up, by name, before it clicks. A window is named by the class that made
+// it, never by where it sits: the client's own window list (CWndMan::ms_lpWindow) is walked once a frame, and a
+// UIWindow.img window carries the UOL it was created from (CUIWnd::m_sBackgrndUOL: "UI/UIWindow.img/Item"), whose
+// leaf is the name. The two screens that are not UIWindow windows came from their own fills: the cash shop draws
+// from UI/CashShop.img and the character-create screen from UI/Login.img/NewChar, so a window made from either is
+// that screen.
+//
+// Dialogs are the exception the UOL cannot name (UtilDlgEx is one class for a party invite, a proposal, an npc
+// dialog and a notice), so qamodule.cpp queues the name of the dialog a packet asks for and the next window that
+// has no UOL of its own takes it. That pairing is order-based, not class-based: it holds because the client builds
+// the dialog inside the packet handler, on the same thread, before the next frame.
+constexpr uint16_t kOpPartyOperation = 0x3E;   // code 4 = party invite
+constexpr uint16_t kOpMarriageRequest = 0x48;  // the proposal prompt
+constexpr uint16_t kOpNpcTalk = 0x130;         // the npc dialog
+constexpr uint16_t kOpNoticeType = 1;          // SERVERMESSAGE type 1 = the notice popup
+
+inline std::string LowerAscii(std::string s) {
+    for (char& c : s) {
+        if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a');
+    }
+    return s;
+}
+
+inline bool StartsWith(const std::string& s, const char* prefix) {
+    const size_t n = std::char_traits<char>::length(prefix);
+    return s.size() >= n && s.compare(0, n, prefix) == 0;
+}
+
+// The runner's name for a window created from this UOL, or nullptr. Full UOLs are compared lowercased by prefix
+// first (the two screens), then by the leaf after the last '/'.
+inline const char* WindowNameFromUol(const std::string& uol) {
+    if (uol.empty()) return nullptr;
+    const std::string low = LowerAscii(uol);
+    if (StartsWith(low, "ui/cashshop.img")) return "cash_shop";
+    if (StartsWith(low, "ui/login.img/newchar")) return "character_create";
+    const size_t slash = low.find_last_of('/');
+    std::string leaf = slash == std::string::npos ? low : low.substr(slash + 1);
+    if (leaf.size() > 4 && leaf.compare(leaf.size() - 4, 4, ".img") == 0) leaf.erase(leaf.size() - 4);
+    struct Entry {
+        const char* leaf;
+        const char* name;
+    };
+    static const Entry kTable[] = {
+        {"item", "item"},
+        {"equip", "equip"},
+        {"skill", "skill"},
+        {"monsterbook", "monster_book"},
+        {"worldmap", "world_map"},
+        {"family", "family"},
+        {"familytree", "family_tree"},
+        {"maker", "maker"},
+        {"book", "book"},
+        {"shop", "shop"},
+        {"personalshop", "personal_shop"},
+        {"tradingroom", "trade"},
+        {"entrustedshop", "storage"},
+        {"trunk", "storage"},
+        {"inventory", "item"},
+    };
+    for (const Entry& e : kTable) {
+        if (leaf == e.leaf) return e.name;
+    }
+    return nullptr;
+}
+
+// The dialog a packet opens, or nullptr.
+inline const char* DialogForPacket(uint16_t opcode, const unsigned char* data, size_t size) {
+    if (!data || size < 3) return nullptr;
+    switch (opcode) {
+    case kOpPartyOperation: return data[2] == 4 ? "party_invite" : nullptr;
+    case kOpMarriageRequest: return "proposal";
+    case kOpNpcTalk: return "npc_dialog";
+    case kOpServerMessage: return data[2] == kOpNoticeType ? "notice" : nullptr;
+    default: return nullptr;
+    }
+}
+
+// Classes named by vtable, for windows the UOL table cannot name. Only what the repo has proved; anything else is
+// "unknown" with its vtable in the event so a run can name it.
+inline const char* WindowNameForVtable(uint32_t vtable) {
+    switch (vtable) {
+    case 0x00B39FE0: return "monster_book";   // CUIMonsterBook primary vtable
+    default: return nullptr;
+    }
+}
+
 // A bottom-up 32-bit BMP header (BITMAPFILEHEADER + BITMAPINFOHEADER, 54 bytes) for a w x h BGRA frame.
 inline void BmpHeader(uint8_t out[54], int w, int h) {
     const uint32_t pixels = static_cast<uint32_t>(w) * static_cast<uint32_t>(h) * 4u;
