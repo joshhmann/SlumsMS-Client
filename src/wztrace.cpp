@@ -177,7 +177,9 @@ void __stdcall CxxThrow_hook(void* object, void* throwInfo) {
 typedef void*(__thiscall* MakeTileFn)(void* self, std::uint32_t a0, std::uint32_t a1, std::uint32_t a2);
 MakeTileFn g_makeTile_original = nullptr;
 
-void* __thiscall MakeTile_hook(void* self, std::uint32_t a0, std::uint32_t a1, std::uint32_t a2) {
+// __fastcall with a dummy edx is how this repo detours a __thiscall member (attackdiag.cpp): ecx = this, the three
+// arguments on the stack, the callee pops them -- the same frame as the stock `ret 0xC`.
+void* __fastcall MakeTile_hook(void* self, void* /*edx*/, std::uint32_t a0, std::uint32_t a1, std::uint32_t a2) {
     // The three arguments are logged RAW, never dereferenced: research-119-120.md could not type them from the stock
     // code alone (the string-pool ids they come from are not decodable offline), and a wrong deref would crash a QA
     // client -- the one thing this trace must not do. Small numbers here are the layer and tile indices, so the line
@@ -236,8 +238,9 @@ void WzTrace_NoteLookup(const wchar_t* path, long hr) {
         const int wide = static_cast<int>(wcsnlen(path, kMaxPathBytes + 1));
         const int n = WideCharToMultiByte(CP_UTF8, 0, path, wide, buffer, static_cast<int>(sizeof buffer), nullptr,
             nullptr);
-        if (n <= 1) return;   // empty path: not a lookup worth a line
-        const std::string utf8(buffer, static_cast<std::size_t>(n - 1));
+        // An explicit source length converts without a terminating NUL, so n is the byte count of the path itself.
+        if (n <= 0) return;   // empty path: not a lookup worth a line
+        const std::string utf8(buffer, static_cast<std::size_t>(n));
         const std::uint32_t value = static_cast<std::uint32_t>(hr);
         if (level >= 2) g_ring.Push(value, LogPath(utf8));
         if (!Succeeded(value)) Append(LookupLine(NowStamp(), GetCurrentThreadId(), value, utf8));
