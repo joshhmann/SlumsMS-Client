@@ -126,6 +126,14 @@ A build configured with `-DSLUMS_QA_MODULE=ON` (which needs `MAPLEROOT_INTEGRATI
 
 Since b249 it also keeps the login phase's packets, because a login can end on a world list with a black, empty channel panel and no server-side trace. Each login packet (`SERVERLIST`, its end marker, `SERVERSTATUS`, `LAST_CONNECTED_WORLD`, `RECOMMENDED_WORLD_MESSAGE`, `CHARLIST`, `SERVER_IP`, the channel and status steps) becomes a `packet.login` event carrying `step`, `op`, `size`, the first 512 bytes as `hex` and, where the layout is fixed by the server's `PacketCreator`, a one-line `summary` (`world 1 Bera channels 5`, `end of list`, `status 0`). The same line is appended to `qa-captures\login-packets.log`, prefixed with a UTC stamp, so the evidence survives a client that is killed or crashes mid-login. The capture is read-only and stops after 256 packets per process.
 
+Since b251 it can also trace the WZ lookups that lead up to a C++ throw, because map 211080100 (Rose Garden)
+ends the session during the field change with no crash dialog and `crash_diagnostics.cpp` had already spent its 16
+event cap before the throw that matters. `config.ini` `[debug] wztrace=1` appends every failed namespace lookup
+(UTC stamp, thread, HRESULT, path) to `wztrace.log` beside the exe; `wztrace=2` also keeps the last 128 lookups and
+detours `_CxxThrowException` (`0x00A60BB7`) to log each throw's caller and dump that ring, once per 2 s burst, and logs
+`MakeTile`'s raw arguments. The log stops at 2 MB, and the value `0` or a missing key attaches nothing at all. See
+`docs/wztrace.md` for the line formats and how to read a failing run.
+
 ## Preserved and added
 
 MapleRoot gameplay remains in the companion code (`mapleroot/ijl15`, linked into `slums.dll`; it no longer ships as a separate `ijl15.dll` proxy): custom skills, long EXP, expanded equipment/quickslots and existing packet contracts. Kaentake owns startup/resolution and the Custom namespace. Additions include field SHOP, visual weather/time/lamps, direction bindings and multipart character-info mount fitting/name clipping. Optional weather gameplay modifiers and the separate 64-bit damage guide remain excluded.

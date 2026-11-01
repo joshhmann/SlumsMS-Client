@@ -84,6 +84,18 @@ if(QAMODULE_TEST_EXE AND EXISTS "${QAMODULE_TEST_EXE}")
 else()
     add_test(NAME qamodule_sites COMMAND qamodule_patch_test)
 endif()
+add_executable(wztrace_policy_test wztrace_policy_test.cpp)
+add_test(NAME wztrace_rules COMMAND wztrace_policy_test)
+
+add_executable(wztrace_patch_test wztrace_patch_test.cpp)
+set(WZTRACE_TEST_EXE "Z:/MSv83/SlumsMS-dev/client-1.5.0-fixes2/exe-copy/MapleStory.exe" CACHE FILEPATH
+    "MapleStory.exe whose bytes the WZ-trace sites are checked against (optional)")
+if(WZTRACE_TEST_EXE AND EXISTS "${WZTRACE_TEST_EXE}")
+    add_test(NAME wztrace_sites COMMAND wztrace_patch_test "${WZTRACE_TEST_EXE}")
+else()
+    add_test(NAME wztrace_sites COMMAND wztrace_patch_test)
+endif()
+
 add_executable(overlay_policy_test overlay_policy_test.cpp)
 add_test(NAME overlay_hud_layout COMMAND overlay_policy_test)
 

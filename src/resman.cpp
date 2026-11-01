@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "hook.h"
 #include "debug.h"
+#include "wztrace.h"
 #include "wvs/wvsapp.h"
 #include "wvs/util.h"
 #include "ztl/ztl.h"
@@ -36,6 +37,9 @@ public:
 
     HRESULT __stdcall raw__OnGetLocalObject_hook(int nIndex, BSTR sPath, int* pnPathUsed, VARIANT* pvRet) {
         HRESULT hr = raw__OnGetLocalObject_orig(this, nIndex, sPath, pnPathUsed, pvRet);
+        // QA trace (ticket b251): every lookup with its HRESULT, so the last one before a throw is on record. Off by
+        // default; one cached integer compare when config.ini [debug] wztrace is absent.
+        WzTrace_NoteLookup(sPath, hr);
 #ifdef MAPLEROOT_CRASH_REPORT
         // The crash report's "missing data" line: the last path that missed and was not found by a later mount.
         if (FAILED(hr)) CrashReport_NoteMissing(sPath);

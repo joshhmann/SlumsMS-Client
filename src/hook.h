@@ -2,6 +2,7 @@
 #include "debug.h"
 #include "mapleroot.h"
 #include "avatar_features.h"
+#include "wztrace.h"
 #include <type_traits>
 
 #ifdef _DEBUG
@@ -298,6 +299,9 @@ inline void AttachClientHooks() {
 #endif
 #endif
     HpMp_Verify();
+    // QA builds only (wztrace.h has the empty inline otherwise): the WZ lookup trace, config.ini [debug] wztrace.
+    // Last, so the mods' own detours are in place before the trace starts watching the field build.
+    WzTrace_Install();
 }
 
 
