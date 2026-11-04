@@ -56,6 +56,14 @@ else()
     add_test(NAME meleerange_guard COMMAND meleerange_patch_test)
 endif()
 
+add_executable(mobattackfix_patch_test mobattackfix_patch_test.cpp)
+set(MOBATTACKFIX_TEST_EXE "Z:/MSv83/SlumsMS-dev/client-1.5.0-fixes2/exe-copy/MapleStory.exe" CACHE FILEPATH
+    "MapleStory.exe whose bytes the b251 mob attack fix test checks (optional)")
+if(MOBATTACKFIX_TEST_EXE AND EXISTS "${MOBATTACKFIX_TEST_EXE}")
+    add_test(NAME mobattackfix_wz_property_epointer COMMAND mobattackfix_patch_test "${MOBATTACKFIX_TEST_EXE}")
+else()
+    add_test(NAME mobattackfix_wz_property_epointer COMMAND mobattackfix_patch_test)
+endif()
 add_executable(hpmp_patch_test hpmp_patch_test.cpp)
 set(HPMP_TEST_EXE "Z:/MSv83/SlumsMS-dev/client-1.5.0-fixes2/exe-copy/MapleStory.exe" CACHE FILEPATH
     "MapleStory.exe whose bytes the 4-byte HP/MP test checks (optional)")
@@ -160,3 +168,4 @@ add_executable(damagefmt_policy_test damagefmt_policy_test.cpp)
 add_test(NAME damagefmt_short_numbers COMMAND damagefmt_policy_test)
 add_executable(crash_report_test crash_report_test.cpp)
 add_test(NAME crash_report_classify_scrub COMMAND crash_report_test)
+

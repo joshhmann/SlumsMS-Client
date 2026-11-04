@@ -69,6 +69,7 @@ void AttachProposalGenderMod(); // proposalgender.cpp: any gender may use an eng
 void AttachCreateBlockMod();    // createblock.cpp: no random "high population" block on character creation
 void AttachMobDamageMod();      // mobdamage.cpp: low defence never adds mob touch damage, [clienthax] lowdefensepenalty
 void AttachMeleeRangeMod();     // meleerange.cpp: a remote attack in a pose without a range no longer closes the client
+void AttachMobAttackFixMod();   // mobattackfix.cpp: a mob attack whose WZ node is not an IWzProperty no longer closes the client (b251)
 void AttachHpMpMod();           // hpmp.cpp: 4-byte HP/MP up to 99,999; refuses to start on unexpected bytes
 void HpMp_Verify();             // hpmp.cpp: after every other mod, checks none overwrote an HP/MP site
 void AttachUiLayoutMod();       // uilayout.cpp: moved status bar buttons keep their clicks (CUIStatusBar::HitTest)
@@ -278,6 +279,8 @@ inline void AttachClientHooks() {
 #ifdef MAPLEROOT_INTEGRATION
     VerifyKaentakeHooks("AttachMeleeRangeMod");
 #endif
+    DebugMessage("Installing: AttachMobAttackFixMod();");
+    AttachMobAttackFixMod();
 #ifndef MAPLEROOT_INTEGRATION
     DebugMessage("Installing: AttachTempStatMod();");
     AttachTempStatMod();

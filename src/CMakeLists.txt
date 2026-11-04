@@ -17,6 +17,7 @@ add_library(injector SHARED
     createblock.cpp
     mobdamage.cpp
     meleerange.cpp
+    mobattackfix.cpp
     hpmp.cpp
     buildshow.cpp
     uilayout.cpp
@@ -165,3 +166,4 @@ set_target_properties(launcher PROPERTIES
 if(MAPLEROOT_INTEGRATION)
     target_compile_definitions(launcher PRIVATE MAPLEROOT_INTEGRATION)
 endif()
+

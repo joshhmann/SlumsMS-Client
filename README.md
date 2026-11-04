@@ -80,6 +80,14 @@ The client computes the damage a mob's touch does to you (`CalcDamage` mob physi
 | --- | --- | --- |
 | `[clienthax] lowdefensepenalty` | `true`: keep the stock rule (low defence adds damage) | `false` |
 
+## Mob attack info and Rose Garden 211080100 (b251, 1.6.4)
+
+Entering `211080100` closed the client. The v4 trace's throw (`0x00A605E7`, `hr=80004003`) comes out of the lazy per-attack mob attack-info builder, not out of the field initializer: `0x00529E7B` (lazy cache getter, count `this+0x218`, 8-byte entries at `this+0x234`) builds the mob's `attackN` record with `0x0067FD81`, which takes the action's animation from the WZ animation cache (`0x00BE78D4`) and casts the node to `IWzProperty` through `_com_ptr_t<IWzProperty>::operator=` (`0x004052AD`). That `QueryInterface` returns `80004003 E_POINTER` for this mob; stock tolerates only `80004002 E_NOINTERFACE` at `0x0067FE3C` and otherwise raises a `_com_error` at `0x0067FE44` that no frame catches. `src/mobattackfix.cpp` routes the one call at `0x0067FE33` through a cave that runs the stock cast and, only for `E_POINTER`, continues at the path stock already has for `E_NOINTERFACE` (`0x0067FE49`): the attack entry is left empty (`0x00529E7B` returns 0, its callers already test for 0) and the map loads. Every other HRESULT goes back through the stock compare/raise byte for byte, so unrelated COM errors still throw. `src/mobattackfix_patch.h` has the caller chain and every checked byte. The same shape — a WZ `QueryInterface` returning `E_POINTER` from a `_com_ptr_t` cast — is fatal anywhere it can happen, so other casts of WZ interfaces remain a latent risk.
+
+| Key | What | Default |
+| --- | --- | --- |
+| `[clienthax] mobattackfix` | `false`: keep the stock throw (the client closes on the affected map) | `true` |
+
 ## 4-byte HP and MP (1.6.0)
 
 The 1.6.0 server sends HP, MaxHP, MP and MaxMP as 4 bytes, so they can go past 32,767 (cap 99,999). `src/hpmp.cpp` is always on and needs a 1.6.0 server; the build stamp (10600 and up) is what the server checks. The client reads the 9 widened packet fields with `Decode4`, stores the four stats raw (checksum 0) instead of as encrypted shorts, and detours `_ZtlSecureFuse<short>` to return them whole. It also widens the 57 places that cut a read-back value to 16 bits and raises the four 30,000 caps. `src/hpmp_patch.h` has the site table and how it was derived. Every site's bytes are checked first. If any differ, or another patch later overwrites one, the client shows an error and exits rather than misreading the server's stats.
