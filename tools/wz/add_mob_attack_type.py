@@ -7,16 +7,28 @@ Type 0 -- also what a missing key reads as -- is the box range: the builder then
 type to <mob>.img/info/attack/<N-1>/type and gives circle ranges (range/r + range/sp), so every such attack ends the
 session the first time the client builds it (Rose Garden's 8211000: the map shows, then the client closes).
 
-The v83 meanings are the same as the newer ones for the two values this copies (stock v83: 118 circle attacks are
-type 1, 110 circle attacks with a ball are type 2), so for every listed attack this adds
+The v83 builder knows three range shapes and nothing else (0x00680593 dispatch, 0x0068071B compares 3 and 4):
+type 0 is the box range (range/lt + range/rb, both raised at 0x00680694/0x006806B7), types 3 and 4 are the attack
+tiles (start/areaCount/attackCount plus the same lt/rb, raised at 0x00680AAD), and every other value -- 1, 2, 9,
+13, 201, anything not zero -- takes one circle branch: range/sp is required (E_POINTER at 0x006807C6) and range/r
+is an optional int. No other key of attackN/info is ever required: the effect/hit/ball/areaWarning art and the
+attach/attachfacing/effectAfter/attackAfter ints are all read tolerantly in the common tail (0x00680B71-0x006811D6).
+Stock v83 spells the circle two ways: type 1 without a ball, type 2 with one (of the 679 attacks already listed,
+264 are type 1; the pack's four stock references agree -- 7130000, 3300004 and 5120003 attack1 are type 1 with no
+info/ball, 8140703 attack1 is type 2 with it).
 
-  Mob/<id>.img/attackN/info/type   int, copied from <id>.img/info/attack/<N-1>/type
+So a newer attack gets the v83 type that reads the data it already carries: TYPE_MAP for the newer values it knows,
+the newer value itself when it is 1 or 2, and for older data with no newer type the ball art picks 2 or 1. For every
+listed attack this adds
+
+  Mob/<id>.img/attackN/info/type   int, from TYPE_MAP or from the newer value itself when v83 shares it
 
 Mob images are stock images, so resman.cpp merges these leaves into them; nothing else of the mob changes.
-mob_attack_type.json is the list: client attacks with no attackN/info/type, a circle range, and a newer type of 1
-or 2 (`--scan` rebuilds it from a client's Data/Mob). Other types the v83 builder does not know stay out.
+mob_attack_type.json is the list (`--scan` rebuilds it from a client's Data/Mob, `--scan --merge` only appends).
+Attacks the pack gives no buildable shape (no range node, a range without sp) or a newer type TYPE_MAP does not
+know stay out: v83 would need art or a range that is not in the data, so they are only reported.
 
-    python3 tools/wz/add_mob_attack_type.py [--scan <client Data/Mob>] [--check]
+    python3 tools/wz/add_mob_attack_type.py [--scan <client Data/Mob> [--merge]] [--check]
 """
 import argparse
 import hashlib
@@ -24,7 +36,7 @@ import json
 import os
 import sys
 import tempfile
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -35,41 +47,75 @@ CUSTOM = ROOT / 'src' / 'Custom.wz'
 LIST = Path(__file__).resolve().parent / 'mob_attack_type.json'
 V83_TYPES = (1, 2)   # circle melee, circle with a ball: the newer values v83 reads the same way
 
+# newer (post-v83) attack type -> (v83 type this list writes, why). All of these take the circle branch in v83, so
+# the choice is only "is the attack a ball attack (2) or a plain circle (1)". Types 3, 4 (attack tiles), 0 (box) and
+# anything else stay out: v83 would read a different set of keys than the attack carries.
+TYPE_MAP = {
+    9: (2, 'bullet attack (bulletSpeed) with info/ball art: circle r+sp, v83 type 2 (ball)'),
+    11: (1, 'mob-skill attack (userSkill), no info/ball art: plain circle, v83 type 1'),
+    13: (2, 'bullet attack (bulletSpeed) with info/ball art: circle r+sp, v83 type 2 (ball)'),
+    14: (1, 'magic attack (conMP, magic), no info/ball art: plain circle, v83 type 1'),
+    19: (1, 'close melee (attackRatio, cooltime, fixDamR), no info/ball art: plain circle, v83 type 1'),
+    21: (1, 'ballAngle attack, but no info/ball art in the data: plain circle, v83 type 1'),
+    201: (2, 'ball from ballStart to ballEnd with info/ball art: circle r+sp, v83 type 2 (ball)'),
+}
+
 
 def children(node):
     return {c.name: c for c in node.children} if node is not None else {}
 
 
-def needs_type(mob_root):
-    """(attack, type) pairs of one mob image that the v83 builder would fail on and the newer data can fix."""
+def classify(mob_root):
+    """((attack, v83 type) to write, (attack, why it stays out)) for one mob image.
+
+    An attack is only touched when attackN/info has no type: with none, the builder reads 0, the box range, and
+    raises E_POINTER when range/lt or range/rb is missing. A box range in the data is therefore left alone (v83
+    already reads it as type 0); a circle needs range/sp, which v83 can build as type 1 or 2.
+    """
     kids = children(mob_root)
     info_attack = children(children(kids.get('info')).get('attack'))
-    out = []
+    rows, out = [], []
     for name, act in kids.items():
         if not (name.startswith('attack') and name[6:].isdigit()):
             continue
         ainfo = children(act).get('info')
-        if ainfo is None:
+        if ainfo is None or 'type' in children(ainfo):
             continue
         keys = children(ainfo)
-        if 'type' in keys:
-            continue
         shape = set(children(keys.get('range')))
-        if not {'r', 'sp'} <= shape or {'lt', 'rb'} <= shape:
+        if {'lt', 'rb'} <= shape:
+            continue
+        if 'sp' not in shape:
+            out.append((name, 'no range/sp: ' + ('attack has no range node' if not shape
+                       else f'range has only {", ".join(sorted(shape))}')))
             continue
         entry = children(info_attack.get(str(int(name[6:]) - 1)))
         t = entry.get('type')
-        if t is not None and t.value in V83_TYPES:
-            out.append((name, t.value))
-    return out
+        if t is None:   # old-style data: no newer type to translate, take the shape it already has
+            rows.append((name, 2 if 'ball' in keys else 1))
+        elif t.value in V83_TYPES:   # the newer data still says 1 or 2: v83 reads it the same way
+            rows.append((name, t.value))
+        elif t.value in TYPE_MAP:
+            rows.append((name, TYPE_MAP[t.value][0]))
+        else:
+            out.append((name, f'newer type {t.value} is not in TYPE_MAP'))
+    return rows, out
+
+
+def needs_type(mob_root):
+    """(attack, type) pairs of one mob image that the v83 builder would fail on and the data can fix."""
+    return classify(mob_root)[0]
 
 
 def scan(folder):
-    rows = []
+    """(list rows, (mob, attack, why) left out) for every mob image in a client's Data/Mob folder."""
+    rows, left = [], []
     for f in sorted(Path(folder).glob('*.img')):
         root, _ = parse_img(f.read_bytes(), f.name)
-        rows += [dict(mob=f.stem, attack=a, type=t) for a, t in needs_type(root)]
-    return rows
+        keep, out = classify(root)
+        rows += [dict(mob=f.stem, attack=a, type=t) for a, t in keep]
+        left += [(f.stem, a, why) for a, why in out]
+    return rows, left
 
 
 def mob_image(mob, attacks):
@@ -81,12 +127,22 @@ def mob_image(mob, attacks):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--scan', help="rebuild mob_attack_type.json from a client's Data/Mob folder first")
+    ap.add_argument('--merge', action='store_true', help='with --scan: append to the list instead of replacing it')
     ap.add_argument('--check', action='store_true', help='only report whether Custom.wz already has every leaf')
     args = ap.parse_args()
     if args.scan:
-        rows = scan(args.scan)
+        rows, left = scan(args.scan)
+        if args.merge:
+            known = {(r['mob'], r['attack']) for r in json.loads(LIST.read_text())}
+            new = [r for r in rows if (r['mob'], r['attack']) not in known]
+            rows = json.loads(LIST.read_text()) + new
+            print(f'{LIST.name}: +{len(new)} attacks')
         LIST.write_text('[\n' + ',\n'.join(json.dumps(r) for r in rows) + '\n]\n')
         print(f'{LIST.name}: {len(rows)} attacks in {len({r["mob"] for r in rows})} mobs')
+        outs = Counter(why for _, _, why in left)
+        print(f'left out: {len(left)} attacks -- ' + '; '.join(f'{n}x {why}' for why, n in sorted(outs.items())))
+        for mob, attack, why in left:
+            print(f'  {mob}/{attack}: {why}')
 
     per_mob = defaultdict(list)
     for r in json.loads(LIST.read_text()):
