@@ -122,6 +122,14 @@ The patch is installed once at startup: the jump key's `call CUserLocal::Jump` i
 
 Blocked maps: on maps the server lists (its `bounce-zones.yaml`; jump quests by default) the six bounce ids do nothing, from a hotkey, a macro or a double-tap, and on jump quests real Flash Jump is refused too, as stock v83 fieldLimit already did. The server sends the list at login (LP `0x3737` `BOUNCE_ZONES_SYNC`); until then the built-in jump-quest list (`src/bounce_zones_builtin.inc`, generated from the server's yaml) applies. `tests/bounce_rules_test.cpp` checks both against the server's golden packet.
 
+## Map objects with missing art (1.6.4)
+
+A map that names map-object art the client's `Data` does not have used to end the session: the art lookup inside `CMapLoadable::MakeObj` (`0x0063AD16`) ends in a `_com_error` E_POINTER thrown out of the map load, and nothing catches it. Map 272000000 (Time Temple) is the known case: it places `Obj/acc10.img/timeTemple/pillar_old/7`, and the client's `Data/Map/Obj/acc10.img` has no `pillar_old` under `timeTemple`. `src/mapobj_guard.h` and the guard in `src/lamps.cpp` (`CMapLoadable::MakeObj_hook`) catch exactly the missing-data HRESULTs (E_POINTER, E_FAIL, STG_E_FILENOTFOUND, STG_E_PATHNOTFOUND) for one object, log `map obj: skipped Obj/<oS>.img/<l0>/<l1>/<l2>`, and leave that object out; every other HRESULT is rethrown untouched. Stock `RestoreObj` (`0x0063ACB5` -> return at `0x0063ACBA`) ignores MakeObj's return value, so skipping is safe: the layer is one object short, not half built. The same release's `Custom.wz` supplies the missing `pillar_old` art so the map draws it properly; the guard is what keeps the next unknown gap from closing the client.
+
+| Key | What | Default |
+| --- | --- | --- |
+| `[clienthax] mapobjguard` | `false`: rethrow every failed map object (stock behaviour: a missing art node closes the client) | `true` |
+
 ## Runtime inputs
 
 The game Data tree is intentionally external. The accepted checkpoint separately retains the base game executable, supporting runtime DLLs, launcher and the exact manually accepted built DLLs. Install into a private copy of the owned v83 client, apply the matching core and addon assets, and use the server/client release manifest. `config.example.ini` uses login port 8485; the earlier disposable tests used 8488.

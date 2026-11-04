@@ -169,3 +169,11 @@ add_test(NAME damagefmt_short_numbers COMMAND damagefmt_policy_test)
 add_executable(crash_report_test crash_report_test.cpp)
 add_test(NAME crash_report_classify_scrub COMMAND crash_report_test)
 
+add_executable(mapobj_guard_test mapobj_guard_test.cpp)
+set(MAPOBJ_TEST_EXE "Z:/MSv83/SlumsMS-dev/client-1.5.0-fixes2/exe-copy/MapleStory.exe" CACHE FILEPATH
+    "MapleStory.exe whose bytes the map-object guard test checks (optional)")
+if(MAPOBJ_TEST_EXE AND EXISTS "${MAPOBJ_TEST_EXE}")
+    add_test(NAME mapobj_guard_skips_missing_art COMMAND mapobj_guard_test "${MAPOBJ_TEST_EXE}")
+else()
+    add_test(NAME mapobj_guard_skips_missing_art COMMAND mapobj_guard_test)
+endif()

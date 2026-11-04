@@ -8,6 +8,9 @@
 #include "weather.h"
 #include "weatherfx.h"   // Weather_ObjCount / Weather_GetObj, for the post z
 #include "lamps.h"
+#include "constants.h"          // CONSTANTS_CONFIG_NAME
+#include "attackstop_patch.h"   // integration::ParseIniBool
+#include "mapobj_guard.h"       // what one unbuildable map object costs
 #include <atomic>
 #include <vector>
 #include <cmath>
@@ -1488,6 +1491,47 @@ void Lamps_Inject(CMapLoadable* pField, bool bSky) {
 // shared by five modules that have no business knowing about obj properties.
 extern void Weather_NoteObjProp(IWzProperty* pObjProp);
 
+// ---------------------------------------------------------------- one bad object must not end the session
+
+// config.ini [clienthax] mapobjguard, read once per process. Default true: the map loads one object
+// short instead of closing the client (mapobj_guard.h has the 272000000 evidence).
+static bool MapObjGuardEnabled() {
+    static const bool bEnabled = [] {
+        char value[32] = {};
+        GetPrivateProfileStringA("clienthax", "mapobjguard", "", value, sizeof(value),
+                                 ".\\" CONSTANTS_CONFIG_NAME);
+        return integration::ParseIniBool(value).value_or(true);
+    }();
+    return bEnabled;
+}
+
+// One part of the object's art path, as the map entry wrote it: a string or a number.
+static std::wstring ObjEntryPart(IWzProperty* pObjProp, const wchar_t* sKey) {
+    if (!pObjProp) {
+        return std::wstring();
+    }
+    try {
+        Ztl_variant_t v = pObjProp->item[sKey];
+        if (V_VT(&v) == VT_BSTR) {
+            return V_BSTR(&v);
+        }
+        return std::to_wstring(get_int32(v, 0));
+    } catch (const _com_error&) {
+        return std::wstring();
+    }
+}
+
+// The art path is the actionable half of a skipped object: it names the WZ node the client could not
+// read, so a missing upload is one log line away.
+static void LogSkippedObj(int nLayer, IWzProperty* pObjProp, long hr) {
+    const std::wstring sPath = MapObjGuard::Describe(ObjEntryPart(pObjProp, L"oS"),
+                                                     ObjEntryPart(pObjProp, L"l0"),
+                                                     ObjEntryPart(pObjProp, L"l1"),
+                                                     ObjEntryPart(pObjProp, L"l2"));
+    DebugMessage("map obj: skipped %ls on layer %d: %s; the object is left out, the map stays",
+                 sPath.c_str(), nLayer, MapObjGuard::ReasonLabel(hr));
+}
+
 void* CMapLoadable::MakeObj_hook(int nLayer, IWzProperty* pObjProp) {
     // Before the original call, because the layer weather.cpp captures is built INSIDE
     // it. This is also how the flag stays fresh: it is written for every object, so one
@@ -1554,7 +1598,22 @@ void* CMapLoadable::MakeObj_hook(int nLayer, IWzProperty* pObjProp) {
         }
     }
     ScopedSet<int> gk(&g_nCaptureKeep, nKeep);
-    return CMapLoadable::MakeObj(this, nLayer, pObjProp);
+    if (!MapObjGuardEnabled()) {
+        return CMapLoadable::MakeObj(this, nLayer, pObjProp);
+    }
+    // Stock RestoreObj (0x0063ACB5 -> 0x0063ACBA) ignores this return value: the object is inserted
+    // into the layer by MakeObj itself. So an object whose art the client does not have costs that
+    // one object, not the map load -- the throw was leaving the session (272000000). Only the
+    // missing-data HRESULTs are skipped; anything else is rethrown untouched (mapobj_guard.h).
+    try {
+        return CMapLoadable::MakeObj(this, nLayer, pObjProp);
+    } catch (const _com_error& e) {
+        if (MapObjGuard::Classify(e.Error()) == MapObjGuard::Action::Skip) {
+            LogSkippedObj(nLayer, pObjProp, e.Error());
+            return nullptr;
+        }
+        throw;
+    }
 }
 
 // The lowest layer z any of the map's OWN objects uses, so a lamp can be put behind all
