@@ -1,7 +1,6 @@
 #include "pch.h"
 #include "hook.h"
 #include "constants.h"
-#include "server_endpoint.h"
 #include "ztl/ztl.h"
 #include <windows.h>
 
@@ -31,18 +30,15 @@ void ProcessConfigFile() {
     if (!CONSTANTS_USE_CONFIG_FILE || g_sServerHost) {
         return;
     }
-    // server.ini (layer-owned, per launcher channel) before config.ini (player-owned): server_endpoint.h, b301.
-    ServerEndpoint::Endpoint endpoint;
-    auto read = [](const char* file, const char* section, const char* key, char* buffer, size_t size) -> size_t {
-        char path[MAX_PATH];
-        sprintf_s(path, ".\\%s", file);
-        return GetPrivateProfileStringA(section, key, "", buffer, static_cast<DWORD>(size), path);
-    };
-    if (!ServerEndpoint::Resolve(read, endpoint)) {
+    char sBuffer[1024];
+    if (GetPrivateProfileStringA("config", "host", "", sBuffer, sizeof(sBuffer), ".\\" CONSTANTS_CONFIG_NAME) == 0) {
         return;
     }
-    g_sServerHost = _strdup(endpoint.host);
-    g_nServerPort = endpoint.port;
+    g_sServerHost = _strdup(sBuffer);
+    if (GetPrivateProfileStringA("config", "port", "", sBuffer, sizeof(sBuffer), ".\\" CONSTANTS_CONFIG_NAME) == 0) {
+        return;
+    }
+    g_nServerPort = atoi(sBuffer);
 }
 
 

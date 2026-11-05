@@ -41,7 +41,7 @@ without the stamp (1.4.1 and older) count as build 0.
 
 ## Server address
 
-`config.ini` `[config] host=` takes a host name (for example `slumsms.asslorde.com`) or an IPv4 address, and `port=` the login port. A name is resolved once, on the first connection. A `server.ini` next to it (`[server] host=` / `port=`) wins when it names both a host and a port from 1 to 65535: each launcher channel's client layer ships one, and the launcher replaces it on update, while `config.ini` is the player's and is kept (b301, `src/server_endpoint.h`). Without a usable `server.ini`, `config.ini` is read as before.
+`config.ini` `[config] host=` takes a host name (for example `slumsms.asslorde.com`) or an IPv4 address, and `port=` the login port. A name is resolved once, on the first connection.
 
 ## Movement during attacks
 
