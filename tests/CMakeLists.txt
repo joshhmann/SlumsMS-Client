@@ -6,6 +6,9 @@ add_test(NAME buildstamp_wire_format COMMAND buildstamp_proto_test)
 add_executable(buildshow_test buildshow_test.cpp)
 add_test(NAME buildshow_text COMMAND buildshow_test)
 
+add_executable(server_endpoint_test server_endpoint_test.cpp)
+add_test(NAME server_endpoint_choice COMMAND server_endpoint_test)
+
 add_executable(checked_hook_test checked_hook_test.cpp)
 add_test(NAME checked_hook_transactions COMMAND checked_hook_test)
 
