@@ -191,7 +191,8 @@ std::deque<Command> g_cashQueue;           // P0-6 use_cash_item
 // merchant_open (P0-2 GP8): one setup at a time, driven a step per frame on the render thread. The check result and
 // the spawned merchant come from the packet thread.
 struct MerchantSetup {
-    enum Stage { Idle, WaitCheck, WaitPrompt, WaitRoom, WaitSpawn, CloseWaitWindow, CloseWaitGone } stage = Idle;
+    enum Stage { Idle, WaitCheck, WaitPrompt, WaitRoom, WaitSpawn, CloseWaitWindow, CloseWaitGone, FredrickWait }
+        stage = Idle;
     Command ask;
     int cashSlot = 0, cashItem = 0, itemType = 0, itemSlot = 0;
     uint64_t deadlineMs = 0;
@@ -201,6 +202,8 @@ std::deque<Command> g_merchantAsks;
 int g_merchantCheck = -1;        // the last ENTRUSTED_SHOP_CHECK_RESULT byte, -1 = none yet
 int g_merchantOid = 0;           // this character's merchant on the field (SPAWN_HIRED_MERCHANT), for merchant_close
 int g_closeMerchantAsks = 0;
+int g_fredrickAsks = 0;
+int g_fredrickMessage = -1;      // the last FREDRICK_MESSAGE byte, -1 = none yet
 bool g_merchantSpawned = false;  // SPAWN_HIRED_MERCHANT for this character
 
 void DropExpiredDialogs(uint64_t now) {
@@ -489,6 +492,9 @@ void CommandsThread() {
                     } else if (c.kind == Command::DropItem) {
                         std::lock_guard<std::mutex> lock(g_requestMutex);
                         if (g_dropQueue.size() < 8) g_dropQueue.push_back({c.item, c.count});
+                    } else if (c.kind == Command::FredrickRetrieve) {
+                        std::lock_guard<std::mutex> lock(g_merchantMutex);
+                        if (g_fredrickAsks < 2) ++g_fredrickAsks;
                     } else if (c.kind == Command::MerchantClose) {
                         std::lock_guard<std::mutex> lock(g_merchantMutex);
                         if (g_closeMerchantAsks < 2) ++g_closeMerchantAsks;
@@ -798,7 +804,10 @@ int CharacterId() {
 }
 
 void OnMerchantPacket(uint16_t opcode, const unsigned char* bytes, size_t size) {
-    if (opcode == kOpEntrustedShopCheck && size >= 3) {
+    if (opcode == kOpFredrickMessage && size >= 3) {
+        std::lock_guard<std::mutex> lock(g_merchantMutex);
+        g_fredrickMessage = bytes[2];
+    } else if (opcode == kOpEntrustedShopCheck && size >= 3) {
         std::lock_guard<std::mutex> lock(g_merchantMutex);
         g_merchantCheck = bytes[2];
     } else if (opcode == kOpSpawnHiredMerchant) {
@@ -901,14 +910,29 @@ void StepMerchant() {
     const uint64_t now = NowMs();
     if (m.stage == MerchantSetup::Idle) {
         int oid = 0;
-        bool close = false;
+        bool close = false, fredrick = false;
         {
             std::lock_guard<std::mutex> lock(g_merchantMutex);
-            if (g_closeMerchantAsks > 0) {
+            if (g_fredrickAsks > 0) {
+                --g_fredrickAsks;
+                fredrick = true;
+                g_fredrickMessage = -1;
+            } else if (g_closeMerchantAsks > 0) {
                 --g_closeMerchantAsks;
                 close = true;
                 oid = g_merchantOid;
             }
+        }
+        if (fredrick) {
+            // fredrick_retrieve: the Fredrick window's Retrieve button (0x0079B238). Click Fredrick (9030000) first, as
+            // a player would; the server does not need the window.
+            if (!CurField()) { Emit("item.fredrick", ",\"ok\":false,\"error\":\"field_not_ready\""); return; }
+            COutPacket retrieve(kOpFredrickAction);
+            retrieve.Encode1(kFredrickRetrieve);
+            SendOut(retrieve);
+            m.stage = MerchantSetup::FredrickWait;
+            m.deadlineMs = now + 5000;
+            return;
         }
         if (close) {
             // merchant_close: the owner visits the merchant (maintenance; the server reopens the owner window), then
@@ -952,6 +976,11 @@ void StepMerchant() {
     if (now > m.deadlineMs) {
         static const char* const kStage[] = {"", "check", "title_prompt", "owner_window", "merchant_spawn",
                                              "owner_window", "owner_window_close"};
+        if (m.stage == MerchantSetup::FredrickWait) {
+            Emit("item.fredrick", ",\"ok\":false,\"error\":\"timeout\"");
+            g_merchant = MerchantSetup();
+            return;
+        }
         if (m.stage >= MerchantSetup::CloseWaitWindow) {
             CloseDone(std::string(",\"ok\":false,\"error\":\"timeout_") + kStage[m.stage] + "\"");
             return;
@@ -1012,6 +1041,19 @@ void StepMerchant() {
         ClientEndDialog(owner, 2);
         m.stage = MerchantSetup::WaitSpawn;
         m.deadlineMs = now + 5000;
+        return;
+    }
+    if (m.stage == MerchantSetup::FredrickWait) {
+        int code = -1;
+        {
+            std::lock_guard<std::mutex> lock(g_merchantMutex);
+            code = g_fredrickMessage;
+        }
+        if (code < 0) return;
+        Emit("item.fredrick", std::string(",\"ok\":") + (code == kFredrickRetrieved ? "true" : "false") +
+                                  ",\"code\":" + std::to_string(code) +
+                                  (code == kFredrickRetrieved ? "" : ",\"error\":\"refused\""));
+        g_merchant = MerchantSetup();
         return;
     }
     if (m.stage == MerchantSetup::CloseWaitWindow) {
