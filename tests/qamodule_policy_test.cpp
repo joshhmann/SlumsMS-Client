@@ -182,6 +182,29 @@ int main() {
         Check(NpcIdForTalkPacket(std::vector<unsigned char>{0x30, 0x01, 4, 0x08, 0xFA, 0x1E, 0x00, 0}.data(), 8) == 2030088,
             "npc id from NPC_TALK");
         Check(NpcIdForTalkPacket(std::vector<unsigned char>{0x30, 0x01, 4}.data(), 3) == -1, "short NPC_TALK has no npc id");
+        {
+            Command c = ParseCommand("npc_pos 2030008");
+            Check(c.kind == Command::NpcPos && c.npc == 2030008, "npc_pos parses");
+            Check(ParseCommand("npc_pos 0").kind == Command::Invalid, "npc_pos needs a positive id");
+            Check(ParseCommand("npc_pos 5 x").kind == Command::Invalid, "npc_pos takes one argument");
+            // spawnNPC: opcode 0x101, oid 0x10, id 2030008, x -969, cy -218, f, fh, rx0, rx1, 1
+            std::vector<unsigned char> spawn{0x01, 0x01, 0x10, 0, 0, 0, 0xB8, 0xF9, 0x1E, 0x00, 0x37, 0xFC, 0x26, 0xFF,
+                                             1, 0x9F, 0, 0, 0, 0, 0, 1};
+            NpcUpdate u = ParseNpcPacket(kOpSpawnNpc, spawn.data(), spawn.size());
+            Check(u.op == NpcUpdate::Add && u.oid == 0x10 && u.npc == 2030008 && u.x == -969 && u.y == -218, "spawn npc");
+            std::vector<unsigned char> ctl{0x03, 0x01, 1, 0x10, 0, 0, 0, 0xB8, 0xF9, 0x1E, 0x00, 0x37, 0xFC, 0x26, 0xFF};
+            u = ParseNpcPacket(kOpSpawnNpcController, ctl.data(), ctl.size());
+            Check(u.op == NpcUpdate::Add && u.npc == 2030008 && u.y == -218, "controller spawn");
+            std::vector<unsigned char> drop{0x03, 0x01, 0, 0x10, 0, 0, 0};
+            Check(ParseNpcPacket(kOpSpawnNpcController, drop.data(), drop.size()).op == NpcUpdate::None,
+                "a dropped controller leaves the npc");
+            std::vector<unsigned char> rem{0x02, 0x01, 0x10, 0, 0, 0};
+            u = ParseNpcPacket(kOpRemoveNpc, rem.data(), rem.size());
+            Check(u.op == NpcUpdate::Remove && u.oid == 0x10, "remove npc");
+            ScreenPoint p = WorldToScreen(-969, -248, -1000, -300, 800, 600);
+            Check(p.x == 431 && p.y == 352 && p.inView, "world to screen");
+            Check(!WorldToScreen(1300, 0, 0, 0, 800, 600).inView, "off screen");
+        }
         Check(std::string(DialogForPacket(kOpNpcTalk, std::vector<unsigned char>{0x30, 0x01, 0}.data(), 3)) == "npc_dialog",
             "npc dialog");
         Check(std::string(DialogForPacket(kOpServerMessage, std::vector<unsigned char>{0x44, 0x00, 1}.data(), 3)) == "notice",

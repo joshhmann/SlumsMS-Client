@@ -15,6 +15,10 @@
 //   ping                         -> {"ev":"pong"}
 //   burst <fps> <ms> <label>     -> back-buffer captures at <fps> for <ms>, to qa-captures\<label>\NNNN.bmp beside
 //                                   the game, plus frames.tsv (index, ms since the burst began); {"ev":"burst.done"}
+//   npc_pos <npc id>             -> {"ev":"npc.pos","npc":<id>,"ok":true,"x":..,"y":..} in game-screen pixels (the
+//                                   space the worker's screenshots and mouse_click use), or "ok":false with "error":
+//                                   npc_not_on_map | out_of_view | field_not_ready. The client never clicks: the
+//                                   worker's click_npc clicks the point (P1-Q2, schema agreed with SlumsMS QA).
 // ============================================================
 
 #include <cstdint>
@@ -57,7 +61,8 @@ inline bool ValidLabel(const std::string& label) {
 }
 
 struct Command {
-    enum Kind { Invalid, Ping, Burst } kind = Invalid;
+    enum Kind { Invalid, Ping, Burst, NpcPos } kind = Invalid;
+    int npc = 0;
     int fps = 0;
     int ms = 0;
     std::string label;
@@ -79,6 +84,13 @@ inline Command ParseCommand(const std::string& line) {
         c.fps = fps;
         c.ms = ms;
         c.label = label;
+        return c;
+    }
+    int npc = 0;
+    if (std::sscanf(line.c_str(), "npc_pos %d %c", &npc, &extra) == 1) {
+        if (npc <= 0) { c.error = "npc id must be positive"; return c; }
+        c.kind = Command::NpcPos;
+        c.npc = npc;
         return c;
     }
     c.error = "unknown command";
@@ -238,6 +250,61 @@ inline ChatLine ParseChatPacket(uint16_t opcode, const unsigned char* data, size
     line.ok = true;
     line.text = TruncateUtf8(line.text, kMaxChatText);
     return line;
+}
+
+// ---- npcs on the field (P1-Q2 click_npc) ------------------------------------------------------------------------
+// The module keeps the field's npcs from the server's own spawn packets (PacketCreator.spawnNPC and the controller
+// form), so it needs no client address: object id -> template id and the npc's foothold point (x, cy).
+constexpr uint16_t kOpSpawnNpc = 0x101;              // int oid, int id, short x, short cy, bool f, short fh, rx0, rx1, 1
+constexpr uint16_t kOpRemoveNpc = 0x102;             // int oid
+constexpr uint16_t kOpSpawnNpcController = 0x103;    // byte 1 + the spawn body, or byte 0 + int oid (control dropped)
+
+struct NpcUpdate {
+    enum Op { None, Add, Remove } op = None;
+    int oid = 0;
+    int npc = 0;
+    int x = 0;
+    int y = 0;   // cy: the foothold the npc stands on
+};
+
+inline NpcUpdate ParseNpcPacket(uint16_t opcode, const unsigned char* data, size_t size) {
+    NpcUpdate u;
+    if (!data || size < 2) return u;
+    detail::Reader r{data, size, 2};
+    int mode = 1, oid = 0, npc = 0, x = 0, cy = 0;
+    if (opcode == kOpRemoveNpc) {
+        if (!r.U32(oid)) return u;
+        u.op = NpcUpdate::Remove;
+        u.oid = oid;
+        return u;
+    }
+    if (opcode == kOpSpawnNpcController && !r.U8(mode)) return u;
+    if (opcode != kOpSpawnNpc && opcode != kOpSpawnNpcController) return u;
+    if (mode == 0) return u;   // the controller dropped: the npc itself stays on the field
+    if (!r.U32(oid) || !r.U32(npc) || !r.U16(x) || !r.U16(cy)) return u;
+    u.op = NpcUpdate::Add;
+    u.oid = oid;
+    u.npc = npc;
+    u.x = static_cast<int16_t>(x);
+    u.y = static_cast<int16_t>(cy);
+    return u;
+}
+
+constexpr int kNpcClickRise = 30;   // click this far above the npc's feet, inside a standing sprite
+
+// A world point as a game-screen point: IWzGr2D::center is the world point at the middle of the w x h screen.
+struct ScreenPoint {
+    int x = 0;
+    int y = 0;
+    bool inView = false;
+};
+
+inline ScreenPoint WorldToScreen(int wx, int wy, int camX, int camY, int w, int h) {
+    ScreenPoint p;
+    p.x = wx - camX + w / 2;
+    p.y = wy - camY + h / 2;
+    p.inView = p.x >= 0 && p.x < w && p.y >= 0 && p.y < h;
+    return p;
 }
 
 // The runner's name for a chat line's kind (QA's chat.log groups by it): the packet a line came in and its mode byte.

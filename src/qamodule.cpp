@@ -16,6 +16,8 @@
 #include "constants.h"   // wndman.h uses CONSTANTS_CENTER_STATUSBAR without including it
 #include "wvs/wnd.h"
 #include "wvs/wndman.h"
+#include "wvs/util.h"     // get_gr: the camera (IWzGr2D::center) and the game screen size
+#include <map>
 
 #include <d3d9.h>
 #include <atomic>
@@ -405,6 +407,9 @@ void CommandsThread() {
                     const Command c = ParseCommand(line);
                     if (c.kind == Command::Ping) {
                         Emit("pong");
+                    } else if (c.kind == Command::NpcPos) {
+                        std::lock_guard<std::mutex> lock(g_npcMutex);
+                        if (g_npcPosQueue.size() < 16) g_npcPosQueue.push_back(c.npc);
                     } else if (c.kind == Command::Burst) {
                         std::lock_guard<std::mutex> lock(g_burstMutex);
                         g_burstQueue.push_back({c.label, c.fps, c.ms});
@@ -417,6 +422,78 @@ void CommandsThread() {
         }
         DisconnectNamedPipe(pipe);
         CloseHandle(pipe);
+    }
+}
+
+// ---- npcs on the field (P1-Q2 click_npc) ---------------------------------------------------------------------------
+// Kept from the server's spawn packets (packet thread), read on the render thread to answer npc_pos.
+struct FieldNpc {
+    int npc;
+    int x;
+    int y;
+};
+std::mutex g_npcMutex;
+std::map<int, FieldNpc> g_npcs;          // object id -> npc
+std::deque<int> g_npcPosQueue;           // npc_pos requests waiting for the render thread
+
+void OnNpcPacket(uint16_t opcode, const unsigned char* bytes, size_t size) {
+    if (opcode == kOpSetField) {         // a new field: the old field's npcs are gone
+        std::lock_guard<std::mutex> lock(g_npcMutex);
+        g_npcs.clear();
+        return;
+    }
+    const NpcUpdate u = ParseNpcPacket(opcode, bytes, size);
+    if (u.op == NpcUpdate::None) return;
+    std::lock_guard<std::mutex> lock(g_npcMutex);
+    if (u.op == NpcUpdate::Add) g_npcs[u.oid] = {u.npc, u.x, u.y};
+    else g_npcs.erase(u.oid);
+}
+
+bool ReadCamera(int& cx, int& cy, int& w, int& h) {
+    try {
+        IWzGr2DPtr& gr = get_gr();
+        if (!gr) return false;
+        IWzVector2DPtr center = gr->Getcenter();
+        if (!center) return false;
+        cx = center->x;
+        cy = center->y;
+        w = static_cast<int>(gr->Getwidth());
+        h = static_cast<int>(gr->Getheight());
+        return w > 0 && h > 0;
+    } catch (const _com_error&) {
+        return false;
+    }
+}
+
+// Render thread: answers each queued npc_pos with the npc's screen point.
+void AnswerNpcPos() {
+    std::deque<int> asks;
+    {
+        std::lock_guard<std::mutex> lock(g_npcMutex);
+        asks.swap(g_npcPosQueue);
+    }
+    for (int npc : asks) {
+        const std::string head = ",\"npc\":" + std::to_string(npc);
+        int mapId = 0, cx = 0, cy = 0, w = 0, h = 0;
+        if (!CurMapId(mapId) || !ReadCamera(cx, cy, w, h)) {
+            Emit("npc.pos", head + ",\"ok\":false,\"error\":\"field_not_ready\"");
+            continue;
+        }
+        bool found = false;
+        FieldNpc at{};
+        {
+            std::lock_guard<std::mutex> lock(g_npcMutex);
+            for (const auto& entry : g_npcs) {
+                if (entry.second.npc == npc) { at = entry.second; found = true; break; }
+            }
+        }
+        if (!found) {
+            Emit("npc.pos", head + ",\"ok\":false,\"error\":\"npc_not_on_map\"");
+            continue;
+        }
+        const ScreenPoint p = WorldToScreen(at.x, at.y - kNpcClickRise, cx, cy, w, h);
+        const std::string where = ",\"x\":" + std::to_string(p.x) + ",\"y\":" + std::to_string(p.y);
+        Emit("npc.pos", head + (p.inView ? ",\"ok\":true" : ",\"ok\":false,\"error\":\"out_of_view\"") + where);
     }
 }
 
@@ -512,6 +589,7 @@ void QaModule_OnPacket(uint16_t opcode, const void* packet, size_t size) {
     const char* dialog = DialogForPacket(opcode, bytes, size);
     QueueDialog(dialog, opcode == kOpNpcTalk && dialog ? NpcIdForTalkPacket(bytes, size) : -1);
     if (!g_dispatchSiteOk) return;
+    OnNpcPacket(opcode, bytes, size);
     // A line the client puts in its chat log: map chat, buddy/party/guild, whisper, spouse, notice, yellow tip.
     const ChatLine chat = ParseChatPacket(opcode, bytes, size);
     if (chat.ok) {
@@ -549,6 +627,7 @@ void QaModule_OnFrame(IDirect3DDevice9* dev) {
         }
     }
     PollWindows();
+    AnswerNpcPos();
     if (!g_active.on) {
         std::lock_guard<std::mutex> lock(g_burstMutex);
         if (g_burstQueue.empty()) return;
