@@ -90,6 +90,12 @@ constexpr uint16_t kOpEntrustedShopCheck = 0x32;     // server: [7] go on, [9] r
 constexpr uint16_t kOpPlayerInteraction = 0x7B;      // CREATE 0, PUT_ITEM 0x21, OPEN 0x0B 01, EXIT 0x0A
 constexpr uint16_t kOpSpawnHiredMerchant = 0x109;    // server: [int owner id][int item id][x][y]...
 constexpr int kMerchantCheckOk = 7;
+// fredrick_retrieve: the Fredrick window's Retrieve button, FREDRICK_ACTION [0x1A] (0x0079B238); the server answers
+// FREDRICK_MESSAGE [0x1E] when it handed everything over, another code when it refused (a full tab, ...).
+constexpr uint16_t kOpFredrickAction = 0x40;
+constexpr unsigned char kFredrickRetrieve = 0x1A;
+constexpr uint16_t kOpFredrickMessage = 0x136;
+constexpr int kFredrickRetrieved = 0x1E;
 inline bool IsHiredMerchantItem(int id) { return id >= 5030000 && id <= 5039999; }
 inline bool ValidShopTitle(const std::string& t) {
     if (t.empty() || t.size() > static_cast<size_t>(kMaxShopTitle)) return false;
@@ -115,7 +121,7 @@ inline bool ValidCharName(const std::string& name) {
 
 struct Command {
     enum Kind { Invalid, Ping, Burst, NpcPos, ClickOption, CloseDialog, DialogNext, DropItem, PartyCreate, PartyInvite,
-        UseCashItem, MerchantOpen, MerchantClose } kind = Invalid;
+        UseCashItem, MerchantOpen, MerchantClose, FredrickRetrieve } kind = Invalid;
     int npc = 0;
     int option = 0;   // click_option: 1-8
     int item = 0;     // drop_item
@@ -176,6 +182,7 @@ inline Command ParseCommand(const std::string& line) {
     }
     if (line == "party_create") { c.kind = Command::PartyCreate; return c; }
     if (line == "merchant_close") { c.kind = Command::MerchantClose; return c; }
+    if (line == "fredrick_retrieve") { c.kind = Command::FredrickRetrieve; return c; }
     // merchant_open <item id> <quantity> <price> [title]: the title is the rest of the line (default "QA shop").
     int qty = 0, price = 0, used = 0;
     if (std::sscanf(line.c_str(), "merchant_open %d %d %d%n", &item, &qty, &price, &used) == 3) {
@@ -503,7 +510,10 @@ constexpr uint16_t kOpNoticeType = 1;          // SERVERMESSAGE type 1 = the not
 // NPC_TALK's handler runs the dialog modally (CScriptMan -> CWnd::DoModal) and returns only when it closes, so the
 // module must read that packet before the client handles it: after, the menu rows arrive once the menu is gone (H1).
 // The hired merchant check result is the same: on [7] its handler runs the shop title prompt modally (0x00A1DD99).
-inline bool ReadBeforeClient(uint16_t opcode) { return opcode == kOpNpcTalk || opcode == kOpEntrustedShopCheck; }
+// FREDRICK_MESSAGE too: its handler may show a modal notice before it returns.
+inline bool ReadBeforeClient(uint16_t opcode) {
+    return opcode == kOpNpcTalk || opcode == kOpEntrustedShopCheck || opcode == kOpFredrickMessage;
+}
 
 inline std::string LowerAscii(std::string s) {
     for (char& c : s) {

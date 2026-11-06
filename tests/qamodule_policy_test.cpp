@@ -288,6 +288,8 @@ int main() {
                 "hired merchants are 503xxxx; 514xxxx are player shops");
             Check(ReadBeforeClient(kOpEntrustedShopCheck), "the merchant check is read before its title prompt");
             Check(ParseCommand("merchant_close").kind == Command::MerchantClose, "merchant_close parses");
+            Check(ParseCommand("fredrick_retrieve").kind == Command::FredrickRetrieve, "fredrick_retrieve parses");
+            Check(ReadBeforeClient(kOpFredrickMessage), "Fredrick's answer is read before its notice");
             // SPAWN_HIRED_MERCHANT as PacketCreator.spawnHiredMerchantBox writes it.
             std::vector<unsigned char> spawn{0x09, 0x01, 46, 0, 0, 0, 0x30, 0xC6, 0x4C, 0, 0x10, 0, 0x20, 0, 0, 0,
                                              8, 0, 'A', 'q', 'C', 'l', 'i', 'e', 'n', 't', 5, 0x2A, 0, 0, 0};
