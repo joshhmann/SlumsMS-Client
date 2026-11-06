@@ -115,7 +115,7 @@ inline bool ValidCharName(const std::string& name) {
 
 struct Command {
     enum Kind { Invalid, Ping, Burst, NpcPos, ClickOption, CloseDialog, DialogNext, DropItem, PartyCreate, PartyInvite,
-        UseCashItem, MerchantOpen } kind = Invalid;
+        UseCashItem, MerchantOpen, MerchantClose } kind = Invalid;
     int npc = 0;
     int option = 0;   // click_option: 1-8
     int item = 0;     // drop_item
@@ -175,6 +175,7 @@ inline Command ParseCommand(const std::string& line) {
         return c;
     }
     if (line == "party_create") { c.kind = Command::PartyCreate; return c; }
+    if (line == "merchant_close") { c.kind = Command::MerchantClose; return c; }
     // merchant_open <item id> <quantity> <price> [title]: the title is the rest of the line (default "QA shop").
     int qty = 0, price = 0, used = 0;
     if (std::sscanf(line.c_str(), "merchant_open %d %d %d%n", &item, &qty, &price, &used) == 3) {
@@ -312,6 +313,16 @@ struct Reader {
     }
 };
 }  // namespace detail
+
+// SPAWN_HIRED_MERCHANT: [int owner][int item][short x][short y][short 0][str owner name][byte 5][int object id]...
+// The object id is what VISIT names (merchant_close). Returns false when the packet is too short.
+inline bool ParseMerchantSpawn(const unsigned char* data, size_t size, int& owner, int& oid) {
+    detail::Reader r{data, size, 2};
+    int item = 0, x = 0, y = 0, zero = 0, kind = 0;
+    std::string name;
+    return r.U32(owner) && r.U32(item) && r.U16(x) && r.U16(y) && r.U16(zero) && r.Str(name) && r.U8(kind) &&
+           r.U32(oid);
+}
 
 // One server packet (starting at its 2-byte opcode) as a chat line; ok=false when the opcode is not a chat source
 // or the payload does not decode.

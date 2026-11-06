@@ -287,6 +287,14 @@ int main() {
             Check(IsHiredMerchantItem(5030000) && IsHiredMerchantItem(5030009) && !IsHiredMerchantItem(5140000),
                 "hired merchants are 503xxxx; 514xxxx are player shops");
             Check(ReadBeforeClient(kOpEntrustedShopCheck), "the merchant check is read before its title prompt");
+            Check(ParseCommand("merchant_close").kind == Command::MerchantClose, "merchant_close parses");
+            // SPAWN_HIRED_MERCHANT as PacketCreator.spawnHiredMerchantBox writes it.
+            std::vector<unsigned char> spawn{0x09, 0x01, 46, 0, 0, 0, 0x30, 0xC6, 0x4C, 0, 0x10, 0, 0x20, 0, 0, 0,
+                                             8, 0, 'A', 'q', 'C', 'l', 'i', 'e', 'n', 't', 5, 0x2A, 0, 0, 0};
+            int owner = 0, oid = 0;
+            Check(ParseMerchantSpawn(spawn.data(), spawn.size(), owner, oid) && owner == 46 && oid == 42,
+                "the merchant's owner and object id");
+            Check(!ParseMerchantSpawn(spawn.data(), spawn.size() - 2, owner, oid), "a short spawn is refused");
             Check(ParseCommand("party_create").kind == Command::PartyCreate, "party_create parses");
             Check(ParseCommand("party_create now").kind == Command::Invalid, "party_create takes nothing");
             c = ParseCommand("party_invite Bishbot");
