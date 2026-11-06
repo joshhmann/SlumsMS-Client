@@ -407,6 +407,9 @@ void CommandsThread() {
                     const Command c = ParseCommand(line);
                     if (c.kind == Command::Ping) {
                         Emit("pong");
+                    } else if (c.kind == Command::ClickOption) {
+                        std::lock_guard<std::mutex> lock(g_menuMutex);
+                        if (g_optionQueue.size() < 8) g_optionQueue.push_back(c.option);
                     } else if (c.kind == Command::NpcPos) {
                         std::lock_guard<std::mutex> lock(g_npcMutex);
                         if (g_npcPosQueue.size() < 16) g_npcPosQueue.push_back(c.npc);
@@ -494,6 +497,71 @@ void AnswerNpcPos() {
         const ScreenPoint p = WorldToScreen(at.x, at.y - kNpcClickRise, cx, cy, w, h);
         const std::string where = ",\"x\":" + std::to_string(p.x) + ",\"y\":" + std::to_string(p.y);
         Emit("npc.pos", head + (p.inView ? ",\"ok\":true" : ",\"ok\":false,\"error\":\"out_of_view\"") + where);
+    }
+}
+
+// ---- npc menus (P1-Q2 click_option) ------------------------------------------------------------------------------
+// The rows of the last npc dialog, from its NPC_TALK packet (packet thread); click_option is answered on the render
+// thread, which is the game thread the dialog's modal loop runs on.
+std::mutex g_menuMutex;
+NpcMenu g_menu;                          // isMenu false when the last npc dialog was not a menu
+std::deque<int> g_optionQueue;
+
+void OnNpcTalk(const unsigned char* bytes, size_t size) {
+    const NpcMenu menu = ParseNpcMenu(bytes, size);
+    if (!menu.isTalk) return;
+    std::lock_guard<std::mutex> lock(g_menuMutex);
+    g_menu = menu;
+}
+
+// The open npc dialog the module saw last, or 0.
+uintptr_t OpenNpcDialog() {
+    for (size_t i = g_windowCount; i-- > 0;) {
+        if (g_windows[i].name == "npc_dialog") return g_windows[i].ptr;
+    }
+    return 0;
+}
+
+bool EndMenu(uintptr_t dlg, int value) {
+    __try {
+        *reinterpret_cast<int*>(dlg + kDlgOffSelection) = value;
+        *reinterpret_cast<int*>(dlg + kDlgOffRet) = kDlgRetOk;
+        *reinterpret_cast<int*>(dlg + kDlgOffTerminate) = 1;
+        return true;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+}
+
+void AnswerClickOption() {
+    std::deque<int> asks;
+    NpcMenu menu;
+    {
+        std::lock_guard<std::mutex> lock(g_menuMutex);
+        asks.swap(g_optionQueue);
+        menu = g_menu;
+    }
+    for (int n : asks) {
+        const std::string head = ",\"op\":\"click_option\",\"option\":" + std::to_string(n);
+        const uintptr_t dlg = OpenNpcDialog();
+        if (!dlg || !menu.isMenu) {
+            Emit("click.done", head + ",\"ok\":false,\"error\":\"not_a_menu\"");
+            continue;
+        }
+        if (n > static_cast<int>(menu.values.size())) {
+            Emit("click.done", head + ",\"ok\":false,\"error\":\"no_such_option\"");
+            continue;
+        }
+        const int value = menu.values[static_cast<size_t>(n - 1)];
+        if (!EndMenu(dlg, value)) {
+            Emit("click.done", head + ",\"ok\":false,\"error\":\"not_a_menu\"");
+            continue;
+        }
+        {
+            std::lock_guard<std::mutex> lock(g_menuMutex);
+            g_menu = NpcMenu();          // answered: a second click_option needs the next menu
+        }
+        Emit("click.done", head + ",\"ok\":true,\"value\":" + std::to_string(value));
     }
 }
 
@@ -590,6 +658,7 @@ void QaModule_OnPacket(uint16_t opcode, const void* packet, size_t size) {
     QueueDialog(dialog, opcode == kOpNpcTalk && dialog ? NpcIdForTalkPacket(bytes, size) : -1);
     if (!g_dispatchSiteOk) return;
     OnNpcPacket(opcode, bytes, size);
+    if (opcode == kOpNpcTalk) OnNpcTalk(bytes, size);
     // A line the client puts in its chat log: map chat, buddy/party/guild, whisper, spouse, notice, yellow tip.
     const ChatLine chat = ParseChatPacket(opcode, bytes, size);
     if (chat.ok) {
@@ -628,6 +697,7 @@ void QaModule_OnFrame(IDirect3DDevice9* dev) {
     }
     PollWindows();
     AnswerNpcPos();
+    AnswerClickOption();
     if (!g_active.on) {
         std::lock_guard<std::mutex> lock(g_burstMutex);
         if (g_burstQueue.empty()) return;

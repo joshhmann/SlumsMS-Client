@@ -205,6 +205,27 @@ int main() {
             Check(p.x == 431 && p.y == 352 && p.inView, "world to screen");
             Check(!WorldToScreen(1300, 0, 0, 0, 800, 600).inView, "off screen");
         }
+        {
+            Command c = ParseCommand("click_option 1");
+            Check(c.kind == Command::ClickOption && c.option == 1, "click_option parses");
+            Check(ParseCommand("click_option 9").kind == Command::Invalid, "click_option is 1-8");
+            Check(ParseCommand("click_option 0").kind == Command::Invalid, "click_option starts at 1");
+            auto talk = [](int type, const std::string& text) {
+                std::vector<unsigned char> b{0x30, 0x01, 4, 0x08, 0xFA, 0x1E, 0x00, static_cast<unsigned char>(type), 0,
+                                             static_cast<unsigned char>(text.size() & 0xFF),
+                                             static_cast<unsigned char>(text.size() >> 8)};
+                b.insert(b.end(), text.begin(), text.end());
+                return b;
+            };
+            auto menu = talk(4, "#wPick:#b\r\n#L0#Stage 1#l\r\n#L5#Stage 2#l\r\n#L12#Stage 3#l");
+            NpcMenu m = ParseNpcMenu(menu.data(), menu.size());
+            Check(m.isTalk && m.isMenu && m.values == std::vector<int>({0, 5, 12}), "menu rows keep their #L values");
+            auto say = talk(0, "#wHello #L0#not a row in a say#l");
+            m = ParseNpcMenu(say.data(), say.size());
+            Check(m.isTalk && !m.isMenu && m.values.empty(), "a say dialog is not a menu");
+            auto odd = talk(4, "#L#broken #Lx# #L3 #L7#ok#l");
+            Check(ParseNpcMenu(odd.data(), odd.size()).values == std::vector<int>({7}), "only well-formed #L<n># rows count");
+        }
         Check(std::string(DialogForPacket(kOpNpcTalk, std::vector<unsigned char>{0x30, 0x01, 0}.data(), 3)) == "npc_dialog",
             "npc dialog");
         Check(std::string(DialogForPacket(kOpServerMessage, std::vector<unsigned char>{0x44, 0x00, 1}.data(), 3)) == "notice",

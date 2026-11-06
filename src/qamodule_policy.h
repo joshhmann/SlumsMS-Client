@@ -19,11 +19,15 @@
 //                                   space the worker's screenshots and mouse_click use), or "ok":false with "error":
 //                                   npc_not_on_map | out_of_view | field_not_ready. The client never clicks: the
 //                                   worker's click_npc clicks the point (P1-Q2, schema agreed with SlumsMS QA).
+//   click_option <n>             -> picks row n (1-8) of the open npc menu (a sendSimple) through the dialog's own
+//                                   reply path, no mouse: {"ev":"click.done","op":"click_option","ok":true,"value":v}
+//                                   or "ok":false with "error": not_a_menu | no_such_option.
 // ============================================================
 
 #include <cstdint>
 #include <cstdio>
 #include <string>
+#include <vector>
 
 namespace QaPolicy {
 
@@ -60,9 +64,12 @@ inline bool ValidLabel(const std::string& label) {
     return true;
 }
 
+constexpr int kMaxMenuOptions = 8;
+
 struct Command {
-    enum Kind { Invalid, Ping, Burst, NpcPos } kind = Invalid;
+    enum Kind { Invalid, Ping, Burst, NpcPos, ClickOption } kind = Invalid;
     int npc = 0;
+    int option = 0;   // click_option: 1-8
     int fps = 0;
     int ms = 0;
     std::string label;
@@ -91,6 +98,13 @@ inline Command ParseCommand(const std::string& line) {
         if (npc <= 0) { c.error = "npc id must be positive"; return c; }
         c.kind = Command::NpcPos;
         c.npc = npc;
+        return c;
+    }
+    int option = 0;
+    if (std::sscanf(line.c_str(), "click_option %d %c", &option, &extra) == 1) {
+        if (option < 1 || option > kMaxMenuOptions) { c.error = "option must be 1-8"; return c; }
+        c.kind = Command::ClickOption;
+        c.option = option;
         return c;
     }
     c.error = "unknown command";
@@ -418,6 +432,47 @@ inline int NpcIdForTalkPacket(const unsigned char* data, size_t size) {
     return static_cast<int>(static_cast<unsigned>(data[3]) | (static_cast<unsigned>(data[4]) << 8) |
                             (static_cast<unsigned>(data[5]) << 16) | (static_cast<unsigned>(data[6]) << 24));
 }
+
+// An npc menu (sendSimple, NPC_TALK message type 4) and the #L<value># of each row in the order they are drawn.
+// NPC_TALK: short opcode, byte 4, int npc, byte message type, byte speaker, string text (PacketCreator.getNPCTalk).
+constexpr int kNpcTalkAskMenu = 4;
+
+struct NpcMenu {
+    bool isTalk = false;     // the packet was an npc dialog at all
+    bool isMenu = false;     // ... and a menu
+    std::vector<int> values; // row n is values[n - 1]
+};
+
+inline NpcMenu ParseNpcMenu(const unsigned char* data, size_t size) {
+    NpcMenu m;
+    if (!data || size < 9) return m;
+    m.isTalk = true;
+    if (data[7] != kNpcTalkAskMenu) return m;
+    detail::Reader r{data, size, 9};
+    std::string text;
+    if (!r.Str(text)) return m;
+    m.isMenu = true;
+    for (size_t at = text.find("#L"); at != std::string::npos; at = text.find("#L", at + 2)) {
+        size_t end = at + 2;
+        int value = 0;
+        bool digits = false;
+        while (end < text.size() && text[end] >= '0' && text[end] <= '9') {
+            value = value * 10 + (text[end] - '0');
+            digits = true;
+            ++end;
+        }
+        if (digits && end < text.size() && text[end] == '#') m.values.push_back(value);
+    }
+    return m;
+}
+
+// Where CScriptMan's ask-menu reply reads the dialog (MapleStory.exe 0x747073..0x7470DE): CWnd::DoModal (0x004EDBA1)
+// runs CWvsApp::Run on the dialog's m_bTerminate and returns its m_nRet; m_nRet 1 sends NPC_TALK_MORE with type 4,
+// action 1 and the int at the selection field, which is the row's #L value.
+constexpr uint32_t kDlgOffRet = 0x6C;         // CDialog::m_nRet
+constexpr uint32_t kDlgOffTerminate = 0x70;   // CDialog::m_bTerminate
+constexpr uint32_t kDlgOffSelection = 0xF4;   // CUtilDlgEx: the picked row's #L value
+constexpr int kDlgRetOk = 1;
 
 // Classes named by vtable, for windows the UOL table cannot name. Only what the repo has proved; anything else is
 // "unknown" with its vtable in the event so a run can name it.
