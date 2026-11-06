@@ -172,6 +172,16 @@ int main() {
             "other party operations open no dialog");
         Check(std::string(DialogForPacket(kOpMarriageRequest, std::vector<unsigned char>{0x48, 0x00, 0}.data(), 3)) == "proposal",
             "proposal dialog");
+        Check(EventLine("hello", 7, "", "2026-11-06T07:00:00.000Z") == "{\"ev\":\"hello\",\"t\":7,\"utc\":\"2026-11-06T07:00:00.000Z\"}\n",
+            "event line with utc");
+        Check(std::string(ChatKindName(kOpMultiChat, 1)) == "party", "multi-chat mode 1 is party");
+        Check(std::string(ChatKindName(kOpWhisper, 0x12)) == "whisper", "whisper kind");
+        Check(std::string(ChatKindName(kOpServerMessage, 3)) == "megaphone", "super megaphone");
+        Check(std::string(ChatKindName(kOpServerMessage, 5)) == "notice", "pink notice");
+        Check(std::string(ChatKindName(kOpYellowTip, 0xFF)) == "system", "gm tip");
+        Check(NpcIdForTalkPacket(std::vector<unsigned char>{0x30, 0x01, 4, 0x08, 0xFA, 0x1E, 0x00, 0}.data(), 8) == 2030088,
+            "npc id from NPC_TALK");
+        Check(NpcIdForTalkPacket(std::vector<unsigned char>{0x30, 0x01, 4}.data(), 3) == -1, "short NPC_TALK has no npc id");
         Check(std::string(DialogForPacket(kOpNpcTalk, std::vector<unsigned char>{0x30, 0x01, 0}.data(), 3)) == "npc_dialog",
             "npc dialog");
         Check(std::string(DialogForPacket(kOpServerMessage, std::vector<unsigned char>{0x44, 0x00, 1}.data(), 3)) == "notice",

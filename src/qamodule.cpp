@@ -53,8 +53,17 @@ std::mutex g_evMutex;
 std::condition_variable g_evCv;
 std::deque<std::string> g_evQueue;
 
+std::string UtcNow() {
+    SYSTEMTIME st;
+    GetSystemTime(&st);
+    char buf[32] = {};
+    snprintf(buf, sizeof(buf), "%04u-%02u-%02uT%02u:%02u:%02u.%03uZ", st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute,
+        st.wSecond, st.wMilliseconds);
+    return buf;
+}
+
 void Emit(const char* name, const std::string& extra = std::string()) {
-    const std::string line = EventLine(name, NowMs(), extra);
+    const std::string line = EventLine(name, NowMs(), extra, UtcNow());
     {
         std::lock_guard<std::mutex> lock(g_evMutex);
         if (g_evQueue.size() < 1024) g_evQueue.push_back(line);
@@ -112,6 +121,7 @@ constexpr uint64_t kDialogQueueMs = 3000;   // a queued dialog name nobody used 
 struct PendingDialog {
     const char* name;
     uint64_t expiresMs;
+    int npcId;   // the npc an npc_dialog is from, else -1
 };
 
 struct TrackedWindow {
@@ -136,7 +146,7 @@ void DropExpiredDialogs(uint64_t now) {
 }
 
 // The dialog a packet asked for; the next window with no name of its own takes it (see qamodule_policy.h).
-void QueueDialog(const char* name) {
+void QueueDialog(const char* name, int npcId = -1) {
     if (!name) return;
     DropExpiredDialogs(NowMs());
     if (g_pendingCount == kMaxPendingDialogs) {   // wait too long and the oldest request is the stale one
@@ -145,13 +155,16 @@ void QueueDialog(const char* name) {
     }
     g_pendingDialogs[g_pendingCount].name = name;
     g_pendingDialogs[g_pendingCount].expiresMs = NowMs() + kDialogQueueMs;
+    g_pendingDialogs[g_pendingCount].npcId = npcId;
     ++g_pendingCount;
 }
 
-const char* TakeDialog() {
+const char* TakeDialog(int& npcId) {
+    npcId = -1;
     DropExpiredDialogs(NowMs());
     if (g_pendingCount == 0) return nullptr;
     const char* name = g_pendingDialogs[0].name;
+    npcId = g_pendingDialogs[0].npcId;
     memmove(&g_pendingDialogs[0], &g_pendingDialogs[1], sizeof(g_pendingDialogs[0]) * (g_pendingCount - 1));
     --g_pendingCount;
     return name;
@@ -185,6 +198,7 @@ void PollWindows() {
         uint32_t createId;
         std::string uol;
         const char* name;
+        int npcId;
     };
     constexpr size_t kMaxFresh = 16;
     Fresh fresh[kMaxFresh];
@@ -216,6 +230,7 @@ void PollWindows() {
         f.w = w;
         f.createId = createId;
         f.uol = NarrowUol(UolOf(w), 128);
+        f.npcId = -1;
         f.name = WindowNameFromUol(f.uol);
         if (!f.name) f.name = WindowNameForVtable(VtableOf(w));
     }
@@ -231,7 +246,7 @@ void PollWindows() {
         const bool wantEmptyUol = pass == 0;
         for (size_t i = 0; i < freshCount; ++i) {
             if (fresh[i].name || fresh[i].uol.empty() != wantEmptyUol) continue;
-            fresh[i].name = TakeDialog();
+            fresh[i].name = TakeDialog(fresh[i].npcId);
         }
     }
 
@@ -242,6 +257,7 @@ void PollWindows() {
         const bool report = f.name != nullptr || !f.uol.empty();
         if (report) {
             std::string extra = ",\"window\":\"" + JsonEscape(f.name ? f.name : "unknown") + "\"";
+            if (f.npcId >= 0) extra += ",\"npc_id\":" + std::to_string(f.npcId);
             if (!f.name) {
                 char vtable[16] = {};
                 snprintf(vtable, sizeof(vtable), "0x%08X", VtableOf(f.w));
@@ -289,7 +305,7 @@ void EventsThread() {
             // Greet with what this client is, then stream the queue (events queued before the runner came stay).
             const std::string hello = EventLine("hello", NowMs(),
                 ",\"pid\":" + std::to_string(GetCurrentProcessId()) + ",\"release\":\"" + JsonEscape(kSlumsRelease) +
-                "\",\"build\":" + std::to_string(kSlumsBuildNumber));
+                "\",\"build\":" + std::to_string(kSlumsBuildNumber), UtcNow());
             DWORD wrote = 0;
             bool ok = WriteFile(pipe, hello.data(), static_cast<DWORD>(hello.size()), &wrote, nullptr) != FALSE;
             while (ok) {
@@ -493,13 +509,16 @@ void QaModule_OnPacket(uint16_t opcode, const void* packet, size_t size) {
     if (!g_started) return;
     const auto* bytes = static_cast<const unsigned char*>(packet);
     // A dialog the runner must expect: queued before the window shows up (qamodule_policy.h DialogForPacket).
-    QueueDialog(DialogForPacket(opcode, bytes, size));
+    const char* dialog = DialogForPacket(opcode, bytes, size);
+    QueueDialog(dialog, opcode == kOpNpcTalk && dialog ? NpcIdForTalkPacket(bytes, size) : -1);
     if (!g_dispatchSiteOk) return;
     // A line the client puts in its chat log: map chat, buddy/party/guild, whisper, spouse, notice, yellow tip.
     const ChatLine chat = ParseChatPacket(opcode, bytes, size);
     if (chat.ok) {
+        // kind is the packet's mode byte, type the runner's name for the line (QA, 2026-11-06: chat.log reads utc/kind/text).
         Emit("chat.received",
-            ",\"kind\":" + std::to_string(chat.kind) + ",\"text\":\"" + JsonEscape(TruncateUtf8(chat.text, kMaxChatText)) + "\"");
+            ",\"kind\":" + std::to_string(chat.kind) + ",\"type\":\"" + std::string(ChatKindName(opcode, chat.kind)) +
+            "\",\"text\":\"" + JsonEscape(TruncateUtf8(chat.text, kMaxChatText)) + "\"");
     }
     const char* signal = SignalForOpcode(opcode);
     if (!signal) return;

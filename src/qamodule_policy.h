@@ -97,9 +97,13 @@ inline std::string JsonEscape(const std::string& s) {
     return out;
 }
 
-// {"ev":"<name>","t":<ms since the client started>}<extra> -- extra is ",\"key\":value..." or empty.
-inline std::string EventLine(const char* name, uint64_t ms, const std::string& extra = std::string()) {
-    return std::string("{\"ev\":\"") + name + "\",\"t\":" + std::to_string(ms) + extra + "}\n";
+// {"ev":"<name>","t":<ms since the client started>[,"utc":"<ISO 8601>"]}<extra> -- extra is ",\"key\":value..." or
+// empty. utc is the wall clock the runner's chat.log and manifest are keyed by (QA, 2026-11-06).
+inline std::string EventLine(const char* name, uint64_t ms, const std::string& extra = std::string(),
+    const std::string& utc = std::string()) {
+    std::string line = std::string("{\"ev\":\"") + name + "\",\"t\":" + std::to_string(ms);
+    if (!utc.empty()) line += ",\"utc\":\"" + utc + "\"";
+    return line + extra + "}\n";
 }
 
 // ---- chat lines (ticket 170) ------------------------------------------------------------------------------------
@@ -236,6 +240,27 @@ inline ChatLine ParseChatPacket(uint16_t opcode, const unsigned char* data, size
     return line;
 }
 
+// The runner's name for a chat line's kind (QA's chat.log groups by it): the packet a line came in and its mode byte.
+inline const char* ChatKindName(uint16_t opcode, int kind) {
+    switch (opcode) {
+    case kOpChatText: return "all";
+    case kOpMultiChat:
+        switch (kind) {
+        case 0: return "buddy";
+        case 1: return "party";
+        case 2: return "guild";
+        case 3: return "alliance";
+        default: return "unknown";
+        }
+    case kOpWhisper: return "whisper";
+    case kOpSpouseChat: return "spouse";
+    case kOpServerMessage:   // 2 megaphone, 3 super megaphone, 8 item megaphone, 9 multi megaphone; the rest notices
+        return (kind == 2 || kind == 3 || kind == 8 || kind == 9) ? "megaphone" : "notice";
+    case kOpYellowTip: return "system";
+    default: return "unknown";
+    }
+}
+
 // ---- windows (ticket 170) ---------------------------------------------------------------------------------------
 // The runner needs to know which window is up, by name, before it clicks. A window is named by the class that made
 // it, never by where it sits: the client's own window list (CWndMan::ms_lpWindow) is walked once a frame, and a
@@ -318,6 +343,13 @@ inline const char* DialogForPacket(uint16_t opcode, const unsigned char* data, s
     case kOpServerMessage: return data[2] == kOpNoticeType ? "notice" : nullptr;
     default: return nullptr;
     }
+}
+
+// The npc an NPC_TALK packet is from (short opcode, byte speaker type, int npc id), or -1.
+inline int NpcIdForTalkPacket(const unsigned char* data, size_t size) {
+    if (!data || size < 7) return -1;
+    return static_cast<int>(static_cast<unsigned>(data[3]) | (static_cast<unsigned>(data[4]) << 8) |
+                            (static_cast<unsigned>(data[5]) << 16) | (static_cast<unsigned>(data[6]) << 24));
 }
 
 // Classes named by vtable, for windows the UOL table cannot name. Only what the repo has proved; anything else is
