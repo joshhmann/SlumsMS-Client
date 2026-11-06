@@ -260,6 +260,41 @@ int main() {
             Check(NextReturnFor(kNpcTalkAskMenu) == 0 && NextReturnFor(2) == 0, "no next button on a menu or a text prompt");
             Check(kDlgRetEnd != kDlgRetOk && kDlgRetEnd != 3 && kDlgRetEnd != 0x2000 && kDlgRetEnd != 0x2001 &&
                 kDlgRetEnd != 6 && kDlgRetEnd != 7, "the end return is none of the answers nor a server close");
+            // P0-6: the Incubator on an egg by item id, or on an explicit tab:slot (an empty one for the refusal case).
+            c = ParseCommand("use_cash_item 5060002 4170000");
+            Check(c.kind == Command::UseCashItem && c.item == 5060002 && c.targetItem == 4170000, "incubator on an egg");
+            c = ParseCommand("use_cash_item 5060002 4:99");
+            Check(c.kind == Command::UseCashItem && c.targetType == 4 && c.targetSlot == 99 && !c.targetItem,
+                "incubator on an explicit slot");
+            Check(ParseCommand("use_cash_item 5060002").kind == Command::Invalid, "the incubator needs a target");
+            Check(ParseCommand("use_cash_item 5072000 4170000").kind == Command::Invalid, "only known cash items");
+            Check(ParseCommand("use_cash_item 5060002 6:1").kind == Command::Invalid, "no sixth tab");
+            Check(ParseCommand("use_cash_item 5060002 4:0").kind == Command::Invalid, "slots start at 1");
+            Check(ParseCommand("use_cash_item 5060002 egg").kind == Command::Invalid, "target is a number");
+            // P0-2 GP8: merchant_open <item> <qty> <price> [title].
+            c = ParseCommand("merchant_open 2000000 5 1000 GP8 shop");
+            Check(c.kind == Command::MerchantOpen && c.item == 2000000 && c.count == 5 && c.price == 1000 &&
+                c.title == "GP8 shop", "merchant_open with a title");
+            c = ParseCommand("merchant_open 4000000 1 50");
+            Check(c.kind == Command::MerchantOpen && c.title == "QA shop", "the default title");
+            Check(ParseCommand("merchant_open 5030000 1 50").kind == Command::Invalid, "no cash items for sale");
+            Check(ParseCommand("merchant_open 2000000 0 50").kind == Command::Invalid, "quantity starts at 1");
+            Check(ParseCommand("merchant_open 2000000 2001 50").kind == Command::Invalid, "the server's 2000 cap");
+            Check(ParseCommand("merchant_open 2000000 1 0").kind == Command::Invalid, "price is positive");
+            Check(ParseCommand("merchant_open 2000000 1 5 a \"quoted\"").kind == Command::Invalid, "no quotes in the title");
+            Check(ParseCommand("merchant_open 2000000 1 5 0123456789012345678901234567890").kind == Command::Invalid,
+                "titles are at most 30");
+            Check(IsHiredMerchantItem(5030000) && IsHiredMerchantItem(5030009) && !IsHiredMerchantItem(5140000),
+                "hired merchants are 503xxxx; 514xxxx are player shops");
+            Check(ReadBeforeClient(kOpEntrustedShopCheck), "the merchant check is read before its title prompt");
+            Check(ParseCommand("merchant_close").kind == Command::MerchantClose, "merchant_close parses");
+            // SPAWN_HIRED_MERCHANT as PacketCreator.spawnHiredMerchantBox writes it.
+            std::vector<unsigned char> spawn{0x09, 0x01, 46, 0, 0, 0, 0x30, 0xC6, 0x4C, 0, 0x10, 0, 0x20, 0, 0, 0,
+                                             8, 0, 'A', 'q', 'C', 'l', 'i', 'e', 'n', 't', 5, 0x2A, 0, 0, 0};
+            int owner = 0, oid = 0;
+            Check(ParseMerchantSpawn(spawn.data(), spawn.size(), owner, oid) && owner == 46 && oid == 42,
+                "the merchant's owner and object id");
+            Check(!ParseMerchantSpawn(spawn.data(), spawn.size() - 2, owner, oid), "a short spawn is refused");
             Check(ParseCommand("party_create").kind == Command::PartyCreate, "party_create parses");
             Check(ParseCommand("party_create now").kind == Command::Invalid, "party_create takes nothing");
             c = ParseCommand("party_invite Bishbot");

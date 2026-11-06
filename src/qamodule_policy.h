@@ -81,6 +81,22 @@ inline PacketBytes PacketFromOpcode(const unsigned char* buffer, size_t length, 
 constexpr int kMaxMenuOptions = 8;
 constexpr int kMaxCharName = 12;      // v83 character names: 4-12 letters and digits
 constexpr int kMaxDropCount = 32767;  // ITEM_MOVE carries the count as a short
+constexpr int kIncubator = 5060002;   // P0-6: its use carries the target's tab and slot as two ints
+constexpr int kMaxShopTitle = 30;
+constexpr int kMaxShopQuantity = 2000;    // the server's perBundle * bundles cap
+// merchant_open (P0-2 GP8): the hired merchant setup as the client does it. Packets and the replies it waits for:
+constexpr uint16_t kOpHiredMerchantRequest = 0x3F;   // [0][8-byte cash SN] (0x00A27B7D); the server checks Fredrick
+constexpr uint16_t kOpEntrustedShopCheck = 0x32;     // server: [7] go on, [9] retrieve from Fredrick first, ...
+constexpr uint16_t kOpPlayerInteraction = 0x7B;      // CREATE 0, PUT_ITEM 0x21, OPEN 0x0B 01, EXIT 0x0A
+constexpr uint16_t kOpSpawnHiredMerchant = 0x109;    // server: [int owner id][int item id][x][y]...
+constexpr int kMerchantCheckOk = 7;
+inline bool IsHiredMerchantItem(int id) { return id >= 5030000 && id <= 5039999; }
+inline bool ValidShopTitle(const std::string& t) {
+    if (t.empty() || t.size() > static_cast<size_t>(kMaxShopTitle)) return false;
+    for (char c : t) if (c < 0x20 || c > 0x7E || c == '"' || c == '\\') return false;
+    return true;
+}
+constexpr uint16_t kOpUseCashItem = 0x4F;   // USE_CASH_ITEM, as SendConsumeCashItemUseRequest 0x00A0A63F builds it
 
 // The inventory tab an item id lives in: 1 Equip .. 5 Cash, the id's millions digit; 0 for anything else.
 inline int InventoryTypeOf(int item) {
@@ -98,13 +114,18 @@ inline bool ValidCharName(const std::string& name) {
 }
 
 struct Command {
-    enum Kind { Invalid, Ping, Burst, NpcPos, ClickOption, CloseDialog, DialogNext, DropItem, PartyCreate, PartyInvite }
-        kind = Invalid;
+    enum Kind { Invalid, Ping, Burst, NpcPos, ClickOption, CloseDialog, DialogNext, DropItem, PartyCreate, PartyInvite,
+        UseCashItem, MerchantOpen, MerchantClose } kind = Invalid;
     int npc = 0;
     int option = 0;   // click_option: 1-8
     int item = 0;     // drop_item
     int count = 0;    // drop_item: 1 unless given
     std::string name; // party_invite
+    int targetItem = 0;   // use_cash_item: the target found by item id, or
+    int targetType = 0;   // ... an explicit tab and slot (inv:slot), for a target that is not there
+    int targetSlot = 0;
+    int price = 0;            // merchant_open
+    std::string title;        // merchant_open
     int fps = 0;
     int ms = 0;
     std::string label;
@@ -154,6 +175,45 @@ inline Command ParseCommand(const std::string& line) {
         return c;
     }
     if (line == "party_create") { c.kind = Command::PartyCreate; return c; }
+    if (line == "merchant_close") { c.kind = Command::MerchantClose; return c; }
+    // merchant_open <item id> <quantity> <price> [title]: the title is the rest of the line (default "QA shop").
+    int qty = 0, price = 0, used = 0;
+    if (std::sscanf(line.c_str(), "merchant_open %d %d %d%n", &item, &qty, &price, &used) == 3) {
+        const int tab = InventoryTypeOf(item);
+        if (!tab || tab == 5) { c.error = "the item must be in tabs 1-4"; return c; }
+        if (qty < 1 || qty > kMaxShopQuantity) { c.error = "quantity must be 1-2000"; return c; }
+        if (price < 1) { c.error = "price must be positive"; return c; }
+        std::string title = line.substr(static_cast<size_t>(used));
+        const size_t first = title.find_first_not_of(' ');
+        title = first == std::string::npos ? std::string("QA shop") : title.substr(first);
+        if (!ValidShopTitle(title)) { c.error = "title must be 1-30 printable characters"; return c; }
+        c.kind = Command::MerchantOpen;
+        c.item = item;
+        c.count = qty;
+        c.price = price;
+        c.title = title;
+        return c;
+    }
+    // use_cash_item <cash item id> <target>: the target is an item id (its first stack) or inv:slot. Only the items
+    // whose packet the module knows are taken (kIncubator), so nothing half-built reaches the server.
+    char target[24] = {};
+    if (std::sscanf(line.c_str(), "use_cash_item %d %23s %c", &item, target, &extra) == 2) {
+        if (item != kIncubator) { c.error = "use_cash_item supports only the Incubator (5060002)"; return c; }
+        int type = 0, slot = 0;
+        char more = 0;
+        if (std::sscanf(target, "%d:%d%c", &type, &slot, &more) == 2) {
+            if (type < 1 || type > 5 || slot < 1 || slot > 255) { c.error = "target inv:slot must be 1-5:1-255"; return c; }
+            c.targetType = type;
+            c.targetSlot = slot;
+        } else if (std::sscanf(target, "%d%c", &c.targetItem, &more) == 1 && InventoryTypeOf(c.targetItem)) {
+        } else {
+            c.error = "target must be an item id or inv:slot";
+            return c;
+        }
+        c.kind = Command::UseCashItem;
+        c.item = item;
+        return c;
+    }
     if (line == "close_dialog") { c.kind = Command::CloseDialog; return c; }
     if (line == "dialog_next") { c.kind = Command::DialogNext; return c; }
     char name[32] = {};
@@ -253,6 +313,16 @@ struct Reader {
     }
 };
 }  // namespace detail
+
+// SPAWN_HIRED_MERCHANT: [int owner][int item][short x][short y][short 0][str owner name][byte 5][int object id]...
+// The object id is what VISIT names (merchant_close). Returns false when the packet is too short.
+inline bool ParseMerchantSpawn(const unsigned char* data, size_t size, int& owner, int& oid) {
+    detail::Reader r{data, size, 2};
+    int item = 0, x = 0, y = 0, zero = 0, kind = 0;
+    std::string name;
+    return r.U32(owner) && r.U32(item) && r.U16(x) && r.U16(y) && r.U16(zero) && r.Str(name) && r.U8(kind) &&
+           r.U32(oid);
+}
 
 // One server packet (starting at its 2-byte opcode) as a chat line; ok=false when the opcode is not a chat source
 // or the payload does not decode.
@@ -432,7 +502,8 @@ constexpr uint16_t kOpNoticeType = 1;          // SERVERMESSAGE type 1 = the not
 
 // NPC_TALK's handler runs the dialog modally (CScriptMan -> CWnd::DoModal) and returns only when it closes, so the
 // module must read that packet before the client handles it: after, the menu rows arrive once the menu is gone (H1).
-inline bool ReadBeforeClient(uint16_t opcode) { return opcode == kOpNpcTalk; }
+// The hired merchant check result is the same: on [7] its handler runs the shop title prompt modally (0x00A1DD99).
+inline bool ReadBeforeClient(uint16_t opcode) { return opcode == kOpNpcTalk || opcode == kOpEntrustedShopCheck; }
 
 inline std::string LowerAscii(std::string s) {
     for (char& c : s) {
