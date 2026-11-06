@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "mapleroot.h"
+#include "crash_budget.h"
 #include <windows.h>
 #include <cstdio>
 #ifdef MAPLEROOT_CRASH_REPORT
@@ -8,8 +9,7 @@
 
 namespace {
 volatile LONG reporting = 0;
-volatile LONG cppEvents = 0;
-volatile LONG fatalEvents = 0;
+CrashBudget::Budget budget;   // only touched while `reporting` is held (b334: game errors have their own entries)
 void AppendLine(HANDLE file, const char* text) {
     DWORD written = 0;
     WriteFile(file, text, static_cast<DWORD>(strlen(text)), &written, nullptr);
@@ -43,7 +43,13 @@ LONG CALLBACK OnException(EXCEPTION_POINTERS* pointers) {
 #endif
     if ((!fatalCandidate && !cpp) || InterlockedCompareExchange(&reporting, 1, 0))
         return EXCEPTION_CONTINUE_SEARCH;
-    if (InterlockedIncrement(cpp ? &cppEvents : &fatalEvents) > 16) {
+    DWORD thrownHr = 0;
+    if (cpp && pointers->ExceptionRecord->NumberParameters >= 2) {
+        __try { thrownHr = *reinterpret_cast<DWORD*>(pointers->ExceptionRecord->ExceptionInformation[1]); }
+        __except (EXCEPTION_EXECUTE_HANDLER) { thrownHr = 0; }
+    }
+    const CrashBudget::Kind kind = CrashBudget::KindOf(fatalCandidate, cpp, thrownHr);
+    if (!budget.Take(kind)) {
         InterlockedExchange(&reporting, 0);
         return EXCEPTION_CONTINUE_SEARCH;
     }
@@ -81,7 +87,7 @@ LONG CALLBACK OnException(EXCEPTION_POINTERS* pointers) {
         }
         // Optimized engine frames often omit EBP. Log only plausible code
         // addresses from the stack, never raw stack contents or object data.
-        if (fatalCandidate) {
+        if (fatalCandidate || kind == CrashBudget::Kind::GameError) {   // b334: a game error gets the stack scan too
             int emitted = 0;
             for (int i = 0; i < 128 && emitted < 20; ++i) {
                 DWORD candidate = 0;

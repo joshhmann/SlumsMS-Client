@@ -168,6 +168,8 @@ add_executable(damagefmt_policy_test damagefmt_policy_test.cpp)
 add_test(NAME damagefmt_short_numbers COMMAND damagefmt_policy_test)
 add_executable(crash_report_test crash_report_test.cpp)
 add_test(NAME crash_report_classify_scrub COMMAND crash_report_test)
+add_executable(crash_budget_test crash_budget_test.cpp)
+add_test(NAME crash_budget_game_errors_after_startup COMMAND crash_budget_test)
 
 add_executable(mapobj_guard_test mapobj_guard_test.cpp)
 set(MAPOBJ_TEST_EXE "Z:/MSv83/SlumsMS-dev/client-1.5.0-fixes2/exe-copy/MapleStory.exe" CACHE FILEPATH
