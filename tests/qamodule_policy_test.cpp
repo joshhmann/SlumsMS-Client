@@ -210,6 +210,20 @@ int main() {
             Check(c.kind == Command::ClickOption && c.option == 1, "click_option parses");
             Check(ParseCommand("click_option 9").kind == Command::Invalid, "click_option is 1-8");
             Check(ParseCommand("click_option 0").kind == Command::Invalid, "click_option starts at 1");
+            // D1 (2026-11-06): the receive buffer starts with the socket header; the parsers get the packet from its opcode.
+            const std::vector<unsigned char> received{0xAA, 0xBB, 0xCC, 0xDD, 0x01, 0x01, 0x03, 0xCA, 0x9A, 0x3B, 0xBC,
+                                                      0xC8, 0x1F, 0x00, 0x82, 0x03, 0x04, 0x01, 0x01, 0x6A, 0x00, 0x50,
+                                                      0x03, 0xB4, 0x03, 0x01};
+            const PacketBytes body = PacketFromOpcode(received.data(), received.size(), 4);
+            Check(body.data == received.data() + 4 && body.size == 22, "the packet starts at the opcode");
+            const NpcUpdate mark = ParseNpcPacket(kOpSpawnNpc, body.data, body.size);
+            Check(mark.op == NpcUpdate::Add && mark.npc == 2083004 && mark.x == 898 && mark.y == 260,
+                "Mark of the Squad from the logged TEST bytes");
+            Check(ParseNpcPacket(kOpSpawnNpc, received.data(), received.size()).npc != 2083004,
+                "from the buffer start the header is read as the packet (the D1 bug)");
+            Check(!PacketFromOpcode(received.data(), received.size(), 25).data, "no room for an opcode");
+            Check(!PacketFromOpcode(received.data(), received.size(), 40).data, "offset past the end");
+            Check(!PacketFromOpcode(nullptr, 10, 0).data, "no buffer");
             // P1-Q2 (Zakum run): drop_item and the party requests.
             c = ParseCommand("drop_item 4001017");
             Check(c.kind == Command::DropItem && c.item == 4001017 && c.count == 1, "drop_item drops one by default");
@@ -222,6 +236,10 @@ int main() {
             Check(ParseCommand("drop_item 4001017 1 x").kind == Command::Invalid, "nothing after the count");
             Check(InventoryTypeOf(1302000) == 1 && InventoryTypeOf(4001017) == 4 && InventoryTypeOf(5000000) == 5,
                 "the tab is the millions digit");
+            Check(ParseCommand("close_dialog").kind == Command::CloseDialog, "close_dialog parses");
+            Check(ParseCommand("close_dialog 1").kind == Command::Invalid, "close_dialog takes nothing");
+            Check(kDlgRetEnd != kDlgRetOk && kDlgRetEnd != 3 && kDlgRetEnd != 0x2000 && kDlgRetEnd != 0x2001 &&
+                kDlgRetEnd != 6 && kDlgRetEnd != 7, "the end return is none of the answers nor a server close");
             Check(ParseCommand("party_create").kind == Command::PartyCreate, "party_create parses");
             Check(ParseCommand("party_create now").kind == Command::Invalid, "party_create takes nothing");
             c = ParseCommand("party_invite Bishbot");
