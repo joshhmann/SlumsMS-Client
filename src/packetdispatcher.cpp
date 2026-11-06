@@ -3,6 +3,7 @@
 #include "wvs/packet.h"
 #include <mutex>
 #include "qamodule.h"
+#include "qamodule_policy.h"   // PacketFromOpcode
 #ifdef MAPLEROOT_CASHSHOP_WINDOW
 #include "cashshopwnd.h"
 #endif
@@ -32,6 +33,8 @@ std::mutex dispatchGate;
 bool shuttingDown = false;
 void __fastcall ProcessPacketHook(void* socket, void*, CInPacket* packet) {
     unsigned short opcode = 0;
+    // Where the opcode starts: the receive buffer begins with the socket header, and the handler moves the offset on.
+    const size_t start = packet ? packet->GetOffset() : 0;
     if (packet && packet->TryPeekOpcode(opcode)) {
 #ifdef MAPLEROOT_CASHSHOP_WINDOW
         if (opcode == kCashShopSyncOpcode) {
@@ -98,7 +101,12 @@ void __fastcall ProcessPacketHook(void* socket, void*, CInPacket* packet) {
     }
     ProcessPacket(socket, packet);
     // QA builds only (ticket 166): a handled packet may make a screen ready, add a chat line, or ask for a dialog.
-    if (packet) QaModule_OnPacket(opcode, packet->BufferPublic(), packet->LengthPublic());
+    // The module reads each packet from its opcode (qamodule_policy.h PacketFromOpcode): from the start of the buffer,
+    // every NPC, chat and dialog parse read the header and failed (D1, 2026-11-06).
+    if (packet) {
+        const QaPolicy::PacketBytes body = QaPolicy::PacketFromOpcode(packet->BufferPublic(), packet->LengthPublic(), start);
+        if (body.data) QaModule_OnPacket(opcode, body.data, body.size);
+    }
 }
 }
 void ShutdownCustomPackets() {

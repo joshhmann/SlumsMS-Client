@@ -64,6 +64,20 @@ inline bool ValidLabel(const std::string& label) {
     return true;
 }
 
+// One received packet from its opcode on: CInPacket's buffer starts with the socket header, so the parsers below take
+// the bytes from the offset the opcode was peeked at, before the client's handler moved it on.
+struct PacketBytes {
+    const unsigned char* data = nullptr;
+    size_t size = 0;
+};
+inline PacketBytes PacketFromOpcode(const unsigned char* buffer, size_t length, size_t opcodeAt) {
+    PacketBytes b;
+    if (!buffer || opcodeAt > length || length - opcodeAt < 2) return b;
+    b.data = buffer + opcodeAt;
+    b.size = length - opcodeAt;
+    return b;
+}
+
 constexpr int kMaxMenuOptions = 8;
 constexpr int kMaxCharName = 12;      // v83 character names: 4-12 letters and digits
 constexpr int kMaxDropCount = 32767;  // ITEM_MOVE carries the count as a short
@@ -84,7 +98,7 @@ inline bool ValidCharName(const std::string& name) {
 }
 
 struct Command {
-    enum Kind { Invalid, Ping, Burst, NpcPos, ClickOption, DropItem, PartyCreate, PartyInvite } kind = Invalid;
+    enum Kind { Invalid, Ping, Burst, NpcPos, ClickOption, CloseDialog, DropItem, PartyCreate, PartyInvite } kind = Invalid;
     int npc = 0;
     int option = 0;   // click_option: 1-8
     int item = 0;     // drop_item
@@ -139,6 +153,7 @@ inline Command ParseCommand(const std::string& line) {
         return c;
     }
     if (line == "party_create") { c.kind = Command::PartyCreate; return c; }
+    if (line == "close_dialog") { c.kind = Command::CloseDialog; return c; }
     char name[32] = {};
     if (std::sscanf(line.c_str(), "party_invite %31s %c", name, &extra) == 1) {
         if (!ValidCharName(name)) { c.error = "name must be 4-12 letters or digits"; return c; }
@@ -512,6 +527,14 @@ constexpr uint32_t kDlgOffRet = 0x6C;         // CDialog::m_nRet
 constexpr uint32_t kDlgOffTerminate = 0x70;   // CDialog::m_bTerminate
 constexpr uint32_t kDlgOffSelection = 0xF4;   // CUtilDlgEx: the picked row's #L value
 constexpr int kDlgRetOk = 1;
+// Any other return but 3 (closed by the server) makes every npc dialog type reply "end chat": [type][-1] (say 0x0074689D,
+// menu 0x00747073, yes/no 6/7 0x007469F7). IDCANCEL is what the dialog's own close button returns.
+constexpr int kDlgRetEnd = 2;
+// CUtilDlgEx, the npc dialog (built at 0x009A31AD, 0x6E8 bytes). It is a CDialog, which derives from CWnd and not
+// CUIWnd (0x004ED9FC calls CWnd's constructor 0x009DE383), so the window walk lets it through by its vtable (D1).
+constexpr uint32_t kVtable_CUtilDlgEx = 0x00B3E100;
+constexpr uint32_t kAddr_CWndManInstance = 0x00BEC20C;   // TSingleton<CWndMan>::ms_pInstance (DoModal reads it)
+constexpr uint32_t kOff_ModalList = 0x6C;                // CWndMan: ZList<IUIMsgHandler*> of open modal dialogs
 
 // Classes named by vtable, for windows the UOL table cannot name. Only what the repo has proved; anything else is
 // "unknown" with its vtable in the event so a run can name it.

@@ -170,6 +170,7 @@ std::deque<int> g_npcPosQueue;           // npc_pos requests waiting for the ren
 std::mutex g_menuMutex;
 NpcMenu g_menu;                          // isMenu false when the last npc dialog was not a menu
 std::deque<int> g_optionQueue;
+int g_closeAsks = 0;                     // close_dialog requests (P1-Q2, D1: the welcome dialog blocks chat)
 // P1-Q2 (Zakum run): drops and party requests, asked for on the commands thread, sent on the render thread (the game
 // thread, where the item and party windows call the same senders).
 struct DropAsk {
@@ -257,8 +258,9 @@ void PollWindows() {
         if (!w) continue;
         const uint32_t createId = CreateIdOf(w);
         if (createId == 0) continue;                              // not created yet (Destroy zeroes the serial)
-        if (!w->IsKindOf(&CUIWnd::ms_RTTI_CUIWnd)) continue;      // HUD layers and children are not runner screens
-        g_cuiwndSeen = true;
+        const bool npcDialog = VtableOf(w) == kVtable_CUtilDlgEx;   // a CDialog, not a CUIWnd
+        if (!npcDialog && !w->IsKindOf(&CUIWnd::ms_RTTI_CUIWnd)) continue;   // HUD layers and children are not runner screens
+        if (!npcDialog) g_cuiwndSeen = true;
 
         size_t slot = kMaxTrackedWindows;
         for (size_t i = 0; i < g_windowCount; ++i) {
@@ -295,6 +297,11 @@ void PollWindows() {
             if (fresh[i].name || fresh[i].uol.empty() != wantEmptyUol) continue;
             fresh[i].name = TakeDialog(fresh[i].npcId);
         }
+    }
+
+    // An npc dialog no packet asked for (or whose packet was not read) is still the npc dialog.
+    for (size_t i = 0; i < freshCount; ++i) {
+        if (!fresh[i].name && VtableOf(fresh[i].w) == kVtable_CUtilDlgEx) fresh[i].name = "npc_dialog";
     }
 
     for (size_t i = 0; i < freshCount; ++i) {
@@ -455,6 +462,9 @@ void CommandsThread() {
                     } else if (c.kind == Command::ClickOption) {
                         std::lock_guard<std::mutex> lock(g_menuMutex);
                         if (g_optionQueue.size() < 8) g_optionQueue.push_back(c.option);
+                    } else if (c.kind == Command::CloseDialog) {
+                        std::lock_guard<std::mutex> lock(g_menuMutex);
+                        if (g_closeAsks < 8) ++g_closeAsks;
                     } else if (c.kind == Command::DropItem) {
                         std::lock_guard<std::mutex> lock(g_requestMutex);
                         if (g_dropQueue.size() < 8) g_dropQueue.push_back({c.item, c.count});
@@ -555,11 +565,64 @@ void OnNpcTalk(const unsigned char* bytes, size_t size) {
 }
 
 // The open npc dialog the module saw last, or 0.
+// The innermost modal npc dialog. DoModal (0x004EDBA1) enters it through CWndMan::EnterModal (0x009E33FC), which adds
+// its IUIMsgHandler (the dialog + 4) to the ZList at CWndMan + 0x6C; the newest is the tail.
+uintptr_t ModalNpcDialog() {
+    __try {
+        const uintptr_t wndMan = *reinterpret_cast<uintptr_t*>(kAddr_CWndManInstance);
+        if (!wndMan) return 0;
+        const auto& modal = *reinterpret_cast<const ZList<void*>*>(wndMan + kOff_ModalList);
+        void** pos = modal.GetTailPosition();
+        for (int guard = 0; pos && guard < 16; ++guard) {
+            void* handler = ZList<void*>::GetPrev(pos);
+            if (!handler) continue;
+            const uintptr_t dlg = reinterpret_cast<uintptr_t>(handler) - 4;
+            if (*reinterpret_cast<uint32_t*>(dlg) == kVtable_CUtilDlgEx) return dlg;
+        }
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+    }
+    return 0;
+}
+
+// The open npc dialog: the one the window walk named, else the modal one.
 uintptr_t OpenNpcDialog() {
     for (size_t i = g_windowCount; i-- > 0;) {
         if (g_windows[i].name == "npc_dialog") return g_windows[i].ptr;
     }
-    return 0;
+    return ModalNpcDialog();
+}
+
+// Ends the dialog the way its close button does; the reply path sends "end chat" for every dialog type.
+bool EndDialog(uintptr_t dlg) {
+    __try {
+        *reinterpret_cast<int*>(dlg + kDlgOffRet) = kDlgRetEnd;
+        *reinterpret_cast<int*>(dlg + kDlgOffTerminate) = 1;
+        return true;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+}
+
+void AnswerCloseDialog() {
+    int asks = 0;
+    {
+        std::lock_guard<std::mutex> lock(g_menuMutex);
+        asks = g_closeAsks;
+        g_closeAsks = 0;
+    }
+    for (int i = 0; i < asks; ++i) {
+        const std::string head = ",\"op\":\"close_dialog\"";
+        const uintptr_t dlg = OpenNpcDialog();
+        if (!dlg || !EndDialog(dlg)) {
+            Emit("click.done", head + ",\"ok\":false,\"error\":\"no_dialog\"");
+            continue;
+        }
+        {
+            std::lock_guard<std::mutex> lock(g_menuMutex);
+            g_menu = NpcMenu();
+        }
+        Emit("click.done", head + ",\"ok\":true");
+    }
 }
 
 bool EndMenu(uintptr_t dlg, int value) {
@@ -833,6 +896,7 @@ void QaModule_OnFrame(IDirect3DDevice9* dev) {
     PollWindows();
     AnswerNpcPos();
     AnswerClickOption();
+    AnswerCloseDialog();
     AnswerRequests();
     if (!g_active.on) {
         std::lock_guard<std::mutex> lock(g_burstMutex);
