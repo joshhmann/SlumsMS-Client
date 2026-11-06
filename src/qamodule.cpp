@@ -686,7 +686,12 @@ int FindItemSlot(int type, int item) {
         const int n = *reinterpret_cast<int*>(tab - 4);
         for (int slot = 1; slot < n && slot <= 255; ++slot) {
             const uintptr_t p = *reinterpret_cast<uintptr_t*>(tab + 8 * slot + 4);
-            if (p && *reinterpret_cast<int*>(p + QaPatch::kOff_ItemId) == item) return slot;
+            if (!p) continue;
+            // nItemID is a TSecType<long>, not a plain int: read it the client's way (the first build-4 run on TEST
+            // compared the raw field and missed an Eye of Fire in ETC slot 7).
+            const int id = reinterpret_cast<int(__thiscall*)(const void*)>(QaPatch::kAddr_TSecTypeLong_GetData)(
+                reinterpret_cast<const void*>(p + QaPatch::kOff_ItemId));
+            if (id == item) return slot;
         }
     } __except (EXCEPTION_EXECUTE_HANDLER) {
     }

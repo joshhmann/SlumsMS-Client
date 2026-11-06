@@ -37,7 +37,8 @@ constexpr std::uint32_t kAddr_GetField = 0x00437A0C;          // get_field: the 
 constexpr std::uint32_t kAddr_CWvsContext = 0x00BE7918;       // TSingleton<CWvsContext>::ms_pInstance
 constexpr std::uint32_t kOff_CharacterData = 0x20B8;          // CWvsContext -> GW_CharacterData* (the invite sender reads it)
 constexpr std::uint32_t kOff_ItemTabs = 0x447;                // GW_CharacterData + 0x447 + 4*type -> ZArray<ZRef<item>> (invresize)
-constexpr std::uint32_t kOff_ItemId = 0xC;                    // GW_ItemSlotBase::nItemID (0x004724D5 compares it)
+constexpr std::uint32_t kOff_ItemId = 0xC;                    // GW_ItemSlotBase::nItemID, a TSecType<long> (coloringprism.cpp)
+constexpr std::uint32_t kAddr_TSecTypeLong_GetData = 0x0042873D;  // TSecType<long>::GetData: the plaintext id
 
 constexpr std::size_t kProcessPacketLength = 17;            // mov eax,imm32 / call rel32 / push ecx; push ecx / mov eax,[abs32]
 constexpr std::size_t kGetCurFieldIDLength = 16;            // call rel32 / test eax,eax / je / lea ecx,[eax+disp32]
