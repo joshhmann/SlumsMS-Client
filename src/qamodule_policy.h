@@ -81,6 +81,8 @@ inline PacketBytes PacketFromOpcode(const unsigned char* buffer, size_t length, 
 constexpr int kMaxMenuOptions = 8;
 constexpr int kMaxCharName = 12;      // v83 character names: 4-12 letters and digits
 constexpr int kMaxDropCount = 32767;  // ITEM_MOVE carries the count as a short
+constexpr int kIncubator = 5060002;   // P0-6: its use carries the target's tab and slot as two ints
+constexpr uint16_t kOpUseCashItem = 0x4F;   // USE_CASH_ITEM, as SendConsumeCashItemUseRequest 0x00A0A63F builds it
 
 // The inventory tab an item id lives in: 1 Equip .. 5 Cash, the id's millions digit; 0 for anything else.
 inline int InventoryTypeOf(int item) {
@@ -98,13 +100,16 @@ inline bool ValidCharName(const std::string& name) {
 }
 
 struct Command {
-    enum Kind { Invalid, Ping, Burst, NpcPos, ClickOption, CloseDialog, DialogNext, DropItem, PartyCreate, PartyInvite }
-        kind = Invalid;
+    enum Kind { Invalid, Ping, Burst, NpcPos, ClickOption, CloseDialog, DialogNext, DropItem, PartyCreate, PartyInvite,
+        UseCashItem } kind = Invalid;
     int npc = 0;
     int option = 0;   // click_option: 1-8
     int item = 0;     // drop_item
     int count = 0;    // drop_item: 1 unless given
     std::string name; // party_invite
+    int targetItem = 0;   // use_cash_item: the target found by item id, or
+    int targetType = 0;   // ... an explicit tab and slot (inv:slot), for a target that is not there
+    int targetSlot = 0;
     int fps = 0;
     int ms = 0;
     std::string label;
@@ -154,6 +159,26 @@ inline Command ParseCommand(const std::string& line) {
         return c;
     }
     if (line == "party_create") { c.kind = Command::PartyCreate; return c; }
+    // use_cash_item <cash item id> <target>: the target is an item id (its first stack) or inv:slot. Only the items
+    // whose packet the module knows are taken (kIncubator), so nothing half-built reaches the server.
+    char target[24] = {};
+    if (std::sscanf(line.c_str(), "use_cash_item %d %23s %c", &item, target, &extra) == 2) {
+        if (item != kIncubator) { c.error = "use_cash_item supports only the Incubator (5060002)"; return c; }
+        int type = 0, slot = 0;
+        char more = 0;
+        if (std::sscanf(target, "%d:%d%c", &type, &slot, &more) == 2) {
+            if (type < 1 || type > 5 || slot < 1 || slot > 255) { c.error = "target inv:slot must be 1-5:1-255"; return c; }
+            c.targetType = type;
+            c.targetSlot = slot;
+        } else if (std::sscanf(target, "%d%c", &c.targetItem, &more) == 1 && InventoryTypeOf(c.targetItem)) {
+        } else {
+            c.error = "target must be an item id or inv:slot";
+            return c;
+        }
+        c.kind = Command::UseCashItem;
+        c.item = item;
+        return c;
+    }
     if (line == "close_dialog") { c.kind = Command::CloseDialog; return c; }
     if (line == "dialog_next") { c.kind = Command::DialogNext; return c; }
     char name[32] = {};

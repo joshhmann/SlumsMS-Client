@@ -260,6 +260,17 @@ int main() {
             Check(NextReturnFor(kNpcTalkAskMenu) == 0 && NextReturnFor(2) == 0, "no next button on a menu or a text prompt");
             Check(kDlgRetEnd != kDlgRetOk && kDlgRetEnd != 3 && kDlgRetEnd != 0x2000 && kDlgRetEnd != 0x2001 &&
                 kDlgRetEnd != 6 && kDlgRetEnd != 7, "the end return is none of the answers nor a server close");
+            // P0-6: the Incubator on an egg by item id, or on an explicit tab:slot (an empty one for the refusal case).
+            c = ParseCommand("use_cash_item 5060002 4170000");
+            Check(c.kind == Command::UseCashItem && c.item == 5060002 && c.targetItem == 4170000, "incubator on an egg");
+            c = ParseCommand("use_cash_item 5060002 4:99");
+            Check(c.kind == Command::UseCashItem && c.targetType == 4 && c.targetSlot == 99 && !c.targetItem,
+                "incubator on an explicit slot");
+            Check(ParseCommand("use_cash_item 5060002").kind == Command::Invalid, "the incubator needs a target");
+            Check(ParseCommand("use_cash_item 5072000 4170000").kind == Command::Invalid, "only known cash items");
+            Check(ParseCommand("use_cash_item 5060002 6:1").kind == Command::Invalid, "no sixth tab");
+            Check(ParseCommand("use_cash_item 5060002 4:0").kind == Command::Invalid, "slots start at 1");
+            Check(ParseCommand("use_cash_item 5060002 egg").kind == Command::Invalid, "target is a number");
             Check(ParseCommand("party_create").kind == Command::PartyCreate, "party_create parses");
             Check(ParseCommand("party_create now").kind == Command::Invalid, "party_create takes nothing");
             c = ParseCommand("party_invite Bishbot");

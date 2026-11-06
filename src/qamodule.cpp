@@ -17,7 +17,8 @@
 #include "wvs/wnd.h"
 #include "wvs/wndman.h"
 #include "wvs/util.h"     // get_gr: the camera (IWzGr2D::center) and the game screen size
-#include "ztl/ztl.h"      // ZXString: the invite sender takes the name as the client's own string
+#include "ztl/ztl.h"      // ZXString
+#include "wvs/packet.h"   // COutPacket: use_cash_item sends USE_CASH_ITEM: the invite sender takes the name as the client's own string
 #include <map>
 
 #include <d3d9.h>
@@ -185,6 +186,7 @@ struct PartyAsk {
 std::mutex g_requestMutex;
 std::deque<DropAsk> g_dropQueue;
 std::deque<PartyAsk> g_partyQueue;
+std::deque<Command> g_cashQueue;           // P0-6 use_cash_item
 
 void DropExpiredDialogs(uint64_t now) {
     size_t keep = 0;
@@ -472,6 +474,9 @@ void CommandsThread() {
                     } else if (c.kind == Command::DropItem) {
                         std::lock_guard<std::mutex> lock(g_requestMutex);
                         if (g_dropQueue.size() < 8) g_dropQueue.push_back({c.item, c.count});
+                    } else if (c.kind == Command::UseCashItem) {
+                        std::lock_guard<std::mutex> lock(g_requestMutex);
+                        if (g_cashQueue.size() < 8) g_cashQueue.push_back(c);
                     } else if (c.kind == Command::PartyCreate || c.kind == Command::PartyInvite) {
                         std::lock_guard<std::mutex> lock(g_requestMutex);
                         if (g_partyQueue.size() < 8) g_partyQueue.push_back({c.kind == Command::PartyCreate, c.name});
@@ -751,6 +756,20 @@ bool SendDrop(int type, int slot, int count) {
     }
 }
 
+// USE_CASH_ITEM as the client builds it (0x00A0A63F): [short cash pos][int item id], then the item's own fields; for
+// the Incubator the target's tab and slot as two ints (the server returns right after them).
+bool SendIncubatorUse(int cashSlot, int targetType, int targetSlot) {
+    void* sock = *reinterpret_cast<void**>(QaPatch::kAddr_ClientSocket);
+    if (!sock) return false;
+    COutPacket o(kOpUseCashItem);
+    o.Encode2(static_cast<unsigned short>(cashSlot));
+    o.Encode4(static_cast<unsigned int>(kIncubator));
+    o.Encode4(static_cast<unsigned int>(targetType));
+    o.Encode4(static_cast<unsigned int>(targetSlot));
+    reinterpret_cast<void(__thiscall*)(void*, const COutPacket&)>(QaPatch::kAddr_ClientSocket_SendPacket)(sock, o);
+    return true;
+}
+
 void* CurField() {
     return reinterpret_cast<void*(__cdecl*)()>(QaPatch::kAddr_GetField)();
 }
@@ -794,6 +813,30 @@ void AnswerRequests() {
         const bool sent = SendDrop(type, slot, d.count);
         Emit("item.drop", head + ",\"type\":" + std::to_string(type) + ",\"slot\":" + std::to_string(slot) +
                               (sent ? ",\"ok\":true" : ",\"ok\":false,\"error\":\"no_character\""));
+    }
+    std::deque<Command> uses;
+    {
+        std::lock_guard<std::mutex> lock(g_requestMutex);
+        uses.swap(g_cashQueue);
+    }
+    for (const Command& u : uses) {
+        std::string head = ",\"item\":" + std::to_string(u.item);
+        const int cashSlot = FindItemSlot(5, u.item);
+        if (!cashSlot) { Emit("item.use", head + ",\"ok\":false,\"error\":\"not_in_inventory\""); continue; }
+        int type = u.targetType, slot = u.targetSlot;
+        if (u.targetItem) {
+            type = InventoryTypeOf(u.targetItem);
+            slot = FindItemSlot(type, u.targetItem);
+            if (!slot) {
+                Emit("item.use", head + ",\"target_item\":" + std::to_string(u.targetItem) +
+                                      ",\"ok\":false,\"error\":\"target_not_in_inventory\"");
+                continue;
+            }
+        }
+        head += ",\"slot\":" + std::to_string(cashSlot) + ",\"target_type\":" + std::to_string(type) +
+                ",\"target_slot\":" + std::to_string(slot);
+        const bool sent = CurField() && SendIncubatorUse(cashSlot, type, slot);
+        Emit("item.use", head + (sent ? ",\"ok\":true" : ",\"ok\":false,\"error\":\"field_not_ready\""));
     }
     for (const PartyAsk& p : parties) {
         const std::string head = p.create ? ",\"op\":\"create\"" : ",\"op\":\"invite\",\"name\":\"" + p.name + "\"";
