@@ -369,10 +369,13 @@ struct ScreenPoint {
     bool inView = false;
 };
 
-inline ScreenPoint WorldToScreen(int wx, int wy, int camX, int camY, int w, int h) {
+// adjustCy: a screen taller than 600 draws the field (h - 600) / 2 lower than its centre (resolution.cpp moves the
+// Gr2D centre by get_adjust_cy()); without it every npc point was 84 px high on 1366x768 and a short npc (Adobis)
+// was clicked above its head (b344, 2026-11-06).
+inline ScreenPoint WorldToScreen(int wx, int wy, int camX, int camY, int w, int h, int adjustCy = 0) {
     ScreenPoint p;
     p.x = wx - camX + w / 2;
-    p.y = wy - camY + h / 2;
+    p.y = wy - camY + h / 2 + adjustCy;
     p.inView = p.x >= 0 && p.x < w && p.y >= 0 && p.y < h;
     return p;
 }
