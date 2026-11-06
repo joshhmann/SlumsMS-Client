@@ -65,11 +65,31 @@ inline bool ValidLabel(const std::string& label) {
 }
 
 constexpr int kMaxMenuOptions = 8;
+constexpr int kMaxCharName = 12;      // v83 character names: 4-12 letters and digits
+constexpr int kMaxDropCount = 32767;  // ITEM_MOVE carries the count as a short
+
+// The inventory tab an item id lives in: 1 Equip .. 5 Cash, the id's millions digit; 0 for anything else.
+inline int InventoryTypeOf(int item) {
+    const int type = item / 1000000;
+    return (item > 0 && type >= 1 && type <= 5) ? type : 0;
+}
+
+inline bool ValidCharName(const std::string& name) {
+    if (name.size() < 4 || name.size() > static_cast<size_t>(kMaxCharName)) return false;
+    for (char c : name) {
+        const bool ok = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9');
+        if (!ok) return false;
+    }
+    return true;
+}
 
 struct Command {
-    enum Kind { Invalid, Ping, Burst, NpcPos, ClickOption } kind = Invalid;
+    enum Kind { Invalid, Ping, Burst, NpcPos, ClickOption, DropItem, PartyCreate, PartyInvite } kind = Invalid;
     int npc = 0;
     int option = 0;   // click_option: 1-8
+    int item = 0;     // drop_item
+    int count = 0;    // drop_item: 1 unless given
+    std::string name; // party_invite
     int fps = 0;
     int ms = 0;
     std::string label;
@@ -105,6 +125,25 @@ inline Command ParseCommand(const std::string& line) {
         if (option < 1 || option > kMaxMenuOptions) { c.error = "option must be 1-8"; return c; }
         c.kind = Command::ClickOption;
         c.option = option;
+        return c;
+    }
+    int item = 0, count = 0;
+    const int dropFields = std::sscanf(line.c_str(), "drop_item %d %d %c", &item, &count, &extra);
+    if (dropFields == 1 || dropFields == 2) {
+        if (!InventoryTypeOf(item)) { c.error = "item id must be 1000000-5999999"; return c; }
+        if (dropFields == 1) count = 1;
+        if (count < 1 || count > kMaxDropCount) { c.error = "count must be 1-32767"; return c; }
+        c.kind = Command::DropItem;
+        c.item = item;
+        c.count = count;
+        return c;
+    }
+    if (line == "party_create") { c.kind = Command::PartyCreate; return c; }
+    char name[32] = {};
+    if (std::sscanf(line.c_str(), "party_invite %31s %c", name, &extra) == 1) {
+        if (!ValidCharName(name)) { c.error = "name must be 4-12 letters or digits"; return c; }
+        c.kind = Command::PartyInvite;
+        c.name = name;
         return c;
     }
     c.error = "unknown command";

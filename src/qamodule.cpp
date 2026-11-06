@@ -17,6 +17,7 @@
 #include "wvs/wnd.h"
 #include "wvs/wndman.h"
 #include "wvs/util.h"     // get_gr: the camera (IWzGr2D::center) and the game screen size
+#include "ztl/ztl.h"      // ZXString: the invite sender takes the name as the client's own string
 #include <map>
 
 #include <d3d9.h>
@@ -83,6 +84,8 @@ void EmitError(const std::string& msg) { Emit("error", ",\"msg\":\"" + JsonEscap
 // bytes here are the stock ones. A mismatch switches that part off and says so, instead of sending wrong signals.
 bool g_dispatchSiteOk = false;
 bool g_fieldSiteOk = false;
+bool g_dropSiteOk = false;     // P1-Q2 drop_item
+bool g_partySiteOk = false;    // P1-Q2 party_create / party_invite
 
 void CheckHookSites() {
     g_dispatchSiteOk = QaPatch::Matches(reinterpret_cast<const unsigned char*>(QaPatch::kAddr_ProcessPacket),
@@ -96,6 +99,21 @@ void CheckHookSites() {
     if (!g_fieldSiteOk) {
         EmitError("hook site 0x00A1238B (CWvsContext::GetCurFieldID) is not the stock code this build expects: "
                   "field.ready carries no map_id");
+    }
+    g_dropSiteOk = QaPatch::Matches(reinterpret_cast<const unsigned char*>(QaPatch::kAddr_SendChangeSlotPositionRequest),
+                                    QaPatch::SendChangeSlotBytes().data(), QaPatch::SendChangeSlotBytes().size());
+    if (!g_dropSiteOk) {
+        EmitError("hook site 0x00A0900A (CWvsContext::SendChangeSlotPositionRequest) is not the stock code this build "
+                  "expects: drop_item is off");
+    }
+    g_partySiteOk =
+        QaPatch::Matches(reinterpret_cast<const unsigned char*>(QaPatch::kAddr_SendCreatePartyRequest),
+                         QaPatch::SendCreatePartyBytes().data(), QaPatch::SendCreatePartyBytes().size()) &&
+        QaPatch::Matches(reinterpret_cast<const unsigned char*>(QaPatch::kAddr_SendInvitePartyRequest),
+                         QaPatch::SendInvitePartyBytes().data(), QaPatch::SendInvitePartyBytes().size());
+    if (!g_partySiteOk) {
+        EmitError("hook sites 0x0052FCE1/0x0052FECF (the party create and invite senders) are not the stock code this "
+                  "build expects: party_create and party_invite are off");
     }
 }
 
@@ -152,6 +170,19 @@ std::deque<int> g_npcPosQueue;           // npc_pos requests waiting for the ren
 std::mutex g_menuMutex;
 NpcMenu g_menu;                          // isMenu false when the last npc dialog was not a menu
 std::deque<int> g_optionQueue;
+// P1-Q2 (Zakum run): drops and party requests, asked for on the commands thread, sent on the render thread (the game
+// thread, where the item and party windows call the same senders).
+struct DropAsk {
+    int item;
+    int count;
+};
+struct PartyAsk {
+    bool create;
+    std::string name;   // invite
+};
+std::mutex g_requestMutex;
+std::deque<DropAsk> g_dropQueue;
+std::deque<PartyAsk> g_partyQueue;
 
 void DropExpiredDialogs(uint64_t now) {
     size_t keep = 0;
@@ -424,6 +455,12 @@ void CommandsThread() {
                     } else if (c.kind == Command::ClickOption) {
                         std::lock_guard<std::mutex> lock(g_menuMutex);
                         if (g_optionQueue.size() < 8) g_optionQueue.push_back(c.option);
+                    } else if (c.kind == Command::DropItem) {
+                        std::lock_guard<std::mutex> lock(g_requestMutex);
+                        if (g_dropQueue.size() < 8) g_dropQueue.push_back({c.item, c.count});
+                    } else if (c.kind == Command::PartyCreate || c.kind == Command::PartyInvite) {
+                        std::lock_guard<std::mutex> lock(g_requestMutex);
+                        if (g_partyQueue.size() < 8) g_partyQueue.push_back({c.kind == Command::PartyCreate, c.name});
                     } else if (c.kind == Command::NpcPos) {
                         std::lock_guard<std::mutex> lock(g_npcMutex);
                         if (g_npcPosQueue.size() < 16) g_npcPosQueue.push_back(c.npc);
@@ -568,6 +605,101 @@ void AnswerClickOption() {
     }
 }
 
+// ---- items and parties (P1-Q2, Zakum run) ------------------------------------------------------------------------
+// The client's own senders do the work, so the server gets exactly what the item and party windows send, after the
+// client's own checks (the drop throttle, "you cannot invite yourself", a full party). The answer says the request
+// was handed to the sender; what the server did shows in the runner's server lines and chat.
+
+// The 1-based slot of the first `item` in tab `type`, or 0 (no character yet, or not in that tab). Index 0 of a tab's
+// ZArray is unused: the client indexes it by slot (0x0047B396).
+int FindItemSlot(int type, int item) {
+    __try {
+        const uintptr_t ctx = *reinterpret_cast<uintptr_t*>(QaPatch::kAddr_CWvsContext);
+        if (!ctx) return 0;
+        const uintptr_t cd = *reinterpret_cast<uintptr_t*>(ctx + QaPatch::kOff_CharacterData);
+        if (!cd) return 0;
+        const uintptr_t tab = *reinterpret_cast<uintptr_t*>(cd + QaPatch::kOff_ItemTabs + 4 * type);
+        if (!tab) return 0;
+        const int n = *reinterpret_cast<int*>(tab - 4);
+        for (int slot = 1; slot < n && slot <= 255; ++slot) {
+            const uintptr_t p = *reinterpret_cast<uintptr_t*>(tab + 8 * slot + 4);
+            if (p && *reinterpret_cast<int*>(p + QaPatch::kOff_ItemId) == item) return slot;
+        }
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+    }
+    return 0;
+}
+
+bool SendDrop(int type, int slot, int count) {
+    __try {
+        void* ctx = *reinterpret_cast<void**>(QaPatch::kAddr_CWvsContext);
+        if (!ctx) return false;
+        reinterpret_cast<void(__thiscall*)(void*, int, int, int, int)>(QaPatch::kAddr_SendChangeSlotPositionRequest)(
+            ctx, type, slot, 0, count);
+        return true;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+}
+
+void* CurField() {
+    return reinterpret_cast<void*(__cdecl*)()>(QaPatch::kAddr_GetField)();
+}
+
+bool SendPartyCreate() {
+    __try {
+        if (!CurField()) return false;
+        reinterpret_cast<void(__cdecl*)()>(QaPatch::kAddr_SendCreatePartyRequest)();
+        return true;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+}
+
+bool SendPartyInvite(const ZXString<char>* name) {
+    __try {
+        void* field = CurField();
+        if (!field) return false;
+        reinterpret_cast<void(__thiscall*)(void*, const ZXString<char>*)>(QaPatch::kAddr_SendInvitePartyRequest)(
+            field, name);
+        return true;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+}
+
+void AnswerRequests() {
+    std::deque<DropAsk> drops;
+    std::deque<PartyAsk> parties;
+    {
+        std::lock_guard<std::mutex> lock(g_requestMutex);
+        drops.swap(g_dropQueue);
+        parties.swap(g_partyQueue);
+    }
+    for (const DropAsk& d : drops) {
+        const int type = InventoryTypeOf(d.item);
+        const std::string head = ",\"item\":" + std::to_string(d.item) + ",\"count\":" + std::to_string(d.count);
+        if (!g_dropSiteOk) { Emit("item.drop", head + ",\"ok\":false,\"error\":\"site_mismatch\""); continue; }
+        const int slot = FindItemSlot(type, d.item);
+        if (!slot) { Emit("item.drop", head + ",\"ok\":false,\"error\":\"not_in_inventory\""); continue; }
+        const bool sent = SendDrop(type, slot, d.count);
+        Emit("item.drop", head + ",\"type\":" + std::to_string(type) + ",\"slot\":" + std::to_string(slot) +
+                              (sent ? ",\"ok\":true" : ",\"ok\":false,\"error\":\"no_character\""));
+    }
+    for (const PartyAsk& p : parties) {
+        const std::string head = p.create ? ",\"op\":\"create\"" : ",\"op\":\"invite\",\"name\":\"" + p.name + "\"";
+        if (!g_partySiteOk) { Emit("party.sent", head + ",\"ok\":false,\"error\":\"site_mismatch\""); continue; }
+        bool sent;
+        if (p.create) {
+            sent = SendPartyCreate();
+        } else {
+            const ZXString<char> name(p.name.c_str());
+            sent = SendPartyInvite(&name);
+        }
+        Emit("party.sent", head + (sent ? ",\"ok\":true" : ",\"ok\":false,\"error\":\"field_not_ready\""));
+    }
+}
+
 // ---- render-thread state -----------------------------------------------------------------------------------------
 // Ready signals armed by handled packets; each fires after kSettleFrames more frames.
 std::mutex g_signalMutex;
@@ -701,6 +833,7 @@ void QaModule_OnFrame(IDirect3DDevice9* dev) {
     PollWindows();
     AnswerNpcPos();
     AnswerClickOption();
+    AnswerRequests();
     if (!g_active.on) {
         std::lock_guard<std::mutex> lock(g_burstMutex);
         if (g_burstQueue.empty()) return;
