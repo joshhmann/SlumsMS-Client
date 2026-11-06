@@ -231,6 +231,9 @@ int main() {
             Check(!PacketFromOpcode(received.data(), received.size(), 25).data, "no room for an opcode");
             Check(!PacketFromOpcode(received.data(), received.size(), 40).data, "offset past the end");
             Check(!PacketFromOpcode(nullptr, 10, 0).data, "no buffer");
+            // H1 (2026-11-06): the npc dialog's handler returns only when the dialog closes, so NPC_TALK is read first.
+            Check(ReadBeforeClient(kOpNpcTalk), "npc dialogs are read before the client runs them");
+            Check(!ReadBeforeClient(kOpSpawnNpc) && !ReadBeforeClient(kOpSetField), "everything else after");
             // P1-Q2 (Zakum run): drop_item and the party requests.
             c = ParseCommand("drop_item 4001017");
             Check(c.kind == Command::DropItem && c.item == 4001017 && c.count == 1, "drop_item drops one by default");
