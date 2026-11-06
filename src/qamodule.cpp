@@ -1,0 +1,941 @@
+// ============================================================
+// qamodule.cpp -- the QA client's runner channel (ticket 166, SLUMS_QA_MODULE builds only). Rules and the wire format
+// are in qamodule_policy.h. Two one-way named pipes per client process; the runner connects to both.
+//   events thread:   accepts the runner on ...-events, writes queued event lines; reconnects if the runner goes away.
+//   commands thread: accepts the runner on ...-commands, reads lines, queues bursts for the render thread.
+//   render thread (EndScene): fires settled ready signals, takes burst frames (GetRenderTargetData), hands them to
+//   the writer thread, which saves qa-captures\<label>\NNNN.bmp and frames.tsv beside the game.
+// Nothing here runs in a player build: the file is compiled only with SLUMS_QA_MODULE.
+// ============================================================
+#include "pch.h"
+#include "qamodule.h"
+#include "qamodule_patch.h"
+#include "qamodule_policy.h"
+#include "buildstamp_proto.h"
+#include "debug.h"
+#include "constants.h"   // wndman.h uses CONSTANTS_CENTER_STATUSBAR without including it
+#include "wvs/wnd.h"
+#include "wvs/wndman.h"
+#include "wvs/util.h"     // get_gr: the camera (IWzGr2D::center) and the game screen size
+#include "ztl/ztl.h"      // ZXString: the invite sender takes the name as the client's own string
+#include <map>
+
+#include <d3d9.h>
+#include <atomic>
+#include <condition_variable>
+#include <cstdio>
+#include <cstring>
+#include <deque>
+#include <mutex>
+#include <string>
+#include <thread>
+#include <vector>
+
+namespace {
+
+using namespace QaPolicy;
+
+std::atomic<bool> g_started{false};
+LARGE_INTEGER g_qpcFreq{}, g_qpcStart{};
+
+uint64_t NowMs() {
+    LARGE_INTEGER now;
+    QueryPerformanceCounter(&now);
+    return static_cast<uint64_t>((now.QuadPart - g_qpcStart.QuadPart) * 1000 / g_qpcFreq.QuadPart);
+}
+
+std::wstring GameDir() {
+    wchar_t path[MAX_PATH] = {};
+    GetModuleFileNameW(nullptr, path, MAX_PATH);
+    if (wchar_t* slash = wcsrchr(path, L'\\')) *slash = 0;
+    return path;
+}
+
+// ---- events (client -> runner) ----------------------------------------------------------------------------------
+std::mutex g_evMutex;
+std::condition_variable g_evCv;
+std::deque<std::string> g_evQueue;
+
+std::string UtcNow() {
+    SYSTEMTIME st;
+    GetSystemTime(&st);
+    char buf[32] = {};
+    snprintf(buf, sizeof(buf), "%04u-%02u-%02uT%02u:%02u:%02u.%03uZ", st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute,
+        st.wSecond, st.wMilliseconds);
+    return buf;
+}
+
+void Emit(const char* name, const std::string& extra = std::string()) {
+    const std::string line = EventLine(name, NowMs(), extra, UtcNow());
+    {
+        std::lock_guard<std::mutex> lock(g_evMutex);
+        if (g_evQueue.size() < 1024) g_evQueue.push_back(line);
+    }
+    g_evCv.notify_one();
+    DebugMessage("QA: %s", line.substr(0, line.size() - 1).c_str());
+}
+
+void EmitError(const std::string& msg) { Emit("error", ",\"msg\":\"" + JsonEscape(msg) + "\""); }
+
+// ---- stock-byte guards (ticket 170) -----------------------------------------------------------------------------
+// The QA module installs no patches; it rides the existing packet detour and reads the client's own window list.
+// Both addresses it stands on are compared with qamodule_patch.h before anything uses them. This runs before the
+// client's hooks go in (DllMain -> AttachSystemHooks -> QaModule_Start; AttachClientHooks comes later), so the
+// bytes here are the stock ones. A mismatch switches that part off and says so, instead of sending wrong signals.
+bool g_dispatchSiteOk = false;
+bool g_fieldSiteOk = false;
+bool g_dropSiteOk = false;     // P1-Q2 drop_item
+bool g_partySiteOk = false;    // P1-Q2 party_create / party_invite
+
+void CheckHookSites() {
+    g_dispatchSiteOk = QaPatch::Matches(reinterpret_cast<const unsigned char*>(QaPatch::kAddr_ProcessPacket),
+                                        QaPatch::ProcessPacketBytes().data(), QaPatch::ProcessPacketBytes().size());
+    if (!g_dispatchSiteOk) {
+        EmitError("hook site 0x004965F1 (CClientSocket::ProcessPacket) is not the stock code this build expects: "
+                  "ready signals and chat.received are off");
+    }
+    g_fieldSiteOk = QaPatch::Matches(reinterpret_cast<const unsigned char*>(QaPatch::kAddr_GetCurFieldID),
+                                     QaPatch::GetCurFieldIDBytes().data(), QaPatch::GetCurFieldIDBytes().size());
+    if (!g_fieldSiteOk) {
+        EmitError("hook site 0x00A1238B (CWvsContext::GetCurFieldID) is not the stock code this build expects: "
+                  "field.ready carries no map_id");
+    }
+    g_dropSiteOk = QaPatch::Matches(reinterpret_cast<const unsigned char*>(QaPatch::kAddr_SendChangeSlotPositionRequest),
+                                    QaPatch::SendChangeSlotBytes().data(), QaPatch::SendChangeSlotBytes().size());
+    if (!g_dropSiteOk) {
+        EmitError("hook site 0x00A0900A (CWvsContext::SendChangeSlotPositionRequest) is not the stock code this build "
+                  "expects: drop_item is off");
+    }
+    g_partySiteOk =
+        QaPatch::Matches(reinterpret_cast<const unsigned char*>(QaPatch::kAddr_SendCreatePartyRequest),
+                         QaPatch::SendCreatePartyBytes().data(), QaPatch::SendCreatePartyBytes().size()) &&
+        QaPatch::Matches(reinterpret_cast<const unsigned char*>(QaPatch::kAddr_SendInvitePartyRequest),
+                         QaPatch::SendInvitePartyBytes().data(), QaPatch::SendInvitePartyBytes().size());
+    if (!g_partySiteOk) {
+        EmitError("hook sites 0x0052FCE1/0x0052FECF (the party create and invite senders) are not the stock code this "
+                  "build expects: party_create and party_invite are off");
+    }
+}
+
+// The map the client is in, read the way the rest of the client reads it (bounce.cpp, lamps.cpp, weather.cpp).
+// Returns false when the site check failed, so field.ready then omits map_id rather than reporting a wrong map.
+bool CurMapId(int& mapId) {
+    if (!g_fieldSiteOk) return false;
+    mapId = reinterpret_cast<int(__thiscall*)(void*)>(QaPatch::kAddr_GetCurFieldID)(nullptr);
+    return true;
+}
+
+// ---- windows (ticket 170) ---------------------------------------------------------------------------------------
+// Once a frame the client's own window list (CWndMan::ms_lpWindow) is compared with the list from the last frame;
+// a window that appeared is window.open, one that went away is window.closed. Nothing is patched and nothing is
+// clicked. Only what the runner can act on is reported: UIWindow windows (they have a background UOL), windows named
+// by class, and dialogs a packet asked for. Game logic and rendering share one thread in this client, so the list is
+// stable between frames and this needs no lock.
+//
+// A window is keyed by its address AND its CreateWnd serial (CWnd+0x14, zeroed on Destroy), so a new window that
+// reuses a freed address is still reported as a new window.
+constexpr size_t kMaxTrackedWindows = 128;
+constexpr size_t kMaxPendingDialogs = 8;
+constexpr uint64_t kDialogQueueMs = 3000;   // a queued dialog name nobody used is stale after this
+
+struct PendingDialog {
+    const char* name;
+    uint64_t expiresMs;
+    int npcId;   // the npc an npc_dialog is from, else -1
+};
+
+struct TrackedWindow {
+    uintptr_t ptr;
+    uint32_t createId;
+    std::string name;
+};
+
+PendingDialog g_pendingDialogs[kMaxPendingDialogs];
+size_t g_pendingCount = 0;
+bool g_cuiwndSeen = false;      // the client's class test found at least one UI window
+unsigned g_windowScanFrames = 0;
+TrackedWindow g_windows[kMaxTrackedWindows];
+size_t g_windowCount = 0;
+
+// P1-Q2: the field's npcs (click_npc) and the last npc menu's rows (click_option). Filled on the packet thread,
+// asked for on the commands thread, answered on the render thread.
+struct FieldNpc {
+    int npc;
+    int x;
+    int y;
+};
+std::mutex g_npcMutex;
+std::map<int, FieldNpc> g_npcs;          // object id -> npc
+std::deque<int> g_npcPosQueue;           // npc_pos requests waiting for the render thread
+std::mutex g_menuMutex;
+NpcMenu g_menu;                          // isMenu false when the last npc dialog was not a menu
+std::deque<int> g_optionQueue;
+int g_closeAsks = 0;                     // close_dialog requests (P1-Q2, D1: the welcome dialog blocks chat)
+// P1-Q2 (Zakum run): drops and party requests, asked for on the commands thread, sent on the render thread (the game
+// thread, where the item and party windows call the same senders).
+struct DropAsk {
+    int item;
+    int count;
+};
+struct PartyAsk {
+    bool create;
+    std::string name;   // invite
+};
+std::mutex g_requestMutex;
+std::deque<DropAsk> g_dropQueue;
+std::deque<PartyAsk> g_partyQueue;
+
+void DropExpiredDialogs(uint64_t now) {
+    size_t keep = 0;
+    for (size_t i = 0; i < g_pendingCount; ++i) {
+        if (g_pendingDialogs[i].expiresMs >= now) g_pendingDialogs[keep++] = g_pendingDialogs[i];
+    }
+    g_pendingCount = keep;
+}
+
+// The dialog a packet asked for; the next window with no name of its own takes it (see qamodule_policy.h).
+void QueueDialog(const char* name, int npcId = -1) {
+    if (!name) return;
+    DropExpiredDialogs(NowMs());
+    if (g_pendingCount == kMaxPendingDialogs) {   // wait too long and the oldest request is the stale one
+        memmove(&g_pendingDialogs[0], &g_pendingDialogs[1], sizeof(g_pendingDialogs[0]) * (g_pendingCount - 1));
+        --g_pendingCount;
+    }
+    g_pendingDialogs[g_pendingCount].name = name;
+    g_pendingDialogs[g_pendingCount].expiresMs = NowMs() + kDialogQueueMs;
+    g_pendingDialogs[g_pendingCount].npcId = npcId;
+    ++g_pendingCount;
+}
+
+const char* TakeDialog(int& npcId) {
+    npcId = -1;
+    DropExpiredDialogs(NowMs());
+    if (g_pendingCount == 0) return nullptr;
+    const char* name = g_pendingDialogs[0].name;
+    npcId = g_pendingDialogs[0].npcId;
+    memmove(&g_pendingDialogs[0], &g_pendingDialogs[1], sizeof(g_pendingDialogs[0]) * (g_pendingCount - 1));
+    --g_pendingCount;
+    return name;
+}
+
+uint32_t CreateIdOf(const CWnd* w) {
+    return *reinterpret_cast<const uint32_t*>(reinterpret_cast<const char*>(w) + 0x14);   // invresize_patch.h kOff_CreateId
+}
+
+uint32_t VtableOf(const CWnd* w) { return static_cast<uint32_t>(reinterpret_cast<uintptr_t>(*reinterpret_cast<void* const*>(w))); }
+
+// The background UOL a UIWindow window was made from (CUIWnd::m_sBackgrndUOL at +0x5AC, ZXString = one pointer).
+const wchar_t* UolOf(const CWnd* w) {
+    return *reinterpret_cast<const wchar_t* const*>(reinterpret_cast<const char*>(w) + 0x5AC);
+}
+
+// UOLs are ASCII; anything else is not a name we can map, so it becomes '?' rather than widening the event.
+std::string NarrowUol(const wchar_t* w, size_t max) {
+    std::string s;
+    if (!w) return s;
+    for (size_t i = 0; i < max && w[i]; ++i) s.push_back(w[i] < 0x80 ? static_cast<char>(w[i]) : '?');
+    return s;
+}
+
+void PollWindows() {
+    bool seen[kMaxTrackedWindows] = {};
+    // Windows that appeared this frame, named after the walk so a dialog name is only handed to one of them and
+    // never to a window that was already up.
+    struct Fresh {
+        CWnd* w;
+        uint32_t createId;
+        std::string uol;
+        const char* name;
+        int npcId;
+    };
+    constexpr size_t kMaxFresh = 16;
+    Fresh fresh[kMaxFresh];
+    size_t freshCount = 0;
+
+    auto pos = CWndMan::ms_lpWindow.GetHeadPosition();
+    while (pos) {
+        CWnd* w = CWndMan::ms_lpWindow.GetNext(pos);
+        if (!w) continue;
+        const uint32_t createId = CreateIdOf(w);
+        if (createId == 0) continue;                              // not created yet (Destroy zeroes the serial)
+        const bool npcDialog = VtableOf(w) == kVtable_CUtilDlgEx;   // a CDialog, not a CUIWnd
+        if (!npcDialog && !w->IsKindOf(&CUIWnd::ms_RTTI_CUIWnd)) continue;   // HUD layers and children are not runner screens
+        if (!npcDialog) g_cuiwndSeen = true;
+
+        size_t slot = kMaxTrackedWindows;
+        for (size_t i = 0; i < g_windowCount; ++i) {
+            if (g_windows[i].ptr == reinterpret_cast<uintptr_t>(w) && g_windows[i].createId == createId) {
+                slot = i;
+                break;
+            }
+        }
+        if (slot != kMaxTrackedWindows) {
+            seen[slot] = true;                                    // already reported open
+            continue;
+        }
+        if (freshCount == kMaxFresh) continue;
+
+        Fresh& f = fresh[freshCount++];
+        f.w = w;
+        f.createId = createId;
+        f.uol = NarrowUol(UolOf(w), 128);
+        f.npcId = -1;
+        f.name = WindowNameFromUol(f.uol);
+        if (!f.name) f.name = WindowNameForVtable(VtableOf(w));
+    }
+
+    // Dialogs are one class for a party invite, a proposal, an npc dialog and a notice, so the name comes from the
+    // packet that asked for the dialog. A window with no UOL of its own is the surest match, so those are served
+    // first; only then the rest.
+    if (!g_cuiwndSeen && ++g_windowScanFrames == 600) {   // ten seconds of frames with no UI window at all
+        EmitError("the window list shows no UI windows: window.open and window.closed are off (class test failed)");
+    }
+
+    for (int pass = 0; pass < 2; ++pass) {
+        const bool wantEmptyUol = pass == 0;
+        for (size_t i = 0; i < freshCount; ++i) {
+            if (fresh[i].name || fresh[i].uol.empty() != wantEmptyUol) continue;
+            fresh[i].name = TakeDialog(fresh[i].npcId);
+        }
+    }
+
+    // An npc dialog no packet asked for (or whose packet was not read) is still the npc dialog.
+    for (size_t i = 0; i < freshCount; ++i) {
+        if (!fresh[i].name && VtableOf(fresh[i].w) == kVtable_CUtilDlgEx) fresh[i].name = "npc_dialog";
+    }
+
+    for (size_t i = 0; i < freshCount; ++i) {
+        const Fresh& f = fresh[i];
+        // A window with no name and no UOL is HUD furniture the runner does not act on (the minimap, the status
+        // bar's children). It is still remembered below, so it cannot take a dialog name queued a frame later.
+        const bool report = f.name != nullptr || !f.uol.empty();
+        if (report) {
+            std::string extra = ",\"window\":\"" + JsonEscape(f.name ? f.name : "unknown") + "\"";
+            if (f.npcId >= 0) extra += ",\"npc_id\":" + std::to_string(f.npcId);
+            if (!f.name) {
+                char vtable[16] = {};
+                snprintf(vtable, sizeof(vtable), "0x%08X", VtableOf(f.w));
+                extra += ",\"vtable\":\"";
+                extra += vtable;
+                extra += "\",\"uol\":\"" + JsonEscape(f.uol) + "\"";
+            }
+            Emit("window.open", extra);
+        }
+        if (g_windowCount < kMaxTrackedWindows) {
+            g_windows[g_windowCount].ptr = reinterpret_cast<uintptr_t>(f.w);
+            g_windows[g_windowCount].createId = f.createId;
+            g_windows[g_windowCount].name = report ? (f.name ? f.name : "unknown") : std::string();
+            seen[g_windowCount] = true;
+            ++g_windowCount;
+        }
+    }
+
+    for (size_t i = 0; i < g_windowCount;) {
+        if (seen[i]) {
+            ++i;
+            continue;
+        }
+        if (!g_windows[i].name.empty()) Emit("window.closed", ",\"window\":\"" + JsonEscape(g_windows[i].name) + "\"");
+        g_windows[i] = g_windows[g_windowCount - 1];
+        seen[i] = seen[g_windowCount - 1];
+        --g_windowCount;
+    }
+}
+
+std::wstring PipeName(const wchar_t* suffix) {
+    return L"\\\\.\\pipe\\slums-qa-" + std::to_wstring(GetCurrentProcessId()) + L"-" + suffix;
+}
+
+void EventsThread() {
+    const std::wstring name = PipeName(L"events");
+    for (;;) {
+        HANDLE pipe = CreateNamedPipeW(name.c_str(), PIPE_ACCESS_OUTBOUND, PIPE_TYPE_BYTE | PIPE_WAIT, 1, 64 * 1024, 0, 0, nullptr);
+        if (pipe == INVALID_HANDLE_VALUE) {
+            DebugMessage("QA: could not open the events pipe (error %lu)", GetLastError());
+            return;
+        }
+        const BOOL connected = ConnectNamedPipe(pipe, nullptr) || GetLastError() == ERROR_PIPE_CONNECTED;
+        if (connected) {
+            // Greet with what this client is, then stream the queue (events queued before the runner came stay).
+            const std::string hello = EventLine("hello", NowMs(),
+                ",\"pid\":" + std::to_string(GetCurrentProcessId()) + ",\"release\":\"" + JsonEscape(kSlumsRelease) +
+                "\",\"build\":" + std::to_string(kSlumsBuildNumber), UtcNow());
+            DWORD wrote = 0;
+            bool ok = WriteFile(pipe, hello.data(), static_cast<DWORD>(hello.size()), &wrote, nullptr) != FALSE;
+            while (ok) {
+                std::string line;
+                {
+                    std::unique_lock<std::mutex> lock(g_evMutex);
+                    g_evCv.wait(lock, [] { return !g_evQueue.empty(); });
+                    line = std::move(g_evQueue.front());
+                    g_evQueue.pop_front();
+                }
+                ok = WriteFile(pipe, line.data(), static_cast<DWORD>(line.size()), &wrote, nullptr) != FALSE;
+            }
+        }
+        DisconnectNamedPipe(pipe);
+        CloseHandle(pipe);
+    }
+}
+
+// ---- bursts (render thread takes frames, writer thread saves them) ------------------------------------------------
+struct Burst {
+    std::string label;
+    int fps = 0;
+    int ms = 0;
+};
+
+std::mutex g_burstMutex;
+std::deque<Burst> g_burstQueue;      // commands thread -> render thread
+
+struct Frame {
+    std::string label;
+    int index = 0;
+    uint64_t atMs = 0;               // since the burst began
+    int w = 0, h = 0;
+    std::vector<uint8_t> bgra;       // top-down rows, w*4 bytes each
+    bool last = false;
+};
+std::mutex g_frameMutex;
+std::condition_variable g_frameCv;
+std::deque<Frame> g_frameQueue;      // render thread -> writer thread
+
+void WriterThread() {
+    const std::wstring root = GameDir() + L"\\qa-captures";
+    CreateDirectoryW(root.c_str(), nullptr);
+    for (;;) {
+        Frame f;
+        {
+            std::unique_lock<std::mutex> lock(g_frameMutex);
+            g_frameCv.wait(lock, [] { return !g_frameQueue.empty(); });
+            f = std::move(g_frameQueue.front());
+            g_frameQueue.pop_front();
+        }
+        const std::wstring dir = root + L"\\" + std::wstring(f.label.begin(), f.label.end());
+        CreateDirectoryW(dir.c_str(), nullptr);
+        if (!f.bgra.empty()) {
+            wchar_t file[32];
+            swprintf_s(file, L"\\%04d.bmp", f.index);
+            FILE* out = nullptr;
+            if (_wfopen_s(&out, (dir + file).c_str(), L"wb") == 0 && out) {
+                uint8_t header[54];
+                BmpHeader(header, f.w, f.h);
+                fwrite(header, 1, sizeof header, out);
+                for (int y = f.h - 1; y >= 0; --y) fwrite(&f.bgra[static_cast<size_t>(y) * f.w * 4], 1, static_cast<size_t>(f.w) * 4, out);
+                fclose(out);
+            }
+            FILE* tsv = nullptr;
+            if (_wfopen_s(&tsv, (dir + L"\\frames.tsv").c_str(), L"ab") == 0 && tsv) {
+                fprintf(tsv, "%04d\t%llu\n", f.index, static_cast<unsigned long long>(f.atMs));
+                fclose(tsv);
+            }
+        }
+        if (f.last) {
+            Emit("burst.done", ",\"label\":\"" + f.label + "\",\"frames\":" + std::to_string(f.bgra.empty() ? f.index : f.index + 1));
+        }
+    }
+}
+
+void CommandsThread() {
+    const std::wstring name = PipeName(L"commands");
+    for (;;) {
+        HANDLE pipe = CreateNamedPipeW(name.c_str(), PIPE_ACCESS_INBOUND, PIPE_TYPE_BYTE | PIPE_WAIT, 1, 0, 4096, 0, nullptr);
+        if (pipe == INVALID_HANDLE_VALUE) {
+            DebugMessage("QA: could not open the commands pipe (error %lu)", GetLastError());
+            return;
+        }
+        if (ConnectNamedPipe(pipe, nullptr) || GetLastError() == ERROR_PIPE_CONNECTED) {
+            std::string pending;
+            char buf[512];
+            DWORD got = 0;
+            while (ReadFile(pipe, buf, sizeof buf, &got, nullptr) && got > 0) {
+                pending.append(buf, got);
+                size_t nl;
+                while ((nl = pending.find('\n')) != std::string::npos) {
+                    std::string line = pending.substr(0, nl);
+                    pending.erase(0, nl + 1);
+                    if (!line.empty() && line.back() == '\r') line.pop_back();
+                    if (line.empty()) continue;
+                    const Command c = ParseCommand(line);
+                    if (c.kind == Command::Ping) {
+                        Emit("pong");
+                    } else if (c.kind == Command::ClickOption) {
+                        std::lock_guard<std::mutex> lock(g_menuMutex);
+                        if (g_optionQueue.size() < 8) g_optionQueue.push_back(c.option);
+                    } else if (c.kind == Command::CloseDialog) {
+                        std::lock_guard<std::mutex> lock(g_menuMutex);
+                        if (g_closeAsks < 8) ++g_closeAsks;
+                    } else if (c.kind == Command::DropItem) {
+                        std::lock_guard<std::mutex> lock(g_requestMutex);
+                        if (g_dropQueue.size() < 8) g_dropQueue.push_back({c.item, c.count});
+                    } else if (c.kind == Command::PartyCreate || c.kind == Command::PartyInvite) {
+                        std::lock_guard<std::mutex> lock(g_requestMutex);
+                        if (g_partyQueue.size() < 8) g_partyQueue.push_back({c.kind == Command::PartyCreate, c.name});
+                    } else if (c.kind == Command::NpcPos) {
+                        std::lock_guard<std::mutex> lock(g_npcMutex);
+                        if (g_npcPosQueue.size() < 16) g_npcPosQueue.push_back(c.npc);
+                    } else if (c.kind == Command::Burst) {
+                        std::lock_guard<std::mutex> lock(g_burstMutex);
+                        g_burstQueue.push_back({c.label, c.fps, c.ms});
+                    } else {
+                        EmitError(c.error + ": " + line.substr(0, 80));
+                    }
+                }
+                if (pending.size() > 4096) pending.clear();   // a runner that never sends a newline
+            }
+        }
+        DisconnectNamedPipe(pipe);
+        CloseHandle(pipe);
+    }
+}
+
+// ---- npcs on the field (P1-Q2 click_npc) ---------------------------------------------------------------------------
+// Kept from the server's spawn packets (packet thread), read on the render thread to answer npc_pos.
+
+void OnNpcPacket(uint16_t opcode, const unsigned char* bytes, size_t size) {
+    if (opcode == kOpSetField) {         // a new field: the old field's npcs are gone
+        std::lock_guard<std::mutex> lock(g_npcMutex);
+        g_npcs.clear();
+        return;
+    }
+    const NpcUpdate u = ParseNpcPacket(opcode, bytes, size);
+    if (u.op == NpcUpdate::None) return;
+    std::lock_guard<std::mutex> lock(g_npcMutex);
+    if (u.op == NpcUpdate::Add) g_npcs[u.oid] = {u.npc, u.x, u.y};
+    else g_npcs.erase(u.oid);
+}
+
+bool ReadCamera(int& cx, int& cy, int& w, int& h) {
+    try {
+        IWzGr2DPtr& gr = get_gr();
+        if (!gr) return false;
+        IWzVector2DPtr center = gr->Getcenter();
+        if (!center) return false;
+        cx = center->x;
+        cy = center->y;
+        w = static_cast<int>(gr->Getwidth());
+        h = static_cast<int>(gr->Getheight());
+        return w > 0 && h > 0;
+    } catch (const _com_error&) {
+        return false;
+    }
+}
+
+// Render thread: answers each queued npc_pos with the npc's screen point.
+void AnswerNpcPos() {
+    std::deque<int> asks;
+    {
+        std::lock_guard<std::mutex> lock(g_npcMutex);
+        asks.swap(g_npcPosQueue);
+    }
+    for (int npc : asks) {
+        const std::string head = ",\"npc\":" + std::to_string(npc);
+        int mapId = 0, cx = 0, cy = 0, w = 0, h = 0;
+        if (!CurMapId(mapId) || !ReadCamera(cx, cy, w, h)) {
+            Emit("npc.pos", head + ",\"ok\":false,\"error\":\"field_not_ready\"");
+            continue;
+        }
+        bool found = false;
+        FieldNpc at{};
+        {
+            std::lock_guard<std::mutex> lock(g_npcMutex);
+            for (const auto& entry : g_npcs) {
+                if (entry.second.npc == npc) { at = entry.second; found = true; break; }
+            }
+        }
+        if (!found) {
+            Emit("npc.pos", head + ",\"ok\":false,\"error\":\"npc_not_on_map\"");
+            continue;
+        }
+        const ScreenPoint p = ToReference(WorldToScreen(at.x, at.y - kNpcClickRise, cx, cy, w, h), w, h);
+        const std::string where = ",\"x\":" + std::to_string(p.x) + ",\"y\":" + std::to_string(p.y);
+        Emit("npc.pos", head + (p.inView ? ",\"ok\":true" : ",\"ok\":false,\"error\":\"out_of_view\"") + where);
+    }
+}
+
+// ---- npc menus (P1-Q2 click_option) ------------------------------------------------------------------------------
+// The rows of the last npc dialog, from its NPC_TALK packet (packet thread); click_option is answered on the render
+// thread, which is the game thread the dialog's modal loop runs on.
+
+void OnNpcTalk(const unsigned char* bytes, size_t size) {
+    const NpcMenu menu = ParseNpcMenu(bytes, size);
+    if (!menu.isTalk) return;
+    std::lock_guard<std::mutex> lock(g_menuMutex);
+    g_menu = menu;
+}
+
+// The open npc dialog the module saw last, or 0.
+// The innermost modal npc dialog. DoModal (0x004EDBA1) enters it through CWndMan::EnterModal (0x009E33FC), which adds
+// its IUIMsgHandler (the dialog + 4) to the ZList at CWndMan + 0x6C; the newest is the tail.
+uintptr_t ModalNpcDialog() {
+    __try {
+        const uintptr_t wndMan = *reinterpret_cast<uintptr_t*>(kAddr_CWndManInstance);
+        if (!wndMan) return 0;
+        const auto& modal = *reinterpret_cast<const ZList<void*>*>(wndMan + kOff_ModalList);
+        void** pos = modal.GetTailPosition();
+        for (int guard = 0; pos && guard < 16; ++guard) {
+            void* handler = ZList<void*>::GetPrev(pos);
+            if (!handler) continue;
+            const uintptr_t dlg = reinterpret_cast<uintptr_t>(handler) - 4;
+            if (*reinterpret_cast<uint32_t*>(dlg) == kVtable_CUtilDlgEx) return dlg;
+        }
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+    }
+    return 0;
+}
+
+// The open npc dialog: the one the window walk named, else the modal one.
+uintptr_t OpenNpcDialog() {
+    for (size_t i = g_windowCount; i-- > 0;) {
+        if (g_windows[i].name == "npc_dialog") return g_windows[i].ptr;
+    }
+    return ModalNpcDialog();
+}
+
+// Ends the dialog the way its close button does; the reply path sends "end chat" for every dialog type.
+bool EndDialog(uintptr_t dlg) {
+    __try {
+        *reinterpret_cast<int*>(dlg + kDlgOffRet) = kDlgRetEnd;
+        *reinterpret_cast<int*>(dlg + kDlgOffTerminate) = 1;
+        return true;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+}
+
+void AnswerCloseDialog() {
+    int asks = 0;
+    {
+        std::lock_guard<std::mutex> lock(g_menuMutex);
+        asks = g_closeAsks;
+        g_closeAsks = 0;
+    }
+    for (int i = 0; i < asks; ++i) {
+        const std::string head = ",\"op\":\"close_dialog\"";
+        const uintptr_t dlg = OpenNpcDialog();
+        if (!dlg || !EndDialog(dlg)) {
+            Emit("click.done", head + ",\"ok\":false,\"error\":\"no_dialog\"");
+            continue;
+        }
+        {
+            std::lock_guard<std::mutex> lock(g_menuMutex);
+            g_menu = NpcMenu();
+        }
+        Emit("click.done", head + ",\"ok\":true");
+    }
+}
+
+bool EndMenu(uintptr_t dlg, int value) {
+    __try {
+        *reinterpret_cast<int*>(dlg + kDlgOffSelection) = value;
+        *reinterpret_cast<int*>(dlg + kDlgOffRet) = kDlgRetOk;
+        *reinterpret_cast<int*>(dlg + kDlgOffTerminate) = 1;
+        return true;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+}
+
+void AnswerClickOption() {
+    std::deque<int> asks;
+    NpcMenu menu;
+    {
+        std::lock_guard<std::mutex> lock(g_menuMutex);
+        asks.swap(g_optionQueue);
+        menu = g_menu;
+    }
+    for (int n : asks) {
+        const std::string head = ",\"op\":\"click_option\",\"option\":" + std::to_string(n);
+        const uintptr_t dlg = OpenNpcDialog();
+        if (!dlg || !menu.isMenu) {
+            Emit("click.done", head + ",\"ok\":false,\"error\":\"not_a_menu\"");
+            continue;
+        }
+        if (n > static_cast<int>(menu.values.size())) {
+            Emit("click.done", head + ",\"ok\":false,\"error\":\"no_such_option\"");
+            continue;
+        }
+        const int value = menu.values[static_cast<size_t>(n - 1)];
+        if (!EndMenu(dlg, value)) {
+            Emit("click.done", head + ",\"ok\":false,\"error\":\"not_a_menu\"");
+            continue;
+        }
+        {
+            std::lock_guard<std::mutex> lock(g_menuMutex);
+            g_menu = NpcMenu();          // answered: a second click_option needs the next menu
+        }
+        Emit("click.done", head + ",\"ok\":true,\"value\":" + std::to_string(value));
+    }
+}
+
+// ---- items and parties (P1-Q2, Zakum run) ------------------------------------------------------------------------
+// The client's own senders do the work, so the server gets exactly what the item and party windows send, after the
+// client's own checks (the drop throttle, "you cannot invite yourself", a full party). The answer says the request
+// was handed to the sender; what the server did shows in the runner's server lines and chat.
+
+// The 1-based slot of the first `item` in tab `type`, or 0 (no character yet, or not in that tab). Index 0 of a tab's
+// ZArray is unused: the client indexes it by slot (0x0047B396).
+int FindItemSlot(int type, int item) {
+    __try {
+        const uintptr_t ctx = *reinterpret_cast<uintptr_t*>(QaPatch::kAddr_CWvsContext);
+        if (!ctx) return 0;
+        const uintptr_t cd = *reinterpret_cast<uintptr_t*>(ctx + QaPatch::kOff_CharacterData);
+        if (!cd) return 0;
+        const uintptr_t tab = *reinterpret_cast<uintptr_t*>(cd + QaPatch::kOff_ItemTabs + 4 * type);
+        if (!tab) return 0;
+        const int n = *reinterpret_cast<int*>(tab - 4);
+        for (int slot = 1; slot < n && slot <= 255; ++slot) {
+            const uintptr_t p = *reinterpret_cast<uintptr_t*>(tab + 8 * slot + 4);
+            if (!p) continue;
+            // nItemID is a TSecType<long>, not a plain int: read it the client's way (the first build-4 run on TEST
+            // compared the raw field and missed an Eye of Fire in ETC slot 7).
+            const int id = reinterpret_cast<int(__thiscall*)(const void*)>(QaPatch::kAddr_TSecTypeLong_GetData)(
+                reinterpret_cast<const void*>(p + QaPatch::kOff_ItemId));
+            if (id == item) return slot;
+        }
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+    }
+    return 0;
+}
+
+bool SendDrop(int type, int slot, int count) {
+    __try {
+        void* ctx = *reinterpret_cast<void**>(QaPatch::kAddr_CWvsContext);
+        if (!ctx) return false;
+        reinterpret_cast<void(__thiscall*)(void*, int, int, int, int)>(QaPatch::kAddr_SendChangeSlotPositionRequest)(
+            ctx, type, slot, 0, count);
+        return true;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+}
+
+void* CurField() {
+    return reinterpret_cast<void*(__cdecl*)()>(QaPatch::kAddr_GetField)();
+}
+
+bool SendPartyCreate() {
+    __try {
+        if (!CurField()) return false;
+        reinterpret_cast<void(__cdecl*)()>(QaPatch::kAddr_SendCreatePartyRequest)();
+        return true;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+}
+
+bool SendPartyInvite(const ZXString<char>* name) {
+    __try {
+        void* field = CurField();
+        if (!field) return false;
+        reinterpret_cast<void(__thiscall*)(void*, const ZXString<char>*)>(QaPatch::kAddr_SendInvitePartyRequest)(
+            field, name);
+        return true;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+}
+
+void AnswerRequests() {
+    std::deque<DropAsk> drops;
+    std::deque<PartyAsk> parties;
+    {
+        std::lock_guard<std::mutex> lock(g_requestMutex);
+        drops.swap(g_dropQueue);
+        parties.swap(g_partyQueue);
+    }
+    for (const DropAsk& d : drops) {
+        const int type = InventoryTypeOf(d.item);
+        const std::string head = ",\"item\":" + std::to_string(d.item) + ",\"count\":" + std::to_string(d.count);
+        if (!g_dropSiteOk) { Emit("item.drop", head + ",\"ok\":false,\"error\":\"site_mismatch\""); continue; }
+        const int slot = FindItemSlot(type, d.item);
+        if (!slot) { Emit("item.drop", head + ",\"ok\":false,\"error\":\"not_in_inventory\""); continue; }
+        const bool sent = SendDrop(type, slot, d.count);
+        Emit("item.drop", head + ",\"type\":" + std::to_string(type) + ",\"slot\":" + std::to_string(slot) +
+                              (sent ? ",\"ok\":true" : ",\"ok\":false,\"error\":\"no_character\""));
+    }
+    for (const PartyAsk& p : parties) {
+        const std::string head = p.create ? ",\"op\":\"create\"" : ",\"op\":\"invite\",\"name\":\"" + p.name + "\"";
+        if (!g_partySiteOk) { Emit("party.sent", head + ",\"ok\":false,\"error\":\"site_mismatch\""); continue; }
+        bool sent;
+        if (p.create) {
+            sent = SendPartyCreate();
+        } else {
+            const ZXString<char> name(p.name.c_str());
+            sent = SendPartyInvite(&name);
+        }
+        Emit("party.sent", head + (sent ? ",\"ok\":true" : ",\"ok\":false,\"error\":\"field_not_ready\""));
+    }
+}
+
+// ---- render-thread state -----------------------------------------------------------------------------------------
+// Ready signals armed by handled packets; each fires after kSettleFrames more frames.
+std::mutex g_signalMutex;
+std::vector<std::pair<const char*, int>> g_armed;   // signal, frames still to draw
+
+struct ActiveBurst {
+    bool on = false;
+    Burst b;
+    uint64_t startMs = 0, nextMs = 0;
+    int taken = 0;
+} g_active;
+
+IDirect3DSurface9* g_sysmem = nullptr;
+UINT g_sysW = 0, g_sysH = 0;
+D3DFORMAT g_sysFmt = D3DFMT_UNKNOWN;
+
+void ReleaseSysmem() {
+    if (g_sysmem) g_sysmem->Release();
+    g_sysmem = nullptr;
+    g_sysW = g_sysH = 0;
+    g_sysFmt = D3DFMT_UNKNOWN;
+}
+
+// Copies the current back buffer; false (with one error event) when the format is not 32-bit.
+bool Grab(IDirect3DDevice9* dev, Frame& f) {
+    IDirect3DSurface9* rt = nullptr;
+    if (FAILED(dev->GetRenderTarget(0, &rt)) || !rt) return false;
+    D3DSURFACE_DESC desc = {};
+    rt->GetDesc(&desc);
+    if (desc.Format != D3DFMT_X8R8G8B8 && desc.Format != D3DFMT_A8R8G8B8) {
+        rt->Release();
+        static bool told = false;
+        if (!told) { told = true; EmitError("back buffer is not 32-bit (format " + std::to_string(desc.Format) + ")"); }
+        return false;
+    }
+    if (!g_sysmem || g_sysW != desc.Width || g_sysH != desc.Height || g_sysFmt != desc.Format) {
+        ReleaseSysmem();
+        if (FAILED(dev->CreateOffscreenPlainSurface(desc.Width, desc.Height, desc.Format, D3DPOOL_SYSTEMMEM, &g_sysmem, nullptr))) {
+            rt->Release();
+            return false;
+        }
+        g_sysW = desc.Width;
+        g_sysH = desc.Height;
+        g_sysFmt = desc.Format;
+    }
+    const bool ok = SUCCEEDED(dev->GetRenderTargetData(rt, g_sysmem));
+    rt->Release();
+    if (!ok) return false;
+    D3DLOCKED_RECT lr = {};
+    if (FAILED(g_sysmem->LockRect(&lr, nullptr, D3DLOCK_READONLY))) return false;
+    f.w = static_cast<int>(desc.Width);
+    f.h = static_cast<int>(desc.Height);
+    f.bgra.resize(static_cast<size_t>(f.w) * f.h * 4);
+    for (int y = 0; y < f.h; ++y) {
+        uint8_t* row = &f.bgra[static_cast<size_t>(y) * f.w * 4];
+        memcpy(row, static_cast<const uint8_t*>(lr.pBits) + static_cast<size_t>(y) * lr.Pitch, static_cast<size_t>(f.w) * 4);
+        for (int x = 0; x < f.w; ++x) row[x * 4 + 3] = 0xFF;   // X8R8G8B8 leaves alpha undefined
+    }
+    g_sysmem->UnlockRect();
+    return true;
+}
+
+void PushFrame(Frame&& f) {
+    {
+        std::lock_guard<std::mutex> lock(g_frameMutex);
+        g_frameQueue.push_back(std::move(f));
+    }
+    g_frameCv.notify_one();
+}
+
+}  // namespace
+
+void QaModule_Start() {
+    bool expected = false;
+    if (!g_started.compare_exchange_strong(expected, true)) return;
+    QueryPerformanceFrequency(&g_qpcFreq);
+    QueryPerformanceCounter(&g_qpcStart);
+    CheckHookSites();   // before the client's hooks go in: these must be the stock bytes
+    std::thread(EventsThread).detach();
+    std::thread(CommandsThread).detach();
+    std::thread(WriterThread).detach();
+    DebugMessage("QA module: pipes slums-qa-%lu-events / -commands (QA build %s, never for players)",
+        GetCurrentProcessId(), kSlumsRelease);
+}
+
+void QaModule_OnPacket(uint16_t opcode, const void* packet, size_t size) {
+    if (!g_started) return;
+    const auto* bytes = static_cast<const unsigned char*>(packet);
+    // A dialog the runner must expect: queued before the window shows up (qamodule_policy.h DialogForPacket).
+    const char* dialog = DialogForPacket(opcode, bytes, size);
+    QueueDialog(dialog, opcode == kOpNpcTalk && dialog ? NpcIdForTalkPacket(bytes, size) : -1);
+    if (!g_dispatchSiteOk) return;
+    OnNpcPacket(opcode, bytes, size);
+    if (opcode == kOpNpcTalk) OnNpcTalk(bytes, size);
+    // A line the client puts in its chat log: map chat, buddy/party/guild, whisper, spouse, notice, yellow tip.
+    const ChatLine chat = ParseChatPacket(opcode, bytes, size);
+    if (chat.ok) {
+        // kind is the packet's mode byte, type the runner's name for the line (QA, 2026-11-06: chat.log reads utc/kind/text).
+        Emit("chat.received",
+            ",\"kind\":" + std::to_string(chat.kind) + ",\"type\":\"" + std::string(ChatKindName(opcode, chat.kind)) +
+            "\",\"text\":\"" + JsonEscape(TruncateUtf8(chat.text, kMaxChatText)) + "\"");
+    }
+    const char* signal = SignalForOpcode(opcode);
+    if (!signal) return;
+    std::lock_guard<std::mutex> lock(g_signalMutex);
+    for (auto& armed : g_armed) {
+        if (armed.first == signal) { armed.second = kSettleFrames; return; }   // re-armed: wait again from now
+    }
+    g_armed.emplace_back(signal, kSettleFrames);
+}
+
+void QaModule_OnFrame(IDirect3DDevice9* dev) {
+    if (!g_started) return;
+    {
+        std::lock_guard<std::mutex> lock(g_signalMutex);
+        for (size_t i = 0; i < g_armed.size();) {
+            if (--g_armed[i].second <= 0) {
+                const char* name = g_armed[i].first;
+                int mapId = 0;
+                std::string extra;
+                if (std::strcmp(name, "field.ready") == 0 && CurMapId(mapId)) {
+                    extra = ",\"map_id\":" + std::to_string(mapId);
+                }
+                Emit(name, extra);
+                g_armed.erase(g_armed.begin() + static_cast<std::ptrdiff_t>(i));
+            } else {
+                ++i;
+            }
+        }
+    }
+    PollWindows();
+    AnswerNpcPos();
+    AnswerClickOption();
+    AnswerCloseDialog();
+    AnswerRequests();
+    if (!g_active.on) {
+        std::lock_guard<std::mutex> lock(g_burstMutex);
+        if (g_burstQueue.empty()) return;
+        g_active.b = g_burstQueue.front();
+        g_burstQueue.pop_front();
+        g_active.on = true;
+        g_active.startMs = g_active.nextMs = NowMs();
+        g_active.taken = 0;
+        Emit("burst.start", ",\"label\":\"" + g_active.b.label + "\",\"fps\":" + std::to_string(g_active.b.fps) +
+            ",\"ms\":" + std::to_string(g_active.b.ms));
+    }
+    const uint64_t now = NowMs();
+    const uint64_t endMs = g_active.startMs + static_cast<uint64_t>(g_active.b.ms);
+    if (now >= g_active.nextMs && now < endMs) {
+        Frame f;
+        f.label = g_active.b.label;
+        f.index = g_active.taken;
+        f.atMs = now - g_active.startMs;
+        if (Grab(dev, f)) {
+            ++g_active.taken;
+            PushFrame(std::move(f));
+        }
+        g_active.nextMs += 1000u / static_cast<unsigned>(g_active.b.fps);
+        if (g_active.nextMs < now) g_active.nextMs = now;   // a slow frame skips shots instead of bunching them
+    }
+    if (now >= endMs) {
+        Frame done;                    // no pixels: tells the writer the burst is over, with the count in index
+        done.label = g_active.b.label;
+        done.index = g_active.taken;
+        done.last = true;
+        PushFrame(std::move(done));
+        g_active.on = false;
+    }
+}
+
+void QaModule_OnDeviceReset() { ReleaseSysmem(); }

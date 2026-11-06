@@ -414,6 +414,7 @@ static uint32_t ClientDataCaps() {
             break;
         }
     }
+    if (kSlumsQaBuild) caps |= kCapQaBuild;
     DebugMessage("Build stamp: caps 0x%08X", caps);
     return caps;
 }
