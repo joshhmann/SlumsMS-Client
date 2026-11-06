@@ -188,6 +188,19 @@ std::deque<DropAsk> g_dropQueue;
 std::deque<PartyAsk> g_partyQueue;
 std::deque<Command> g_cashQueue;           // P0-6 use_cash_item
 
+// merchant_open (P0-2 GP8): one setup at a time, driven a step per frame on the render thread. The check result and
+// the spawned merchant come from the packet thread.
+struct MerchantSetup {
+    enum Stage { Idle, WaitCheck, WaitPrompt, WaitRoom, WaitSpawn } stage = Idle;
+    Command ask;
+    int cashSlot = 0, cashItem = 0, itemType = 0, itemSlot = 0;
+    uint64_t deadlineMs = 0;
+} g_merchant;
+std::mutex g_merchantMutex;
+std::deque<Command> g_merchantAsks;
+int g_merchantCheck = -1;        // the last ENTRUSTED_SHOP_CHECK_RESULT byte, -1 = none yet
+bool g_merchantSpawned = false;  // SPAWN_HIRED_MERCHANT for this character
+
 void DropExpiredDialogs(uint64_t now) {
     size_t keep = 0;
     for (size_t i = 0; i < g_pendingCount; ++i) {
@@ -474,6 +487,9 @@ void CommandsThread() {
                     } else if (c.kind == Command::DropItem) {
                         std::lock_guard<std::mutex> lock(g_requestMutex);
                         if (g_dropQueue.size() < 8) g_dropQueue.push_back({c.item, c.count});
+                    } else if (c.kind == Command::MerchantOpen) {
+                        std::lock_guard<std::mutex> lock(g_merchantMutex);
+                        if (g_merchantAsks.size() < 2) g_merchantAsks.push_back(c);
                     } else if (c.kind == Command::UseCashItem) {
                         std::lock_guard<std::mutex> lock(g_requestMutex);
                         if (g_cashQueue.size() < 8) g_cashQueue.push_back(c);
@@ -756,6 +772,197 @@ bool SendDrop(int type, int slot, int count) {
     }
 }
 
+// ---- merchant_open (P0-2 GP8) ------------------------------------------------------------------------------------
+// The hired merchant setup as a player does it: the merchant item's request (the server checks Fredrick), the title
+// prompt the client opens on [7] (cancelled: it sends nothing; the title goes in CREATE as the prompt's OK would),
+// CREATE, then in the owner window PUT_ITEM and the window's own Open sequence: OPEN [0B 01], EXIT [0A] and
+// EndDialog(2) (0x0051876C, then its button handler 0x0051809D -> 0x006FB93C). Byte layouts are the client's own
+// builders: 0x00A27B7D, 0x00A1E0C2, 0x006FDBD0, 0x005187C8, 0x006FB952.
+
+void* CurField();
+
+int CharacterId() {
+    __try {
+        const uintptr_t ctx = *reinterpret_cast<uintptr_t*>(QaPatch::kAddr_CWvsContext);
+        if (!ctx) return 0;
+        const uintptr_t cd = *reinterpret_cast<uintptr_t*>(ctx + QaPatch::kOff_CharacterData);
+        return cd ? *reinterpret_cast<int*>(cd) : 0;   // GW_CharacterData starts with dwCharacterID; the name follows
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return 0;
+    }
+}
+
+void OnMerchantPacket(uint16_t opcode, const unsigned char* bytes, size_t size) {
+    if (opcode == kOpEntrustedShopCheck && size >= 3) {
+        std::lock_guard<std::mutex> lock(g_merchantMutex);
+        g_merchantCheck = bytes[2];
+    } else if (opcode == kOpSpawnHiredMerchant && size >= 6) {
+        int owner = 0;
+        std::memcpy(&owner, bytes + 2, sizeof(owner));
+        if (owner != 0 && owner == CharacterId()) {
+            std::lock_guard<std::mutex> lock(g_merchantMutex);
+            g_merchantSpawned = true;
+        }
+    }
+}
+
+// The first item in tab 5 whose id is a hired merchant's, and its cash serial; 0 when there is none.
+int FindMerchantItem(int& itemId, uint64_t& sn) {
+    __try {
+        const uintptr_t ctx = *reinterpret_cast<uintptr_t*>(QaPatch::kAddr_CWvsContext);
+        if (!ctx) return 0;
+        const uintptr_t cd = *reinterpret_cast<uintptr_t*>(ctx + QaPatch::kOff_CharacterData);
+        if (!cd) return 0;
+        const uintptr_t tab = *reinterpret_cast<uintptr_t*>(cd + QaPatch::kOff_ItemTabs + 4 * 5);
+        if (!tab) return 0;
+        const int n = *reinterpret_cast<int*>(tab - 4);
+        for (int slot = 1; slot < n && slot <= 255; ++slot) {
+            const uintptr_t p = *reinterpret_cast<uintptr_t*>(tab + 8 * slot + 4);
+            if (!p) continue;
+            const int id = reinterpret_cast<int(__thiscall*)(const void*)>(QaPatch::kAddr_TSecTypeLong_GetData)(
+                reinterpret_cast<const void*>(p + QaPatch::kOff_ItemId));
+            if (!IsHiredMerchantItem(id)) continue;
+            itemId = id;
+            sn = *reinterpret_cast<uint64_t*>(p + QaPatch::kOff_ItemCashSN);
+            return slot;
+        }
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+    }
+    return 0;
+}
+
+void SendOut(const COutPacket& o) {
+    void* sock = *reinterpret_cast<void**>(QaPatch::kAddr_ClientSocket);
+    if (sock) reinterpret_cast<void(__thiscall*)(void*, const COutPacket&)>(QaPatch::kAddr_ClientSocket_SendPacket)(sock, o);
+}
+
+// The innermost modal dialog whose vtable is `vtable`, or 0 (the CWndMan modal list, as ModalNpcDialog reads it).
+uintptr_t ModalDialogOf(uint32_t vtable) {
+    __try {
+        const uintptr_t wndMan = *reinterpret_cast<uintptr_t*>(kAddr_CWndManInstance);
+        if (!wndMan) return 0;
+        const auto& modal = *reinterpret_cast<const ZList<void*>*>(wndMan + kOff_ModalList);
+        void** pos = modal.GetTailPosition();
+        for (int guard = 0; pos && guard < 16; ++guard) {
+            void* handler = ZList<void*>::GetPrev(pos);
+            if (!handler) continue;
+            const uintptr_t dlg = reinterpret_cast<uintptr_t>(handler) - 4;
+            if (*reinterpret_cast<uint32_t*>(dlg) == vtable) return dlg;
+        }
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+    }
+    return 0;
+}
+
+void MerchantDone(const std::string& tail) {
+    const Command& a = g_merchant.ask;
+    Emit("merchant.open", ",\"item\":" + std::to_string(a.item) + ",\"quantity\":" + std::to_string(a.count) +
+                              ",\"price\":" + std::to_string(a.price) + tail);
+    g_merchant = MerchantSetup();
+}
+
+void StepMerchant() {
+    MerchantSetup& m = g_merchant;
+    const uint64_t now = NowMs();
+    if (m.stage == MerchantSetup::Idle) {
+        Command ask;
+        {
+            std::lock_guard<std::mutex> lock(g_merchantMutex);
+            if (g_merchantAsks.empty()) return;
+            ask = g_merchantAsks.front();
+            g_merchantAsks.pop_front();
+            g_merchantCheck = -1;
+            g_merchantSpawned = false;
+        }
+        m.ask = ask;
+        if (!CurField()) { MerchantDone(",\"ok\":false,\"error\":\"field_not_ready\""); return; }
+        uint64_t sn = 0;
+        m.cashSlot = FindMerchantItem(m.cashItem, sn);
+        if (!m.cashSlot) { MerchantDone(",\"ok\":false,\"error\":\"no_merchant_item\""); return; }
+        m.itemType = InventoryTypeOf(ask.item);
+        m.itemSlot = FindItemSlot(m.itemType, ask.item);
+        if (!m.itemSlot) { MerchantDone(",\"ok\":false,\"error\":\"not_in_inventory\""); return; }
+        COutPacket req(kOpHiredMerchantRequest);
+        req.Encode1(0);
+        req.EncodeBuffer(&sn, sizeof(sn));
+        SendOut(req);
+        m.stage = MerchantSetup::WaitCheck;
+        m.deadlineMs = now + 5000;
+        return;
+    }
+    if (now > m.deadlineMs) {
+        static const char* const kStage[] = {"", "check", "title_prompt", "owner_window", "merchant_spawn"};
+        MerchantDone(std::string(",\"ok\":false,\"error\":\"timeout_") + kStage[m.stage] + "\"");
+        return;
+    }
+    if (m.stage == MerchantSetup::WaitCheck) {
+        int check = -1;
+        {
+            std::lock_guard<std::mutex> lock(g_merchantMutex);
+            check = g_merchantCheck;
+        }
+        if (check < 0) return;
+        if (check != kMerchantCheckOk) {
+            MerchantDone(",\"ok\":false,\"error\":\"" +
+                         std::string(check == 9 ? "retrieve_from_fredrick_first" : "refused") +
+                         "\",\"check\":" + std::to_string(check));
+            return;
+        }
+        m.stage = MerchantSetup::WaitPrompt;
+        m.deadlineMs = now + 5000;
+        return;
+    }
+    if (m.stage == MerchantSetup::WaitPrompt) {
+        const uintptr_t prompt = ModalDialogOf(kVtable_CUtilDlgEx);
+        if (!prompt || !EndDialog(prompt)) return;   // cancelled: the prompt's caller sends nothing (0x00A1E17B)
+        COutPacket create(kOpPlayerInteraction);
+        create.Encode1(0);                           // CREATE
+        create.Encode1(5);                           // a hired merchant
+        create.EncodeStr(ZXString<char>(m.ask.title.c_str()));
+        create.Encode1(0);
+        create.Encode2(static_cast<unsigned short>(m.cashSlot));
+        create.Encode4(static_cast<unsigned int>(m.cashItem));
+        SendOut(create);
+        m.stage = MerchantSetup::WaitRoom;
+        m.deadlineMs = now + 5000;
+        return;
+    }
+    if (m.stage == MerchantSetup::WaitRoom) {
+        const uintptr_t owner = ModalDialogOf(QaPatch::kVtable_EntrustedShopDlg);
+        if (!owner) return;
+        COutPacket put(kOpPlayerInteraction);
+        put.Encode1(0x21);                           // PUT_ITEM, as an entrusted shop's window sends it
+        put.Encode1(static_cast<unsigned char>(m.itemType));
+        put.Encode2(static_cast<unsigned short>(m.itemSlot));
+        put.Encode2(1);                              // bundles
+        put.Encode2(static_cast<unsigned short>(m.ask.count));
+        put.Encode4(static_cast<unsigned int>(m.ask.price));
+        SendOut(put);
+        COutPacket open(kOpPlayerInteraction);
+        open.Encode1(0x0B);
+        open.Encode1(1);
+        SendOut(open);
+        COutPacket leave(kOpPlayerInteraction);
+        leave.Encode1(0x0A);
+        SendOut(leave);
+        EndDialog(owner, 2);
+        m.stage = MerchantSetup::WaitSpawn;
+        m.deadlineMs = now + 5000;
+        return;
+    }
+    if (m.stage == MerchantSetup::WaitSpawn) {
+        bool spawned = false;
+        {
+            std::lock_guard<std::mutex> lock(g_merchantMutex);
+            spawned = g_merchantSpawned;
+        }
+        if (spawned) {
+            MerchantDone(",\"ok\":true,\"slot\":" + std::to_string(m.itemSlot) + ",\"merchant_item\":" +
+                         std::to_string(m.cashItem));
+        }
+    }
+}
+
 // USE_CASH_ITEM as the client builds it (0x00A0A63F): [short cash pos][int item id], then the item's own fields; for
 // the Incubator the target's tab and slot as two ints (the server returns right after them).
 bool SendIncubatorUse(int cashSlot, int targetType, int targetSlot) {
@@ -946,6 +1153,7 @@ void QaModule_OnPacket(uint16_t opcode, const void* packet, size_t size) {
     if (!g_dispatchSiteOk) return;
     OnNpcPacket(opcode, bytes, size);
     if (opcode == kOpNpcTalk) OnNpcTalk(bytes, size);
+    OnMerchantPacket(opcode, bytes, size);
     // A line the client puts in its chat log: map chat, buddy/party/guild, whisper, spouse, notice, yellow tip.
     const ChatLine chat = ParseChatPacket(opcode, bytes, size);
     if (chat.ok) {
@@ -988,6 +1196,7 @@ void QaModule_OnFrame(IDirect3DDevice9* dev) {
     AnswerCloseDialog();
     AnswerDialogNext();
     AnswerRequests();
+    StepMerchant();
     if (!g_active.on) {
         std::lock_guard<std::mutex> lock(g_burstMutex);
         if (g_burstQueue.empty()) return;

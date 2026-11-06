@@ -271,6 +271,22 @@ int main() {
             Check(ParseCommand("use_cash_item 5060002 6:1").kind == Command::Invalid, "no sixth tab");
             Check(ParseCommand("use_cash_item 5060002 4:0").kind == Command::Invalid, "slots start at 1");
             Check(ParseCommand("use_cash_item 5060002 egg").kind == Command::Invalid, "target is a number");
+            // P0-2 GP8: merchant_open <item> <qty> <price> [title].
+            c = ParseCommand("merchant_open 2000000 5 1000 GP8 shop");
+            Check(c.kind == Command::MerchantOpen && c.item == 2000000 && c.count == 5 && c.price == 1000 &&
+                c.title == "GP8 shop", "merchant_open with a title");
+            c = ParseCommand("merchant_open 4000000 1 50");
+            Check(c.kind == Command::MerchantOpen && c.title == "QA shop", "the default title");
+            Check(ParseCommand("merchant_open 5030000 1 50").kind == Command::Invalid, "no cash items for sale");
+            Check(ParseCommand("merchant_open 2000000 0 50").kind == Command::Invalid, "quantity starts at 1");
+            Check(ParseCommand("merchant_open 2000000 2001 50").kind == Command::Invalid, "the server's 2000 cap");
+            Check(ParseCommand("merchant_open 2000000 1 0").kind == Command::Invalid, "price is positive");
+            Check(ParseCommand("merchant_open 2000000 1 5 a \"quoted\"").kind == Command::Invalid, "no quotes in the title");
+            Check(ParseCommand("merchant_open 2000000 1 5 0123456789012345678901234567890").kind == Command::Invalid,
+                "titles are at most 30");
+            Check(IsHiredMerchantItem(5030000) && IsHiredMerchantItem(5030009) && !IsHiredMerchantItem(5140000),
+                "hired merchants are 503xxxx; 514xxxx are player shops");
+            Check(ReadBeforeClient(kOpEntrustedShopCheck), "the merchant check is read before its title prompt");
             Check(ParseCommand("party_create").kind == Command::PartyCreate, "party_create parses");
             Check(ParseCommand("party_create now").kind == Command::Invalid, "party_create takes nothing");
             c = ParseCommand("party_invite Bishbot");
