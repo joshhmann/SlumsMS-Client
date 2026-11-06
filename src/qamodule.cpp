@@ -551,7 +551,7 @@ void AnswerNpcPos() {
             Emit("npc.pos", head + ",\"ok\":false,\"error\":\"npc_not_on_map\"");
             continue;
         }
-        const ScreenPoint p = ToReference(WorldToScreen(at.x, at.y - kNpcClickRise, cx, cy, w, h), w, h);
+        const ScreenPoint p = ToReference(WorldToScreen(at.x, at.y - kNpcClickRise, cx, cy, w, h, get_adjust_cy()), w, h);
         const std::string where = ",\"x\":" + std::to_string(p.x) + ",\"y\":" + std::to_string(p.y);
         Emit("npc.pos", head + (p.inView ? ",\"ok\":true" : ",\"ok\":false,\"error\":\"out_of_view\"") + where);
     }

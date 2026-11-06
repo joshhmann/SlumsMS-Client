@@ -211,6 +211,11 @@ int main() {
             wide = ToReference(wide, 1366, 768);
             Check(wide.x == 422 && wide.y == 300 && wide.inView, "scaled to the worker's 800x600");
             Check(ToReference(WorldToScreen(-969, -248, -1000, -300, 800, 600), 800, 600).x == 431, "800x600 unchanged");
+            // b344: on 768 rows the field is drawn (768 - 600) / 2 = 84 px lower than the Gr2D centre says; without it
+            // Adobis' point was 84 px high, above his head.
+            ScreenPoint low = WorldToScreen(-1000, -218 - 30, -1000, -218, 1366, 768, (768 - 600) / 2);
+            Check(low.y == 384 - 30 + 84 && low.inView, "the field's vertical shift is added");
+            Check(WorldToScreen(-1000, -248, -1000, -218, 800, 600, 0).y == 270, "no shift at 600 rows");
         }
         {
             Command c = ParseCommand("click_option 1");
