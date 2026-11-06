@@ -1,5 +1,7 @@
 #include "pch.h"
 #include "hook.h"
+#include "debug.h"
+#include <intrin.h>
 #include "constants.h"
 #include "wvs/wvsapp.h"
 #include "wvs/wndman.h"
@@ -336,6 +338,7 @@ void CWvsApp::Run_hook(int* pbTerminate) {
                 // CWvsApp::ExtractComErrorCode(this, &hr);
                 if (m_hrComErrorCode) {
                     HRESULT hr = m_hrComErrorCode;
+                    DebugMessage("RUN_EXIT com_error hr=%08lX", static_cast<unsigned long>(hr));   // b331
                     m_hrComErrorCode = S_OK;
                     m_hrZExceptionCode = S_OK;
                     _com_raise_error(hr, nullptr);
@@ -343,6 +346,7 @@ void CWvsApp::Run_hook(int* pbTerminate) {
                 // CWvsApp::ExtractZExceptionCode(this, &hr)
                 if (m_hrZExceptionCode) {
                     HRESULT hr = m_hrZExceptionCode;
+                    DebugMessage("RUN_EXIT zexception hr=%08lX", static_cast<unsigned long>(hr));   // b331
                     m_hrComErrorCode = S_OK;
                     m_hrZExceptionCode = S_OK;
                     if (hr == 0x20000000) {
@@ -370,9 +374,28 @@ void CWvsApp::Run_hook(int* pbTerminate) {
         }
     } while (!*pbTerminate && msg.message != WM_QUIT);
 
+    // b331: a session that ends with no error says which way the loop ended.
+    DebugMessage("RUN_EXIT loop terminate=%d wm_quit=%d", *pbTerminate, msg.message == WM_QUIT ? 1 : 0);
     if (msg.message == WM_QUIT) {
         PostQuitMessage(0);
     }
+}
+
+namespace {
+// b331: who asks the game to quit. Logs the caller's module and offset, then quits as asked.
+auto PostQuitMessage_orig = &::PostQuitMessage;
+void WINAPI PostQuitMessage_hook(int nExitCode) {
+    const DWORD caller = reinterpret_cast<DWORD>(_ReturnAddress());
+    HMODULE module = nullptr;
+    char path[MAX_PATH] = {};
+    GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+        reinterpret_cast<LPCSTR>(caller), &module);
+    if (module) GetModuleFileNameA(module, path, MAX_PATH);
+    const char* base = strrchr(path, '\\');
+    DebugMessage("POST_QUIT code=%d caller=%s+%08lX", nExitCode, module ? (base ? base + 1 : path) : "unknown",
+        module ? caller - reinterpret_cast<DWORD>(module) : caller);
+    PostQuitMessage_orig(nExitCode);
+}
 }
 
 
@@ -472,6 +495,7 @@ void AttachClientBypass() {
     ATTACH_HOOK(CWvsApp::Constructor, CWvsApp::Constructor_hook);
     ATTACH_HOOK(CWvsApp::SetUp, CWvsApp::SetUp_hook);
     ATTACH_HOOK(CWvsApp::Run, CWvsApp::Run_hook);
+    ATTACH_HOOK(PostQuitMessage_orig, PostQuitMessage_hook);   // b331 diag
     ATTACH_HOOK(CLogin::SendCheckPasswordPacket, CLogin::SendCheckPasswordPacket_hook);
     ATTACH_HOOK(CWndMan::TranslateMessage, CWndMan::TranslateMessage_hook);
 

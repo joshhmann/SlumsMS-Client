@@ -34,23 +34,26 @@ bool shuttingDown = false;
 // b331: the last incoming packets (opcode, length), written to integration.log when a packet's handler throws and at
 // session cleanup, so a silent client close names the packet behind it. Opcodes and lengths only, never packet bytes.
 constexpr int kRecentPackets = 16;
-struct RecentPacket { unsigned short opcode; unsigned short length; };
+struct RecentPacket { unsigned short opcode; unsigned short length; DWORD tick; };
 RecentPacket recentPackets[kRecentPackets] = {};
 volatile LONG recentCount = 0;
 volatile LONG throwsLogged = 0;
 
 void NoteRecentPacket(unsigned short opcode, unsigned short length) {
     const LONG n = InterlockedIncrement(&recentCount) - 1;
-    recentPackets[n % kRecentPackets] = {opcode, length};
+    recentPackets[n % kRecentPackets] = {opcode, length, GetTickCount()};
 }
 
 void LogRecentPackets(const char* why) {
     const LONG n = recentCount;
-    char line[512] = {};
+    char line[768] = {};
     int used = sprintf_s(line, "PACKET_TRAIL %s (%ld received):", why, n);
-    for (LONG i = n > kRecentPackets ? n - kRecentPackets : 0; i < n && used > 0 && used < 480; ++i) {
+    // Each entry is opcode/length@ms before now, so the gaps between packets (a drop and its pickup) show.
+    const DWORD now = GetTickCount();
+    for (LONG i = n > kRecentPackets ? n - kRecentPackets : 0; i < n && used > 0 && used < 720; ++i) {
         const RecentPacket& p = recentPackets[i % kRecentPackets];
-        used += sprintf_s(line + used, sizeof(line) - used, " %04X/%u", p.opcode, p.length);
+        used += sprintf_s(line + used, sizeof(line) - used, " %04X/%u@-%lu", p.opcode, p.length,
+            static_cast<unsigned long>(now - p.tick));
     }
     DebugMessage("%s", line);
 }
