@@ -171,6 +171,7 @@ std::mutex g_menuMutex;
 NpcMenu g_menu;                          // isMenu false when the last npc dialog was not a menu
 std::deque<int> g_optionQueue;
 int g_closeAsks = 0;                     // close_dialog requests (P1-Q2, D1: the welcome dialog blocks chat)
+int g_nextAsks = 0;                      // dialog_next requests (H1: sendOk "Good luck!" starts the instance)
 // P1-Q2 (Zakum run): drops and party requests, asked for on the commands thread, sent on the render thread (the game
 // thread, where the item and party windows call the same senders).
 struct DropAsk {
@@ -465,6 +466,9 @@ void CommandsThread() {
                     } else if (c.kind == Command::CloseDialog) {
                         std::lock_guard<std::mutex> lock(g_menuMutex);
                         if (g_closeAsks < 8) ++g_closeAsks;
+                    } else if (c.kind == Command::DialogNext) {
+                        std::lock_guard<std::mutex> lock(g_menuMutex);
+                        if (g_nextAsks < 8) ++g_nextAsks;
                     } else if (c.kind == Command::DropItem) {
                         std::lock_guard<std::mutex> lock(g_requestMutex);
                         if (g_dropQueue.size() < 8) g_dropQueue.push_back({c.item, c.count});
@@ -592,10 +596,11 @@ uintptr_t OpenNpcDialog() {
     return ModalNpcDialog();
 }
 
-// Ends the dialog the way its close button does; the reply path sends "end chat" for every dialog type.
-bool EndDialog(uintptr_t dlg) {
+// Ends the dialog with the return one of its buttons gives: kDlgRetEnd for the close button (the reply path then sends
+// "end chat" for every dialog type), NextReturnFor for OK / Next / Yes.
+bool EndDialog(uintptr_t dlg, int ret = kDlgRetEnd) {
     __try {
-        *reinterpret_cast<int*>(dlg + kDlgOffRet) = kDlgRetEnd;
+        *reinterpret_cast<int*>(dlg + kDlgOffRet) = ret;
         *reinterpret_cast<int*>(dlg + kDlgOffTerminate) = 1;
         return true;
     } __except (EXCEPTION_EXECUTE_HANDLER) {
@@ -622,6 +627,42 @@ void AnswerCloseDialog() {
             g_menu = NpcMenu();
         }
         Emit("click.done", head + ",\"ok\":true");
+    }
+}
+
+// Presses OK / Next / Yes / Accept on the open dialog, by the type of the last NPC_TALK (read before the dialog opened).
+void AnswerDialogNext() {
+    int asks = 0;
+    NpcMenu talk;
+    {
+        std::lock_guard<std::mutex> lock(g_menuMutex);
+        asks = g_nextAsks;
+        g_nextAsks = 0;
+        talk = g_menu;
+    }
+    for (int i = 0; i < asks; ++i) {
+        const std::string head = ",\"op\":\"dialog_next\"";
+        const uintptr_t dlg = OpenNpcDialog();
+        if (!dlg || !talk.isTalk) {
+            Emit("click.done", head + ",\"ok\":false,\"error\":\"no_dialog\"");
+            continue;
+        }
+        const int ret = NextReturnFor(talk.msgType);
+        if (!ret) {
+            Emit("click.done", head + ",\"ok\":false,\"error\":\"" +
+                (talk.isMenu ? std::string("use_click_option") : "no_next_button") + "\",\"type\":" + std::to_string(talk.msgType));
+            continue;
+        }
+        if (!EndDialog(dlg, ret)) {
+            Emit("click.done", head + ",\"ok\":false,\"error\":\"no_dialog\"");
+            continue;
+        }
+        {
+            std::lock_guard<std::mutex> lock(g_menuMutex);
+            g_menu = NpcMenu();          // answered: the next dialog brings its own NPC_TALK
+        }
+        Emit("click.done", head + ",\"ok\":true,\"type\":" + std::to_string(talk.msgType));
+        talk = NpcMenu();                // a second ask in the same frame has no dialog to answer
     }
 }
 
@@ -902,6 +943,7 @@ void QaModule_OnFrame(IDirect3DDevice9* dev) {
     AnswerNpcPos();
     AnswerClickOption();
     AnswerCloseDialog();
+    AnswerDialogNext();
     AnswerRequests();
     if (!g_active.on) {
         std::lock_guard<std::mutex> lock(g_burstMutex);

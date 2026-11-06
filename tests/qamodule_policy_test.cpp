@@ -248,6 +248,11 @@ int main() {
                 "the tab is the millions digit");
             Check(ParseCommand("close_dialog").kind == Command::CloseDialog, "close_dialog parses");
             Check(ParseCommand("close_dialog 1").kind == Command::Invalid, "close_dialog takes nothing");
+            // H1: dialog_next presses OK / Next / Yes the way the button does; a menu takes click_option.
+            Check(ParseCommand("dialog_next").kind == Command::DialogNext, "dialog_next parses");
+            Check(NextReturnFor(kNpcTalkSay) == 0x2001, "sendOk / sendNext: the Next return, [0][1]");
+            Check(NextReturnFor(kNpcTalkYesNo) == 6 && NextReturnFor(kNpcTalkAcceptDecline) == 6, "Yes / Accept: 6, [type][1]");
+            Check(NextReturnFor(kNpcTalkAskMenu) == 0 && NextReturnFor(2) == 0, "no next button on a menu or a text prompt");
             Check(kDlgRetEnd != kDlgRetOk && kDlgRetEnd != 3 && kDlgRetEnd != 0x2000 && kDlgRetEnd != 0x2001 &&
                 kDlgRetEnd != 6 && kDlgRetEnd != 7, "the end return is none of the answers nor a server close");
             Check(ParseCommand("party_create").kind == Command::PartyCreate, "party_create parses");
@@ -271,6 +276,9 @@ int main() {
             auto say = talk(0, "#wHello #L0#not a row in a say#l");
             m = ParseNpcMenu(say.data(), say.size());
             Check(m.isTalk && !m.isMenu && m.values.empty(), "a say dialog is not a menu");
+            Check(m.msgType == kNpcTalkSay && NextReturnFor(m.msgType) == 0x2001, "a say dialog's type picks Next");
+            auto yesno = talk(1, "Ready?");
+            Check(ParseNpcMenu(yesno.data(), yesno.size()).msgType == kNpcTalkYesNo, "yes/no type kept");
             auto odd = talk(4, "#L#broken #Lx# #L3 #L7#ok#l");
             Check(ParseNpcMenu(odd.data(), odd.size()).values == std::vector<int>({7}), "only well-formed #L<n># rows count");
         }

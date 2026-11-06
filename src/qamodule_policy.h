@@ -98,7 +98,8 @@ inline bool ValidCharName(const std::string& name) {
 }
 
 struct Command {
-    enum Kind { Invalid, Ping, Burst, NpcPos, ClickOption, CloseDialog, DropItem, PartyCreate, PartyInvite } kind = Invalid;
+    enum Kind { Invalid, Ping, Burst, NpcPos, ClickOption, CloseDialog, DialogNext, DropItem, PartyCreate, PartyInvite }
+        kind = Invalid;
     int npc = 0;
     int option = 0;   // click_option: 1-8
     int item = 0;     // drop_item
@@ -154,6 +155,7 @@ inline Command ParseCommand(const std::string& line) {
     }
     if (line == "party_create") { c.kind = Command::PartyCreate; return c; }
     if (line == "close_dialog") { c.kind = Command::CloseDialog; return c; }
+    if (line == "dialog_next") { c.kind = Command::DialogNext; return c; }
     char name[32] = {};
     if (std::sscanf(line.c_str(), "party_invite %31s %c", name, &extra) == 1) {
         if (!ValidCharName(name)) { c.error = "name must be 4-12 letters or digits"; return c; }
@@ -506,10 +508,26 @@ inline int NpcIdForTalkPacket(const unsigned char* data, size_t size) {
 // An npc menu (sendSimple, NPC_TALK message type 4) and the #L<value># of each row in the order they are drawn.
 // NPC_TALK: short opcode, byte 4, int npc, byte message type, byte speaker, string text (PacketCreator.getNPCTalk).
 constexpr int kNpcTalkAskMenu = 4;
+constexpr int kNpcTalkSay = 0;            // sendOk / sendNext / sendPrev / sendNextPrev
+constexpr int kNpcTalkYesNo = 1;          // sendYesNo
+constexpr int kNpcTalkAcceptDecline = 0x0C;   // sendAcceptDecline (the yes/no handler, quest style)
+
+// dialog_next (H1): the return the dialog's OK / Next / Yes / Accept button gives, which the reply path turns into
+// action 1: say 0x2001 -> [0][1] (0x0074689D), yes/no and accept/decline 6 -> [type][1] (0x007469F7). 0 = no such
+// button (a menu takes click_option; text and number prompts are not supported).
+inline int NextReturnFor(int msgType) {
+    switch (msgType) {
+    case kNpcTalkSay: return 0x2001;
+    case kNpcTalkYesNo:
+    case kNpcTalkAcceptDecline: return 6;
+    default: return 0;
+    }
+}
 
 struct NpcMenu {
     bool isTalk = false;     // the packet was an npc dialog at all
     bool isMenu = false;     // ... and a menu
+    int msgType = -1;        // its message type (kNpcTalkSay, kNpcTalkYesNo, ...)
     std::vector<int> values; // row n is values[n - 1]
 };
 
@@ -517,6 +535,7 @@ inline NpcMenu ParseNpcMenu(const unsigned char* data, size_t size) {
     NpcMenu m;
     if (!data || size < 9) return m;
     m.isTalk = true;
+    m.msgType = data[7];
     if (data[7] != kNpcTalkAskMenu) return m;
     detail::Reader r{data, size, 9};
     std::string text;
