@@ -10,6 +10,7 @@ namespace {
 volatile LONG reporting = 0;
 volatile LONG cppEvents = 0;
 volatile LONG fatalEvents = 0;
+volatile LONG zEvents = 0;   // b331: game (ZException-range) throws get their own budget
 void AppendLine(HANDLE file, const char* text) {
     DWORD written = 0;
     WriteFile(file, text, static_cast<DWORD>(strlen(text)), &written, nullptr);
@@ -43,7 +44,17 @@ LONG CALLBACK OnException(EXCEPTION_POINTERS* pointers) {
 #endif
     if ((!fatalCandidate && !cpp) || InterlockedCompareExchange(&reporting, 1, 0))
         return EXCEPTION_CONTINUE_SEARCH;
-    if (InterlockedIncrement(cpp ? &cppEvents : &fatalEvents) > 16) {
+    // b331: a game error (ZException HRESULT) can end the session quietly long after start-up has used the first 16
+    // C++ throws on sound, so those get their own budget of 32 and a stack scan.
+    bool zThrow = false;
+    if (cpp && pointers->ExceptionRecord->NumberParameters >= 2) {
+        __try {
+            const DWORD hr = *reinterpret_cast<DWORD*>(pointers->ExceptionRecord->ExceptionInformation[1]);
+            zThrow = hr >= 0x20000000 && hr <= 0x2200000E;
+        } __except (EXCEPTION_EXECUTE_HANDLER) {
+        }
+    }
+    if (InterlockedIncrement(zThrow ? &zEvents : cpp ? &cppEvents : &fatalEvents) > (zThrow ? 32 : 16)) {
         InterlockedExchange(&reporting, 0);
         return EXCEPTION_CONTINUE_SEARCH;
     }
@@ -81,7 +92,7 @@ LONG CALLBACK OnException(EXCEPTION_POINTERS* pointers) {
         }
         // Optimized engine frames often omit EBP. Log only plausible code
         // addresses from the stack, never raw stack contents or object data.
-        if (fatalCandidate) {
+        if (fatalCandidate || zThrow) {
             int emitted = 0;
             for (int i = 0; i < 128 && emitted < 20; ++i) {
                 DWORD candidate = 0;
