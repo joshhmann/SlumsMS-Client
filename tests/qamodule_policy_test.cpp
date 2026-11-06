@@ -210,6 +210,26 @@ int main() {
             Check(c.kind == Command::ClickOption && c.option == 1, "click_option parses");
             Check(ParseCommand("click_option 9").kind == Command::Invalid, "click_option is 1-8");
             Check(ParseCommand("click_option 0").kind == Command::Invalid, "click_option starts at 1");
+            // P1-Q2 (Zakum run): drop_item and the party requests.
+            c = ParseCommand("drop_item 4001017");
+            Check(c.kind == Command::DropItem && c.item == 4001017 && c.count == 1, "drop_item drops one by default");
+            c = ParseCommand("drop_item 2000000 5");
+            Check(c.kind == Command::DropItem && c.count == 5, "drop_item takes a count");
+            Check(ParseCommand("drop_item 999999").kind == Command::Invalid, "drop_item needs an inventory item id");
+            Check(ParseCommand("drop_item 6000000").kind == Command::Invalid, "no sixth tab");
+            Check(ParseCommand("drop_item 4001017 0").kind == Command::Invalid, "count starts at 1");
+            Check(ParseCommand("drop_item 4001017 40000").kind == Command::Invalid, "count fits a short");
+            Check(ParseCommand("drop_item 4001017 1 x").kind == Command::Invalid, "nothing after the count");
+            Check(InventoryTypeOf(1302000) == 1 && InventoryTypeOf(4001017) == 4 && InventoryTypeOf(5000000) == 5,
+                "the tab is the millions digit");
+            Check(ParseCommand("party_create").kind == Command::PartyCreate, "party_create parses");
+            Check(ParseCommand("party_create now").kind == Command::Invalid, "party_create takes nothing");
+            c = ParseCommand("party_invite Bishbot");
+            Check(c.kind == Command::PartyInvite && c.name == "Bishbot", "party_invite parses");
+            Check(ParseCommand("party_invite abc").kind == Command::Invalid, "names are at least 4");
+            Check(ParseCommand("party_invite abcdefghijklm").kind == Command::Invalid, "names are at most 12");
+            Check(ParseCommand("party_invite Bish\"bot").kind == Command::Invalid, "names are letters and digits");
+            Check(ParseCommand("party_invite Bish bot").kind == Command::Invalid, "one name only");
             auto talk = [](int type, const std::string& text) {
                 std::vector<unsigned char> b{0x30, 0x01, 4, 0x08, 0xFA, 0x1E, 0x00, static_cast<unsigned char>(type), 0,
                                              static_cast<unsigned char>(text.size() & 0xFF),

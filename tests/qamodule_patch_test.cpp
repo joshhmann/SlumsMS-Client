@@ -54,6 +54,12 @@ int main(int argc, char** argv) {
         Check(field[0] == 0xE8 && field[5] == 0x85 && field[6] == 0xC0, "GetCurFieldID: call; test eax, eax");
         Check(field[7] == 0x74 && field[9] == 0x8D && field[10] == 0x88, "GetCurFieldID: je; lea ecx, [eax+disp32]");
 
+        // P1-Q2 senders: each starts with the SEH prologue; the party ones load CWvsContext themselves.
+        Check(SendChangeSlotBytes()[0] == 0xB8 && SendChangeSlotBytes()[5] == 0xE8, "drop sender: SEH prologue");
+        Check(SendChangeSlotBytes()[15] == 0x8B && SendChangeSlotBytes()[16] == 0xF9, "drop sender keeps this in edi");
+        Check(SendCreatePartyBytes()[16] == 0x8B && SendCreatePartyBytes()[18] == 0x18, "create loads [0xBE7918]");
+        Check(SendInvitePartyBytes()[15] == 0x8B && SendInvitePartyBytes()[17] == 0x18, "invite loads [0xBE7918]");
+
         // The guard's decision: stock bytes pass, a changed byte anywhere in the site fails (the QA module then
         // switches that part off and emits an error event naming it).
         {
@@ -80,7 +86,13 @@ int main(int argc, char** argv) {
             Check(Matches(d.data() + dispatchOff, dispatch.data(), kProcessPacketLength),
                 "client exe holds the stock ProcessPacket prologue");
             Check(Matches(d.data() + fieldOff, field.data(), kGetCurFieldIDLength), "client exe holds the stock GetCurFieldID");
-            std::cout << "qamodule_patch: client exe holds both stock sites\n";
+            Check(Matches(d.data() + FileOffset(d, kAddr_SendChangeSlotPositionRequest), SendChangeSlotBytes().data(),
+                kSendChangeSlotLength), "client exe holds the stock SendChangeSlotPositionRequest prologue");
+            Check(Matches(d.data() + FileOffset(d, kAddr_SendCreatePartyRequest), SendCreatePartyBytes().data(),
+                kSendPartyLength), "client exe holds the stock party create sender");
+            Check(Matches(d.data() + FileOffset(d, kAddr_SendInvitePartyRequest), SendInvitePartyBytes().data(),
+                kSendPartyLength), "client exe holds the stock party invite sender");
+            std::cout << "qamodule_patch: client exe holds all five stock sites\n";
         }
     } catch (const std::exception& e) {
         std::cerr << "qamodule_patch: " << e.what() << '\n';
