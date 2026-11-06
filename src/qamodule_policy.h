@@ -375,6 +375,18 @@ inline ScreenPoint WorldToScreen(int wx, int wy, int camX, int camY, int w, int 
     return p;
 }
 
+// The worker clicks in an 800x600 reference space scaled onto the window (client-mcp windows.py move()), so a point on
+// a wider game screen (1366x768, resolution.cpp) is scaled to it before it is reported (D1: an NPC at x=721 of 1366 was
+// clicked at 1231). In-view is judged on the game screen, before scaling.
+constexpr int kRefWidth = 800;
+constexpr int kRefHeight = 600;
+inline ScreenPoint ToReference(ScreenPoint p, int w, int h) {
+    if (w <= 0 || h <= 0) return p;
+    p.x = p.x * kRefWidth / w;
+    p.y = p.y * kRefHeight / h;
+    return p;
+}
+
 // The runner's name for a chat line's kind (QA's chat.log groups by it): the packet a line came in and its mode byte.
 inline const char* ChatKindName(uint16_t opcode, int kind) {
     switch (opcode) {

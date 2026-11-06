@@ -204,6 +204,13 @@ int main() {
             ScreenPoint p = WorldToScreen(-969, -248, -1000, -300, 800, 600);
             Check(p.x == 431 && p.y == 352 && p.inView, "world to screen");
             Check(!WorldToScreen(1300, 0, 0, 0, 800, 600).inView, "off screen");
+            // D1 on 1366x768: Mark of the Squad (x 898) with the camera on the character at 860 is 38 px right of the
+            // centre; the worker's 800x600 space puts that at 422, not 721.
+            ScreenPoint wide = WorldToScreen(898, 260 - 30, 860, 230, 1366, 768);
+            Check(wide.x == 721 && wide.inView, "game pixels on a wide screen");
+            wide = ToReference(wide, 1366, 768);
+            Check(wide.x == 422 && wide.y == 300 && wide.inView, "scaled to the worker's 800x600");
+            Check(ToReference(WorldToScreen(-969, -248, -1000, -300, 800, 600), 800, 600).x == 431, "800x600 unchanged");
         }
         {
             Command c = ParseCommand("click_option 1");
