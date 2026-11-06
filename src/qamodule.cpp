@@ -139,6 +139,20 @@ unsigned g_windowScanFrames = 0;
 TrackedWindow g_windows[kMaxTrackedWindows];
 size_t g_windowCount = 0;
 
+// P1-Q2: the field's npcs (click_npc) and the last npc menu's rows (click_option). Filled on the packet thread,
+// asked for on the commands thread, answered on the render thread.
+struct FieldNpc {
+    int npc;
+    int x;
+    int y;
+};
+std::mutex g_npcMutex;
+std::map<int, FieldNpc> g_npcs;          // object id -> npc
+std::deque<int> g_npcPosQueue;           // npc_pos requests waiting for the render thread
+std::mutex g_menuMutex;
+NpcMenu g_menu;                          // isMenu false when the last npc dialog was not a menu
+std::deque<int> g_optionQueue;
+
 void DropExpiredDialogs(uint64_t now) {
     size_t keep = 0;
     for (size_t i = 0; i < g_pendingCount; ++i) {
@@ -430,14 +444,6 @@ void CommandsThread() {
 
 // ---- npcs on the field (P1-Q2 click_npc) ---------------------------------------------------------------------------
 // Kept from the server's spawn packets (packet thread), read on the render thread to answer npc_pos.
-struct FieldNpc {
-    int npc;
-    int x;
-    int y;
-};
-std::mutex g_npcMutex;
-std::map<int, FieldNpc> g_npcs;          // object id -> npc
-std::deque<int> g_npcPosQueue;           // npc_pos requests waiting for the render thread
 
 void OnNpcPacket(uint16_t opcode, const unsigned char* bytes, size_t size) {
     if (opcode == kOpSetField) {         // a new field: the old field's npcs are gone
@@ -503,9 +509,6 @@ void AnswerNpcPos() {
 // ---- npc menus (P1-Q2 click_option) ------------------------------------------------------------------------------
 // The rows of the last npc dialog, from its NPC_TALK packet (packet thread); click_option is answered on the render
 // thread, which is the game thread the dialog's modal loop runs on.
-std::mutex g_menuMutex;
-NpcMenu g_menu;                          // isMenu false when the last npc dialog was not a menu
-std::deque<int> g_optionQueue;
 
 void OnNpcTalk(const unsigned char* bytes, size_t size) {
     const NpcMenu menu = ParseNpcMenu(bytes, size);
