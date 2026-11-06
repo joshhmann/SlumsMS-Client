@@ -425,6 +425,10 @@ constexpr uint16_t kOpMarriageRequest = 0x48;  // the proposal prompt
 constexpr uint16_t kOpNpcTalk = 0x130;         // the npc dialog
 constexpr uint16_t kOpNoticeType = 1;          // SERVERMESSAGE type 1 = the notice popup
 
+// NPC_TALK's handler runs the dialog modally (CScriptMan -> CWnd::DoModal) and returns only when it closes, so the
+// module must read that packet before the client handles it: after, the menu rows arrive once the menu is gone (H1).
+inline bool ReadBeforeClient(uint16_t opcode) { return opcode == kOpNpcTalk; }
+
 inline std::string LowerAscii(std::string s) {
     for (char& c : s) {
         if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a');

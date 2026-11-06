@@ -103,15 +103,19 @@ void __fastcall ProcessPacketHook(void* socket, void*, CInPacket* packet) {
         }
 #endif
     }
-    ProcessPacket(socket, packet);
     // QA builds only (ticket 166): a handled packet may make a screen ready, add a chat line, or ask for a dialog.
     // The module reads each packet from its opcode (qamodule_policy.h PacketFromOpcode): from the start of the buffer,
-    // every NPC, chat and dialog parse read the header and failed (D1, 2026-11-06).
+    // every NPC, chat and dialog parse read the header and failed (D1, 2026-11-06). An npc dialog is read before the
+    // client handles it, since its handler only returns when the dialog closes (ReadBeforeClient, H1).
 #ifdef SLUMS_QA_MODULE
-    if (packet) {
-        const QaPolicy::PacketBytes body = QaPolicy::PacketFromOpcode(packet->BufferPublic(), packet->LengthPublic(), start);
-        if (body.data) QaModule_OnPacket(opcode, body.data, body.size);
-    }
+    const QaPolicy::PacketBytes body =
+        packet ? QaPolicy::PacketFromOpcode(packet->BufferPublic(), packet->LengthPublic(), start) : QaPolicy::PacketBytes{};
+    const bool readFirst = body.data && QaPolicy::ReadBeforeClient(opcode);
+    if (readFirst) QaModule_OnPacket(opcode, body.data, body.size);
+#endif
+    ProcessPacket(socket, packet);
+#ifdef SLUMS_QA_MODULE
+    if (body.data && !readFirst) QaModule_OnPacket(opcode, body.data, body.size);
 #endif
 }
 }
