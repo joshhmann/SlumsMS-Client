@@ -19,11 +19,12 @@ inline bool IsGameErrorHr(uint32_t hr) { return hr >= 0x20000000u && hr <= 0x220
 
 inline Kind KindOf(bool fatalCandidate, bool cpp, uint32_t hr) {
     if (fatalCandidate) return Kind::Fatal;
-    if (cpp) return Kind::Cpp;
+    if (cpp) return IsGameErrorHr(hr) ? Kind::GameError : Kind::Cpp;
     return Kind::Fatal;
 }
 
-constexpr int kLimit[static_cast<int>(Kind::Count)] = {16, 16, 16};
+// Fatal and plain C++ throws keep their 16; game errors get their own 32, so start-up noise cannot use them up.
+constexpr int kLimit[static_cast<int>(Kind::Count)] = {16, 16, 32};
 
 struct Budget {
     int used[static_cast<int>(Kind::Count)] = {};
