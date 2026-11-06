@@ -859,6 +859,31 @@ uintptr_t ModalDialogOf(uint32_t vtable) {
     return 0;
 }
 
+// The owner window by its vtable: in the window list (a mini room is not modal; the room packet's factory 0x0065DE7C
+// creates it, 0x7A8 bytes), else the modal list.
+uintptr_t WindowOf(uint32_t vtable) {
+    __try {
+        auto pos = CWndMan::ms_lpWindow.GetHeadPosition();
+        for (int guard = 0; pos && guard < 256; ++guard) {
+            CWnd* w = CWndMan::ms_lpWindow.GetNext(pos);
+            if (w && VtableOf(w) == vtable) return reinterpret_cast<uintptr_t>(w);
+        }
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+    }
+    return ModalDialogOf(vtable);
+}
+
+// CDialog::EndDialog (0x004244B1), which the owner window's own close path calls (0x006FB989): for a modeless dialog
+// it does more than the two fields EndDialog() above sets.
+bool ClientEndDialog(uintptr_t dlg, int ret) {
+    __try {
+        reinterpret_cast<void(__thiscall*)(void*, int)>(QaPatch::kAddr_CDialog_EndDialog)(reinterpret_cast<void*>(dlg), ret);
+        return true;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+}
+
 void MerchantDone(const std::string& tail) {
     const Command& a = g_merchant.ask;
     Emit("merchant.open", ",\"item\":" + std::to_string(a.item) + ",\"quantity\":" + std::to_string(a.count) +
@@ -967,7 +992,7 @@ void StepMerchant() {
         return;
     }
     if (m.stage == MerchantSetup::WaitRoom) {
-        const uintptr_t owner = ModalDialogOf(QaPatch::kVtable_EntrustedShopDlg);
+        const uintptr_t owner = WindowOf(QaPatch::kVtable_EntrustedShopDlg);
         if (!owner) return;
         COutPacket put(kOpPlayerInteraction);
         put.Encode1(0x21);                           // PUT_ITEM, as an entrusted shop's window sends it
@@ -984,13 +1009,13 @@ void StepMerchant() {
         COutPacket leave(kOpPlayerInteraction);
         leave.Encode1(0x0A);
         SendOut(leave);
-        EndDialog(owner, 2);
+        ClientEndDialog(owner, 2);
         m.stage = MerchantSetup::WaitSpawn;
         m.deadlineMs = now + 5000;
         return;
     }
     if (m.stage == MerchantSetup::CloseWaitWindow) {
-        if (!ModalDialogOf(QaPatch::kVtable_EntrustedShopDlg)) return;
+        if (!WindowOf(QaPatch::kVtable_EntrustedShopDlg)) return;
         COutPacket close(kOpPlayerInteraction);
         close.Encode1(0x29);
         SendOut(close);
@@ -999,7 +1024,7 @@ void StepMerchant() {
         return;
     }
     if (m.stage == MerchantSetup::CloseWaitGone) {
-        if (ModalDialogOf(QaPatch::kVtable_EntrustedShopDlg)) return;
+        if (WindowOf(QaPatch::kVtable_EntrustedShopDlg)) return;
         {
             std::lock_guard<std::mutex> lock(g_merchantMutex);
             g_merchantOid = 0;
